@@ -1,8 +1,4 @@
-Aquí tienes el código completo. He integrado tu lógica original (que funciona perfectamente) con el **nuevo diseño visual** para el panel lateral (izquierda) que solicitaste, mejorando la tipografía, los inputs y la experiencia de usuario.
 
-He añadido la lógica necesaria para formatear la fecha visualmente (ej: "Lunes, Semana 4") mientras se mantiene el formato técnico para el backend (`YYYY-MM-DD`).
-
-```vue
 <template>
   <v-container fluid class="bg-grey-lighten-4 fill-height align-start pa-0 pa-md-4">
     
@@ -71,7 +67,7 @@ He añadido la lógica necesaria para formatear la fecha visualmente (ej: "Lunes
                   <template v-slot:selection="{ item }">
                     <div class="d-flex align-center py-1 overflow-hidden">
                       <v-avatar color="green-lighten-5" rounded="lg" size="40" class="mr-3 border-green">
-                        <v-icon color="green-darken-2" size="24">mdi-tree</v-icon>
+                        <v-icon color="green-darken-2" size="24">mdi-sprout</v-icon>
                       </v-avatar>
                       <div class="d-flex flex-column text-truncate">
                         <span class="text-body-1 font-weight-black text-truncate text-high-emphasis" style="line-height: 1.2;">
