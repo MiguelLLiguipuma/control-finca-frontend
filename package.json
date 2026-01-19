@@ -1,0 +1,50 @@
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ant-design/icons-vue": "^7.0.1",
+    "@babel/core": "^7.26.9",
+    "@babel/eslint-parser": "^7.26.8",
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "@heroicons/vue": "^2.2.0",
+    "@mdi/font": "^7.4.47",
+    "@vue/compiler-sfc": "^3.5.13",
+    "apexcharts": "^5.3.5",
+    "autoprefixer": "^10.4.21",
+    "axios": "^1.13.1",
+    "boxicons": "^2.1.4",
+    "chart.js": "^4.5.1",
+    "core-js": "^3.40.0",
+    "date-fns": "^4.1.0",
+    "eslint": "^7.32.0",
+    "eslint-plugin-vue": "^8.7.1",
+    "pinia": "^3.0.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.16",
+    "vue": "^3.5.13",
+    "vue-chartjs": "^5.3.2",
+    "vue-router": "^4.5.0",
+    "vue3-apexcharts": "^1.10.0",
+    "vuetify": "^3.7.0-beta.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/tsconfig": "^0.7.0",
+    "nodemon": "^3.1.10",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0"
+  },
+  "description": "This template should help get you started developing with Vue 3 in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.",
+  "main": "vite.config.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
