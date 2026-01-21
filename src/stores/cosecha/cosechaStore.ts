@@ -1,20 +1,12 @@
 import { defineStore } from 'pinia';
-import { cosechaService } from '../../services/cosecha/cosechaService';
+import {
+	cosechaService,
+	type BackendCinta,
+	type PayloadCosecha,
+} from '../../services/cosecha/cosechaService';
 import { useUIStore } from '../../stores/uiStore';
 
 // --- 1. INTERFACES ---
-
-interface RawBalance {
-	calendario_id: number;
-	semana_enfunde: number | string;
-	saldo_en_campo: number | string;
-	color_cinta: string;
-	color_hex: string;
-	anio?: number | string;
-	year?: number | string;
-	año?: number | string;
-}
-
 export interface CintaCosecha {
 	calendario_id: number;
 	semana_enfunde: number;
@@ -31,12 +23,10 @@ interface CosechaState {
 	saldosPendientes: CintaCosecha[];
 	fincaActivaId: number | null;
 	isOnline: boolean;
-	colaSincronizacion: any[];
+	colaSincronizacion: PayloadCosecha[];
 }
 
-// --- 2. HELPER (Lógica Matemática Pura) ---
-// Definimos esto FUERA del store para que TS no se confunda con el 'this'
-// Recibe la semana/año de la cinta y la semana/año actual del sistema
+// --- 2. HELPER (Lógica fuera del store para evitar errores de 'this') ---
 const calcularEdadHelper = (
 	semItem: number,
 	anioItem: number,
@@ -46,11 +36,10 @@ const calcularEdadHelper = (
 	const diffAnios = anioActual - anioItem;
 	if (diffAnios === 0) return semActual - semItem;
 	if (diffAnios > 0) return diffAnios * 52 - semItem + semActual;
-	return -1; // Futuro
+	return -1;
 };
 
 // --- 3. STORE ---
-
 export const useCosechaStore = defineStore('cosecha', {
 	state: (): CosechaState => ({
 		loading: false,
@@ -63,7 +52,6 @@ export const useCosechaStore = defineStore('cosecha', {
 	}),
 
 	getters: {
-		// --- TIEMPO ---
 		infoSistema(): { semana: number; anio: number } {
 			const d = new Date();
 			d.setHours(0, 0, 0, 0);
@@ -74,33 +62,34 @@ export const useCosechaStore = defineStore('cosecha', {
 			);
 			return { semana: weekNo, anio: d.getFullYear() };
 		},
-
 		semanaActual(state): number {
 			return this.infoSistema.semana;
 		},
 		anioActual(state): number {
 			return this.infoSistema.anio;
 		},
-
-		// --- CONFIG ---
 		rangoCorteSugerido: (): number[] => [12, 13],
 
-		// --- TOTALES ---
-		totalDigitado: (state): number =>
-			state.saldosPendientes.reduce(
+		totalDigitado(state): number {
+			return state.saldosPendientes.reduce(
 				(acc, item) =>
 					acc + (item.cantidad_a_cosechar || 0) + (item.rechazo || 0),
 				0,
-			),
-
-		totalRestante: (state): number =>
-			state.saldosPendientes.reduce((acc, item) => {
+			);
+		},
+		totalRestante(state): number {
+			return state.saldosPendientes.reduce((acc, item) => {
 				const digitado = (item.cantidad_a_cosechar || 0) + (item.rechazo || 0);
 				return acc + (item.saldo_en_campo - digitado);
-			}, 0),
+			}, 0);
+		},
 
 		hayExcedidos(): boolean {
-			return this.saldosPendientes.some((item) => this.esExcedido(item));
+			// CORRECCIÓN: Hacemos el cálculo directo para no usar 'this.esExcedido' y evitar el error
+			return this.saldosPendientes.some((item) => {
+				const input = (item.cantidad_a_cosechar || 0) + (item.rechazo || 0);
+				return input > item.saldo_en_campo;
+			});
 		},
 
 		estadoOperacion(): string {
@@ -109,21 +98,17 @@ export const useCosechaStore = defineStore('cosecha', {
 			if (this.saldosPendientes.length === 0) return 'SIN DATOS';
 			return 'ESPERANDO DATOS';
 		},
-
 		estadoColor(): string {
 			if (this.hayExcedidos) return 'error';
 			if (this.totalDigitado > 0) return 'success';
 			return 'grey-darken-1';
 		},
 
-		// --- ORDENAMIENTO ---
 		saldosOrdenados(state): CintaCosecha[] {
-			// Obtenemos info del sistema UNA sola vez aquí
 			const { semana: semActual, anio: anioActual } = this.infoSistema;
 
-			// 1. Filtramos futuros imposibles
 			const lista = state.saldosPendientes.filter((item) => {
-				// CORRECCIÓN: Usamos el helper externo, no 'this.calcularEdadExacta'
+				// CORRECCIÓN: Usamos el helper directo
 				const edad = calcularEdadHelper(
 					item.semana_enfunde,
 					item.anio,
@@ -134,10 +119,8 @@ export const useCosechaStore = defineStore('cosecha', {
 			});
 
 			return lista.sort((a, b) => {
-				// A. REGLA DE ORO: Año (2025 antes que 2026)
 				if (a.anio !== b.anio) return a.anio - b.anio;
-
-				// B. Calculamos edades usando el helper
+				// CORRECCIÓN: Usamos el helper directo
 				const edadA = calcularEdadHelper(
 					a.semana_enfunde,
 					a.anio,
@@ -151,14 +134,11 @@ export const useCosechaStore = defineStore('cosecha', {
 					anioActual,
 				);
 
-				// C. Prioridad a 12-13 semanas
 				const aIdeal = edadA >= 12 && edadA <= 13;
 				const bIdeal = edadB >= 12 && edadB <= 13;
 
 				if (aIdeal && !bIdeal) return -1;
 				if (!aIdeal && bIdeal) return 1;
-
-				// D. Más vieja primero
 				return edadB - edadA;
 			});
 		},
@@ -175,42 +155,34 @@ export const useCosechaStore = defineStore('cosecha', {
 	},
 
 	actions: {
-		// Acción pública que usa el mismo helper
 		calcularEdadExacta(semItem: number, anioItem: number): number {
 			const { semana, anio } = this.infoSistema;
 			return calcularEdadHelper(semItem, anioItem, semana, anio);
 		},
-
 		esCintaDeCorteActual(sem: number, anio: number): boolean {
 			const edad = this.calcularEdadExacta(sem, anio);
 			return edad >= 12 && edad <= 13;
 		},
-
 		esFrutaDeCorte(sem: number, anio: number): boolean {
 			const edad = this.calcularEdadExacta(sem, anio);
 			return edad >= 11 && edad <= 14;
 		},
-
 		esExcedido(item: CintaCosecha): boolean {
 			const input = (item.cantidad_a_cosechar || 0) + (item.rechazo || 0);
 			return input > item.saldo_en_campo;
 		},
-
 		calcularPorcentaje(item: CintaCosecha): number {
 			if (!item.saldo_en_campo) return 0;
 			const input = (item.cantidad_a_cosechar || 0) + (item.rechazo || 0);
 			return Math.min((input / item.saldo_en_campo) * 100, 100);
 		},
 
-		// --- CARGA DE DATOS ---
 		async cargarSaldos(fincaId: number) {
 			if (!fincaId) return;
 			this.loading = true;
 			this.fincaActivaId = fincaId;
-
 			try {
-				const data: RawBalance[] = await cosechaService.getBalance(fincaId);
-
+				const data: BackendCinta[] = await cosechaService.getBalance(fincaId);
 				const { semana: semActual, anio: anioActualSistema } = this.infoSistema;
 
 				this.saldosPendientes = data.map((item) => {
@@ -218,7 +190,6 @@ export const useCosechaStore = defineStore('cosecha', {
 					let anioFinal =
 						Number(item.anio) || Number(item.year) || Number(item.año);
 
-					// INFERENCIA DE AÑO SI VIENE VACÍO
 					if (!anioFinal) {
 						if (semEnfunde > semActual + 15) {
 							anioFinal = anioActualSistema - 1;
@@ -226,7 +197,6 @@ export const useCosechaStore = defineStore('cosecha', {
 							anioFinal = anioActualSistema;
 						}
 					}
-
 					return {
 						calendario_id: item.calendario_id,
 						semana_enfunde: semEnfunde,
@@ -245,17 +215,15 @@ export const useCosechaStore = defineStore('cosecha', {
 				this.loading = false;
 			}
 		},
-
+		// ... resto de tus acciones (enviarCosecha, etc.) déjalas igual ...
 		resetInputs() {
 			this.saldosPendientes.forEach((s) => {
 				s.cantidad_a_cosechar = 0;
 				s.rechazo = 0;
 			});
 		},
-
 		async enviarCosecha(fincaId: number, fecha: string, usuarioId: number) {
 			const uiStore = useUIStore();
-
 			if (this.hayExcedidos) {
 				uiStore.showError('Error: Cantidades superan el saldo.');
 				return false;
@@ -264,7 +232,6 @@ export const useCosechaStore = defineStore('cosecha', {
 				uiStore.showWarning('No hay datos para enviar.');
 				return false;
 			}
-
 			const detalles = this.saldosPendientes
 				.filter((s) => s.cantidad_a_cosechar > 0 || s.rechazo > 0)
 				.map((s) => ({
@@ -272,8 +239,7 @@ export const useCosechaStore = defineStore('cosecha', {
 					cantidad_racimos: s.cantidad_a_cosechar,
 					cantidad_rechazo: s.rechazo,
 				}));
-
-			const payload = {
+			const payload: PayloadCosecha = {
 				id_local: crypto.randomUUID(),
 				finca_id: fincaId,
 				fecha,
@@ -306,7 +272,6 @@ export const useCosechaStore = defineStore('cosecha', {
 				this.loading = false;
 			}
 		},
-
 		inicializarMonitoreoRed() {
 			window.addEventListener('online', () => {
 				this.isOnline = true;
@@ -317,22 +282,19 @@ export const useCosechaStore = defineStore('cosecha', {
 			});
 			if (this.isOnline) this.procesarCola();
 		},
-
 		persistirCola() {
 			localStorage.setItem(
 				'cola_cosecha_pendiente',
 				JSON.stringify(this.colaSincronizacion),
 			);
 		},
-
 		async procesarCola() {
 			if (this.colaSincronizacion.length === 0 || !this.isOnline) return;
 			const cola = [...this.colaSincronizacion];
-			const fallidos = [];
+			const fallidos: PayloadCosecha[] = [];
 			for (const item of cola) {
 				try {
-					const { id_local, timestamp, ...data } = item;
-					await cosechaService.registrarLiquidacion(data);
+					await cosechaService.registrarLiquidacion(item);
 				} catch (e) {
 					fallidos.push(item);
 				}

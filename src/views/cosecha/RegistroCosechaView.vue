@@ -238,7 +238,9 @@
                         </v-col>
 
                         <v-col cols="12" sm="5">
-                          <div class="d-flex justify-end flex-wrap gap-4"> <div class="text-center">
+                          <div class="d-flex justify-end flex-wrap gap-4">
+                            
+                            <div class="text-center">
                               <div class="d-flex justify-space-between align-center px-1 mb-1">
                                 <div class="text-caption font-weight-black text-primary tracking-wider">BUENOS</div>
                                 <v-btn 
@@ -259,13 +261,15 @@
                                   :disabled="cosechaStore.loading || item.cantidad_a_cosechar <= 0"
                                   @click="item.cantidad_a_cosechar--"
                                 />
+                                
                                 <input
+                                  v-select-all
                                   type="number"
                                   class="touch-input text-h5 text-high-emphasis"
                                   v-model.number="item.cantidad_a_cosechar"
                                   :disabled="cosechaStore.loading"
-                                  @focus="$event.target.select()"
                                 />
+                                
                                 <v-btn
                                   icon="mdi-plus"
                                   size="small"
@@ -292,13 +296,15 @@
                                   :disabled="cosechaStore.loading || item.rechazo <= 0"
                                   @click="item.rechazo--"
                                 />
+                                
                                 <input
+                                  v-select-all
                                   type="number"
                                   class="touch-input text-h5 text-error"
                                   v-model.number="item.rechazo"
                                   :disabled="cosechaStore.loading"
-                                  @focus="$event.target.select()"
                                 />
+                                
                                 <v-btn
                                   icon="mdi-plus"
                                   size="small"
@@ -354,7 +360,18 @@ const snackbar = ref({ show: false, message: '', color: 'info' });
 
 const notify = (msg: string, color = 'info') => (snackbar.value = { show: true, message: msg, color });
 
-// ORDENAR AÑOS: ASCENDENTE (2025, luego 2026)
+// === DIRECTIVA PERSONALIZADA: v-select-all ===
+// Esto elimina la necesidad de funciones engorrosas.
+// Automáticamente selecciona el texto cuando el input recibe foco.
+const vSelectAll = {
+  mounted: (el: HTMLElement) => {
+    el.addEventListener('focus', (e) => {
+      // TypeScript sabe que e.target es un elemento del DOM, casteamos seguro aquí adentro
+      (e.target as HTMLInputElement).select();
+    });
+  }
+};
+
 const sortedYears = computed(() => {
     if(!cosechaStore.saldosPorAnio) return [];
     return Object.keys(cosechaStore.saldosPorAnio).sort((a, b) => Number(a) - Number(b));

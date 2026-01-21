@@ -1,40 +1,54 @@
-// src/stores/empresaStore.js
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+// @ts-ignore (Ignoramos el servicio hasta que lo pasemos a TS en el futuro, pero el store ya queda blindado)
 import { empresaService } from '@/services/empresaService';
 
-export const useEmpresaStore = defineStore('empresaStore', () => {
-	// STATE
-	const empresas = ref([]);
-	const empresaSeleccionada = ref(null);
+// --- 1. INTERFACES ---
+export interface Empresa {
+	id: number;
+	nombre: string;
+	// Puedes agregar más campos si tu DB los tiene (ruc, dirección, etc.)
+	[key: string]: any;
+}
 
-	const loading = ref(false);
-	const error = ref(null);
-	const successMessage = ref(null);
+export interface EmpresaPayload {
+	nombre: string;
+	[key: string]: any;
+}
+
+// --- 2. STORE ---
+export const useEmpresaStore = defineStore('empresaStore', () => {
+	// STATE (Tipado explícitamente)
+	const empresas = ref<Empresa[]>([]);
+	const empresaSeleccionada = ref<Empresa | null>(null);
+
+	const loading = ref<boolean>(false);
+	const error = ref<string | null>(null);
+	const successMessage = ref<string | null>(null);
 
 	// === Mutadores locales ===
-	const setEmpresas = (data) => {
+	const setEmpresas = (data: Empresa[]) => {
 		empresas.value = data;
 	};
 
-	const agregarEmpresaLocal = (empresa) => {
+	const agregarEmpresaLocal = (empresa: Empresa) => {
 		empresas.value.push(empresa);
 	};
 
-	const eliminarEmpresaLocal = (id) => {
+	const eliminarEmpresaLocal = (id: number) => {
 		empresas.value = empresas.value.filter((empresa) => empresa.id !== id);
 	};
 
-	const setEmpresaSeleccionada = (empresa) => {
+	const setEmpresaSeleccionada = (empresa: Empresa | null) => {
 		empresaSeleccionada.value = empresa;
 	};
 
 	// === Helpers de mensajes ===
-	const setError = (message) => {
+	const setError = (message: string) => {
 		error.value = message;
 	};
 
-	const setSuccess = (message) => {
+	const setSuccess = (message: string) => {
 		successMessage.value = message;
 	};
 
@@ -43,34 +57,35 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 		successMessage.value = null;
 	};
 
-	// === ACCIONES ASYNC QUE HABLAN CON EL BACKEND ===
+	// === ACCIONES ASYNC ===
 
 	// Cargar todas las empresas
 	const fetchEmpresas = async () => {
 		loading.value = true;
 		clearMessages();
 		try {
+			// TypeScript infiere que data es any por el servicio, pero lo casteamos al guardarlo
 			const data = await empresaService.cargarEmpresas();
 			setEmpresas(data);
 			return data;
-		} catch (err) {
-			setError(err.message);
+		} catch (err: any) {
+			setError(err.message || 'Error al cargar empresas');
 			throw err;
 		} finally {
 			loading.value = false;
 		}
 	};
 
-	// Obtener una empresa por ID (si la necesitas)
-	const fetchEmpresaById = async (id) => {
+	// Obtener una empresa por ID
+	const fetchEmpresaById = async (id: number) => {
 		loading.value = true;
 		clearMessages();
 		try {
 			const data = await empresaService.obtenerEmpresaPorId(id);
 			setEmpresaSeleccionada(data);
 			return data;
-		} catch (err) {
-			setError(err.message);
+		} catch (err: any) {
+			setError(err.message || 'Error al obtener empresa');
 			throw err;
 		} finally {
 			loading.value = false;
@@ -78,7 +93,7 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 	};
 
 	// Crear empresa
-	const crearEmpresa = async (payload) => {
+	const crearEmpresa = async (payload: EmpresaPayload) => {
 		loading.value = true;
 		clearMessages();
 		try {
@@ -86,9 +101,8 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 			agregarEmpresaLocal(creada);
 			setSuccess('Empresa creada correctamente');
 			return creada;
-		} catch (err) {
-			// Aquí puede venir "nombre es requerido" o "Empresa ya existe"
-			setError(err.message);
+		} catch (err: any) {
+			setError(err.message || 'Error al crear empresa');
 			throw err;
 		} finally {
 			loading.value = false;
@@ -96,7 +110,7 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 	};
 
 	// Actualizar empresa
-	const actualizarEmpresa = async (id, payload) => {
+	const actualizarEmpresa = async (id: number, payload: EmpresaPayload) => {
 		loading.value = true;
 		clearMessages();
 		try {
@@ -107,9 +121,8 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 			}
 			setSuccess('Empresa actualizada correctamente');
 			return actualizada;
-		} catch (err) {
-			// Aquí puede venir "Nombre en uso" o "Empresa no encontrada"
-			setError(err.message);
+		} catch (err: any) {
+			setError(err.message || 'Error al actualizar');
 			throw err;
 		} finally {
 			loading.value = false;
@@ -117,15 +130,15 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 	};
 
 	// Eliminar empresa
-	const eliminarEmpresaAction = async (id) => {
+	const eliminarEmpresaAction = async (id: number) => {
 		loading.value = true;
 		clearMessages();
 		try {
 			await empresaService.eliminarEmpresa(id);
 			eliminarEmpresaLocal(id);
 			setSuccess('Empresa eliminada correctamente');
-		} catch (err) {
-			setError(err.message);
+		} catch (err: any) {
+			setError(err.message || 'Error al eliminar');
 			throw err;
 		} finally {
 			loading.value = false;
@@ -140,11 +153,11 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 		error,
 		successMessage,
 
-		// mutadores sincrónicos (si los quieres seguir usando en otros lados)
+		// mutadores
 		setEmpresas,
 		setEmpresaSeleccionada,
 
-		// acciones async usadas por la vista
+		// acciones
 		fetchEmpresas,
 		fetchEmpresaById,
 		crearEmpresa,
