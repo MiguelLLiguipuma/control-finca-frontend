@@ -9,7 +9,7 @@ export const useCalendarioStore = defineStore('calendario', {
 		resumenCalendarios: [], // Resumen anual (GET /calendarios-enfunde/resumen)
 
 		// --- ESTADO DE CONFIGURACIÓN ---
-		anioSeleccionado: 2026,
+		anioSeleccionado: new Date().getFullYear(),
 		empresaSeleccionada: null,
 
 		secuencia: [],
@@ -151,6 +151,15 @@ export const useCalendarioStore = defineStore('calendario', {
 				return false;
 			}
 
+			if (!this.calendarioGenerado.length || this.calendarioGenerado.some((s) => !s.cinta)) {
+				this.mostrarNotificacion(
+					'Completa todas las semanas antes de guardar',
+					'warning',
+					'mdi-alert',
+				);
+				return false;
+			}
+
 			this.loading = true;
 
 			const payload = {
@@ -159,7 +168,7 @@ export const useCalendarioStore = defineStore('calendario', {
 				detalles: this.calendarioGenerado.map((s) => ({
 					semana: s.numero,
 					color_id: s.cinta.id,
-					estado: 'activo', // Usamos 'A' para asegurar compatibilidad con la DB
+					estado: 'A',
 				})),
 			};
 
@@ -174,8 +183,8 @@ export const useCalendarioStore = defineStore('calendario', {
 				// 2. Limpiar el formulario visualmente
 				this.limpiarTodo();
 
-				// 3. Recargar la lista de calendarios
-				await this.obtenerCalendarios();
+					// 3. Recargar el resumen que consume la vista
+					await this.obtenerResumen();
 
 				return true;
 			} catch (error) {

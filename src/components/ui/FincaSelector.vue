@@ -26,18 +26,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useFincaStore } from '@/stores/fincaStore'
 import { storeToRefs } from 'pinia'
 
 const fincaStore = useFincaStore()
 const { fincas, fincaSeleccionadaId, loading } = storeToRefs(fincaStore)
-
-onMounted(() => {
-  if (!fincas.value.length) {
-    fincaStore.obtenerFincas()
-  }
-})
 
 const selectedId = computed({
   get: () => fincaSeleccionadaId.value,
@@ -52,9 +46,7 @@ const selectedId = computed({
   max-width: 320px;
 }
 
-/* 🎨 ADAPTACIÓN DINÁMICA A TEMAS */
 .custom-select-finca :deep(.v-field) {
-  /* Borde y fondo basados en las variables del tema de Vuetify */
   border: 1px solid rgba(var(--v-border-color), 0.15) !important;
   background-color: rgba(var(--v-theme-on-surface), 0.05) !important;
   transition: all 0.2s ease;
@@ -70,7 +62,6 @@ const selectedId = computed({
 .custom-select-finca :deep(.v-field__input) {
   font-size: 0.81rem !important;
   font-weight: 700 !important;
-  /* Color de texto que cambia según light/dark */
   color: rgb(var(--v-theme-on-surface)) !important;
   min-height: 38px !important;
   padding-top: 0 !important;
@@ -95,7 +86,6 @@ const selectedId = computed({
   display: none !important;
 }
 
-/* Estilo del menú desplegable para que no se vea blanco en modo oscuro */
 :deep(.v-list) {
   background: rgb(var(--v-theme-surface)) !important;
   border: 1px solid rgba(var(--v-border-color), 0.1) !important;

@@ -109,11 +109,13 @@
 import { computed, ref, onMounted } from 'vue'
 import { useTheme } from 'vuetify'
 import { useEnfundeStore } from '@/stores/enfundeStore'
+import { useFincaStore } from '@/stores/fincaStore'
 
 const theme = useTheme()
 const isDark = computed(() => theme.global.current.value.dark)
 
 const enfundeStore = useEnfundeStore()
+const fincaStore = useFincaStore()
 const search = ref('')
 
 // NORMALIZACIÓN DE REGISTROS: Asegura que el campo se llame 'color' para la tabla
@@ -130,7 +132,10 @@ const totalFundas = computed(() => enfundeStore.totalFundasFiltradas)
 
 onMounted(() => {
   if (enfundeStore.registros.length === 0) {
-    enfundeStore.cargarRegistros()
+    const fincaId = fincaStore.fincaSeleccionadaId
+    if (fincaId) {
+      enfundeStore.cargarRegistros(fincaId)
+    }
   }
 })
 

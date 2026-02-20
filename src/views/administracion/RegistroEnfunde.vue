@@ -233,6 +233,7 @@ import { useFincaStore } from '@/stores/fincaStore'
 import { useUsuarioStore } from '@/stores/usuarioStore'
 import { useCalendarioStore } from '@/stores/calendarioStore'
 import { useReportesStore } from '@/stores/reportesStore'
+import { useAuthStore } from '@/stores/auth/authStore'
 import TablaEnfunde from '@/components/registros/tablaEnfunde.vue'
 
 const theme = useTheme()
@@ -243,6 +244,7 @@ const reportesStore = useReportesStore()
 const fincaStore = useFincaStore()
 const usuarioStore = useUsuarioStore()
 const calendarioStore = useCalendarioStore()
+const authStore = useAuthStore()
 
 const formRef = ref(null)
 const rawData = ref({ fincas: [], usuarios: [], calendarios: [] })
@@ -264,13 +266,19 @@ const esAnioValido = computed(() => {
 });
 
 const sincronizarYRefrescar = async () => {
-  await reportesStore.actualizarPeriodo(anioFormulario.value);
+  const fincaId = Number(registroStore.formData.finca_id || fincaStore.fincaSeleccionadaId || 0);
+  await reportesStore.actualizarPeriodo(anioFormulario.value, fincaId || null);
   registroStore.tablaKey++;
   registroStore.mostrarMensaje(`Panel sincronizado al año ${anioFormulario.value}`, 'success');
 };
 
 // FILTRADO DE DATOS (CORREGIDO PARA VARIABLE 'anio')
-const fincasFiltradas = computed(() => rawData.value.fincas.map(f => ({ ...f, nombre_completo: `${f.nombre} - ${f.empresa}` })))
+const fincasFiltradas = computed(() =>
+  rawData.value.fincas.map(f => ({
+    ...f,
+    nombre_completo: `${f.nombre} - ${f.empresa_nombre || 'Sin empresa'}`
+  }))
+)
 const usuariosActivos = computed(() => rawData.value.usuarios.filter(u => u.activo !== false))
 
 const calendariosAnioActual = computed(() => {
@@ -307,7 +315,7 @@ watch(() => reportesStore.anioSeleccionado, async (nuevoAnio) => {
   if (nuevoAnio) {
     // Al cambiar el año en el panel, refrescamos calendarios para asegurar consistencia
     const c = await calendarioStore.obtenerCalendarios()
-    rawData.value.calendarios = c
+    rawData.value.calendarios = c || []
   }
 })
 
@@ -320,7 +328,17 @@ onMounted(async () => {
       usuarioStore.obtenerUsuarios(), 
       calendarioStore.obtenerCalendarios()
     ])
-    rawData.value = { fincas: f, usuarios: u, calendarios: c }
+    rawData.value = { fincas: f || [], usuarios: u || [], calendarios: c || [] }
+
+    if (!registroStore.formData.finca_id && fincaStore.fincaSeleccionadaId) {
+      registroStore.formData.finca_id = fincaStore.fincaSeleccionadaId
+    }
+
+    if (!registroStore.formData.usuario_id) {
+      registroStore.formData.usuario_id = Number(
+        authStore.user?.id_usuario ?? authStore.user?.id ?? null
+      )
+    }
   } catch (error) {
     console.error("Error cargando datos de inicio:", error)
   } finally { 

@@ -58,7 +58,7 @@
                   <v-select
                     :model-value="store.anioSeleccionado"
                     @update:model-value="store.setAnio"
-                    :items="[2024, 2025, 2026, 2027, 2028]"
+                    :items="aniosDisponibles"
                     variant="plain"
                     hide-details
                     density="compact"
@@ -322,84 +322,85 @@
           icon="mdi-close"
           @click="store.snackbar.show = false"
         ></v-btn>
-        <v-divider class="my-12 border-dashed" />
-
-<div class="mt-8">
-  <div class="d-flex align-center mb-6">
-    <v-avatar color="primary" size="32" variant="tonal" class="mr-3">
-      <v-icon size="18">mdi-table-clock</v-icon>
-    </v-avatar>
-    <h2 class="text-h5 font-weight-black text-high-emphasis">Planificaciones Registradas</h2>
-    <v-spacer />
-    <v-btn 
-      variant="tonal" 
-      color="primary" 
-      prepend-icon="mdi-refresh" 
-      size="small" 
-      class="rounded-lg font-weight-bold"
-      @click="store.obtenerResumen"
-      :loading="store.loading"
-    >
-      Actualizar
-    </v-btn>
-  </div>
-
-  <v-card border variant="flat" class="rounded-xl bg-surface overflow-hidden">
-    <v-table hover density="comfortable">
-      <thead>
-        <tr class="bg-surface-light">
-          <th class="text-overline font-weight-black pl-6">Empresa</th>
-          <th class="text-overline font-weight-black text-center">Año</th>
-          <th class="text-overline font-weight-black">Secuencia Crónica de Cintas</th>
-          <th class="text-overline font-weight-black text-center">Semanas</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="cal in store.resumenCalendarios" :key="cal.empresa + cal.anio">
-          <td class="pl-6">
-            <div class="font-weight-bold text-primary">{{ cal.empresa }}</div>
-          </td>
-          <td class="text-center">
-            <v-chip size="small" variant="flat" color="secondary" class="font-weight-black">
-              {{ cal.anio }}
-            </v-chip>
-          </td>
-          <td>
-            <div class="d-flex align-center py-2 flex-wrap gap-1">
-              <template v-for="(hex, index) in cal.secuencia_hex.split(',').slice(0, 15)" :key="index">
-                <v-tooltip location="top">
-                  <template v-slot:activator="{ props }">
-                    <div 
-                      v-bind="props"
-                      class="color-dot shadow-sm"
-                      :style="{ backgroundColor: hex }"
-                    ></div>
-                  </template>
-                  <span>Semana {{ index + 1 }}</span>
-                </v-tooltip>
-              </template>
-              <span v-if="cal.total_semanas > 15" class="text-caption text-disabled ml-1">
-                +{{ cal.total_semanas - 15 }} más
-              </span>
-            </div>
-          </td>
-          <td class="text-center font-weight-medium text-medium-emphasis">
-            {{ cal.total_semanas }}
-          </td>
-        </tr>
-        
-        <tr v-if="store.resumenCalendarios.length === 0">
-          <td colspan="4" class="text-center py-10">
-            <v-icon size="48" color="disabled" class="mb-2">mdi-calendar-blank</v-icon>
-            <div class="text-disabled font-weight-medium">No hay calendarios configurados.</div>
-          </td>
-        </tr>
-      </tbody>
-    </v-table>
-  </v-card>
-</div>
       </template>
     </v-snackbar>
+
+    <v-divider class="my-12 border-dashed" />
+
+    <div class="mt-8">
+      <div class="d-flex align-center mb-6">
+        <v-avatar color="primary" size="32" variant="tonal" class="mr-3">
+          <v-icon size="18">mdi-table-clock</v-icon>
+        </v-avatar>
+        <h2 class="text-h5 font-weight-black text-high-emphasis">Planificaciones Registradas</h2>
+        <v-spacer />
+        <v-btn 
+          variant="tonal" 
+          color="primary" 
+          prepend-icon="mdi-refresh" 
+          size="small" 
+          class="rounded-lg font-weight-bold"
+          @click="store.obtenerResumen"
+          :loading="store.loading"
+        >
+          Actualizar
+        </v-btn>
+      </div>
+
+      <v-card border variant="flat" class="rounded-xl bg-surface overflow-hidden">
+        <v-table hover density="comfortable">
+          <thead>
+            <tr class="bg-surface-light">
+              <th class="text-overline font-weight-black pl-6">Empresa</th>
+              <th class="text-overline font-weight-black text-center">Año</th>
+              <th class="text-overline font-weight-black">Secuencia Crónica de Cintas</th>
+              <th class="text-overline font-weight-black text-center">Semanas</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="cal in store.resumenCalendarios" :key="cal.empresa + cal.anio">
+              <td class="pl-6">
+                <div class="font-weight-bold text-primary">{{ cal.empresa }}</div>
+              </td>
+              <td class="text-center">
+                <v-chip size="small" variant="flat" color="secondary" class="font-weight-black">
+                  {{ cal.anio }}
+                </v-chip>
+              </td>
+              <td>
+                <div class="d-flex align-center py-2 flex-wrap gap-1">
+                  <template v-for="(hex, index) in (cal.secuencia_hex || '').split(',').slice(0, 15)" :key="index">
+                    <v-tooltip location="top">
+                      <template v-slot:activator="{ props }">
+                        <div 
+                          v-bind="props"
+                          class="color-dot shadow-sm"
+                          :style="{ backgroundColor: hex }"
+                        ></div>
+                      </template>
+                      <span>Semana {{ index + 1 }}</span>
+                    </v-tooltip>
+                  </template>
+                  <span v-if="cal.total_semanas > 15" class="text-caption text-disabled ml-1">
+                    +{{ cal.total_semanas - 15 }} más
+                  </span>
+                </div>
+              </td>
+              <td class="text-center font-weight-medium text-medium-emphasis">
+                {{ cal.total_semanas }}
+              </td>
+            </tr>
+            
+            <tr v-if="store.resumenCalendarios.length === 0">
+              <td colspan="4" class="text-center py-10">
+                <v-icon size="48" color="disabled" class="mb-2">mdi-calendar-blank</v-icon>
+                <div class="text-disabled font-weight-medium">No hay calendarios configurados.</div>
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card>
+    </div>
 
   </v-container>
 </template>
@@ -420,6 +421,9 @@ const uiState = reactive({
   dialogoAbierto: false,
   semanaEditando: null
 });
+
+const baseYear = new Date().getFullYear();
+const aniosDisponibles = Array.from({ length: 5 }, (_, i) => baseYear - 1 + i);
 
 onMounted(async () => {
   // Carga paralela de datos necesarios

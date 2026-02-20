@@ -126,8 +126,8 @@
                 color="primary"
                 class="rounded-xl py-7 font-weight-black elevation-6 button-glow mb-4 text-h6"
                 height="72"
-                :loading="cosechaStore.loading"
-                :disabled="cosechaStore.loading || cosechaStore.totalDigitado === 0 || !fincaSeleccionada"
+                :loading="cosechaStore.loading || cosechaStore.submitting"
+                :disabled="cosechaStore.loading || cosechaStore.submitting || cosechaStore.totalDigitado === 0 || !fincaSeleccionada"
                 @click="guardarCosecha"
               >
                 <v-icon start size="32">mdi-cloud-upload</v-icon>
@@ -145,6 +145,7 @@
           </v-col>
 
           <v-col cols="12" md="8" lg="9">
+            <PanelPrediccionCosecha :finca-id="fincaSeleccionada" />
             
             <div v-if="cosechaStore.loading" class="text-center pa-12">
               <v-progress-circular indeterminate size="80" width="8" color="primary" />
@@ -246,7 +247,7 @@
                                 <v-btn 
                                   size="x-small" variant="text" color="primary" class="px-0 py-0" 
                                   style="height: 14px; min-width: 0;"
-                                  @click="item.cantidad_a_cosechar = item.saldo_en_campo - (item.rechazo || 0)"
+                                  @click="cosechaStore.maximizarBuenos(item)"
                                 >MAX</v-btn>
                               </div>
                               <v-sheet 
@@ -259,7 +260,7 @@
                                   size="small"
                                   variant="text"
                                   :disabled="cosechaStore.loading || item.cantidad_a_cosechar <= 0"
-                                  @click="item.cantidad_a_cosechar--"
+                                  @click="cosechaStore.ajustarDigitacion(item, 'cantidad_a_cosechar', -1)"
                                 />
                                 
                                 <input
@@ -268,6 +269,7 @@
                                   class="touch-input text-h5 text-high-emphasis"
                                   v-model.number="item.cantidad_a_cosechar"
                                   :disabled="cosechaStore.loading"
+                                  @blur="cosechaStore.normalizarItemDigitacion(item)"
                                 />
                                 
                                 <v-btn
@@ -276,7 +278,7 @@
                                   variant="text"
                                   color="primary"
                                   :disabled="cosechaStore.loading || cosechaStore.esExcedido(item)"
-                                  @click="item.cantidad_a_cosechar++"
+                                  @click="cosechaStore.ajustarDigitacion(item, 'cantidad_a_cosechar', 1)"
                                 />
                               </v-sheet>
                             </div>
@@ -294,7 +296,7 @@
                                   variant="text"
                                   color="error"
                                   :disabled="cosechaStore.loading || item.rechazo <= 0"
-                                  @click="item.rechazo--"
+                                  @click="cosechaStore.ajustarDigitacion(item, 'rechazo', -1)"
                                 />
                                 
                                 <input
@@ -303,6 +305,7 @@
                                   class="touch-input text-h5 text-error"
                                   v-model.number="item.rechazo"
                                   :disabled="cosechaStore.loading"
+                                  @blur="cosechaStore.normalizarItemDigitacion(item)"
                                 />
                                 
                                 <v-btn
@@ -311,7 +314,7 @@
                                   variant="text"
                                   color="error"
                                   :disabled="cosechaStore.loading || cosechaStore.esExcedido(item)"
-                                  @click="item.rechazo++"
+                                  @click="cosechaStore.ajustarDigitacion(item, 'rechazo', 1)"
                                 />
                               </v-sheet>
                             </div>
@@ -346,6 +349,7 @@ import { useCosechaStore, type CintaCosecha } from '../../stores/cosecha/cosecha
 import { useFincaStore } from '../../stores/fincaStore';
 import { useEmpresaStore } from '../../stores/empresaStore';
 import { storeToRefs } from 'pinia';
+import PanelPrediccionCosecha from '../../components/cosecha/PanelPrediccionCosecha.vue';
 
 const cosechaStore = useCosechaStore();
 const fincaStore = useFincaStore();
@@ -425,11 +429,13 @@ const guardarCosecha = async () => {
   if (cosechaStore.loading) return;
   if (!fincaSeleccionada.value) return notify('Seleccione una finca', 'error');
   if (cosechaStore.totalDigitado === 0) return notify('Ingrese al menos un racimo', 'info');
-
-  const ok = await cosechaStore.enviarCosecha(fincaSeleccionada.value, fechaCosecha.value, 1);
-  if (ok) {
-    notify('Reporte enviado correctamente', 'success');
+  if (!localStorage.getItem('token')) {
+    return notify('Sesión no válida. Ingrese nuevamente.', 'error');
   }
+
+  const result = await cosechaStore.enviarCosecha(fincaSeleccionada.value, fechaCosecha.value);
+  if (!result.ok) return notify(result.message, 'error');
+  notify(result.message, result.queued ? 'warning' : 'success');
 };
 
 onMounted(async () => {

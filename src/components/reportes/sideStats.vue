@@ -1,8 +1,12 @@
 <template>
   <div class="side-panel">
-    <div class="kpi-grid">
-      <v-card 
-        v-for="k in stats" 
+    <div v-if="loading" class="kpi-grid">
+      <v-skeleton-loader v-for="n in 3" :key="n" type="article" class="rounded-lg" />
+    </div>
+
+    <div v-else class="kpi-grid">
+      <v-card
+        v-for="k in stats"
         :key="k.label"
         variant="flat"
         class="kpi-card pa-4 rounded-lg border-s-lg"
@@ -41,9 +45,6 @@ const props = defineProps({
   },
 })
 
-/* ======================
-   FORMATO DE VALORES
-====================== */
 const formatValue = (value) => {
   if (typeof value === 'number') {
     return value.toLocaleString('es-EC')
@@ -65,7 +66,6 @@ const formatValue = (value) => {
   gap: 16px;
 }
 
-/* La tarjeta usa el color de superficie del tema */
 .kpi-card {
   background: rgb(var(--v-theme-surface)) !important;
   border-left: 4px solid rgb(var(--v-theme-primary)) !important;
@@ -92,6 +92,4 @@ const formatValue = (value) => {
   font-weight: 800;
   line-height: 1.2;
 }
-
-/* Quitamos los media queries manuales ya que Vuetify lo maneja por clases */
 </style>

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { useEnfundeStore } from './enfundeStore.js';
 import { useReportesStore } from './reportesStore.js'; // 👈 Importado para seguridad
+import { useFincaStore } from './fincaStore';
 
 export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 	state: () => ({
@@ -76,7 +77,11 @@ export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 
 				// 2. 🔥 LA SOLUCIÓN: Recargar registros desde el servidor
 				// Esto asegura que los nombres de finca, usuario y cinta se vean de inmediato
-				await enfundeStore.cargarRegistros();
+				const fincaStore = useFincaStore();
+				const fincaId = Number(
+					this.formData.finca_id ?? fincaStore.fincaSeleccionadaId ?? 0,
+				);
+				await enfundeStore.cargarRegistros(fincaId || null);
 
 				this.mostrarMensaje('Registro guardado correctamente');
 				this.resetFormulario();

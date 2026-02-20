@@ -55,7 +55,10 @@ api.interceptors.response.use(
 					break;
 
 				case 500:
-					mensaje = 'Error interno en el servidor. Inténtelo más tarde.';
+					mensaje =
+						data?.error ||
+						data?.message ||
+						'Error interno en el servidor. Inténtelo más tarde.';
 					break;
 
 				default:
@@ -68,7 +71,7 @@ api.interceptors.response.use(
 		}
 
 		// Evitamos mostrar el error si es un error de cancelación de petición
-		if (!axios.isCancel(error)) {
+		if (!axios.isCancel(error) && !error.config?.skipGlobalError) {
 			uiStore.showError(mensaje);
 		}
 

@@ -17,7 +17,20 @@
     </div>
 
     <v-card-text class="pa-6">
-      <v-row>
+      <v-skeleton-loader
+        v-if="loading"
+        type="image, list-item-three-line, list-item-three-line"
+        class="bg-surface"
+      />
+      <v-sheet
+        v-else-if="cintasOrdenadas.length === 0"
+        class="pa-6 text-center border rounded-lg"
+        color="surface"
+      >
+        <v-icon size="44" color="medium-emphasis">mdi-chart-donut-variant</v-icon>
+        <div class="text-subtitle-1 font-weight-bold text-medium-emphasis mt-2">Sin datos de cintas</div>
+      </v-sheet>
+      <v-row v-else>
         <v-col cols="12" md="5" class="d-flex flex-column align-center justify-center border-right-md">
           <div class="gauge-container mb-6">
             <svg class="gauge-svg" viewBox="0 0 200 200">
@@ -123,24 +136,41 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useTheme } from 'vuetify'
 
 const props = defineProps({
   cintas: { type: Array, required: true },
-  metaDiaria: { type: Number, default: 10000 }
+  metaDiaria: { type: Number, default: 10000 },
+  loading: { type: Boolean, default: false },
 })
 
 const theme = useTheme()
 const isDark = computed(() => theme.global.current.value.dark)
+const now = ref(new Date())
+let clockInterval = null
 
-const horaActual = computed(() => new Date().toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }))
-const totalFundas = computed(() => props.cintas.reduce((acc, c) => acc + (Number(c.total) || 0), 0))
+const cintasSafe = computed(() => Array.isArray(props.cintas) ? props.cintas : [])
+
+onMounted(() => {
+  clockInterval = setInterval(() => {
+    now.value = new Date()
+  }, 60000)
+})
+
+onBeforeUnmount(() => {
+  if (clockInterval) clearInterval(clockInterval)
+})
+
+const horaActual = computed(() =>
+  now.value.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }),
+)
+const totalFundas = computed(() => cintasSafe.value.reduce((acc, c) => acc + (Number(c.total) || 0), 0))
 const totalFundasFormateado = computed(() => new Intl.NumberFormat('es-EC').format(totalFundas.value))
 const metaDiariaFormateada = computed(() => new Intl.NumberFormat('es-EC').format(props.metaDiaria))
 const eficienciaTotal = computed(() => Math.min(100, Math.round((totalFundas.value / props.metaDiaria) * 100)))
 
-const cintasOrdenadas = computed(() => [...props.cintas].sort((a, b) => b.total - a.total).slice(0, 8))
+const cintasOrdenadas = computed(() => [...cintasSafe.value].sort((a, b) => b.total - a.total).slice(0, 8))
 const cintaTop = computed(() => cintasOrdenadas.value[0] || { nombre: 'N/A', total: 0 })
 
 const gaugeSegments = computed(() => {
@@ -160,8 +190,9 @@ const calcularPorcentaje = (v) => Math.round((v / (totalFundas.value || 1)) * 10
 const calcularPromedioHora = (v) => Math.round(v / 8)
 
 const tiempoRestante = computed(() => {
-  const fin = new Date().setHours(17, 0, 0, 0)
-  const dif = fin - new Date()
+  const fin = new Date(now.value)
+  fin.setHours(17, 0, 0, 0)
+  const dif = fin.getTime() - now.value.getTime()
   if (dif < 0) return 'Turno Finalizado'
   return `${Math.floor(dif/3600000)}h ${Math.floor((dif%3600000)/60000)}m`
 })

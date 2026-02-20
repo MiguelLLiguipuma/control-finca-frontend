@@ -1,7 +1,7 @@
 <template>
   <div class="ano-selector-wrapper">
     <v-select
-      v-model="reportesStore.anioSeleccionado" 
+      v-model="reportesStore.anioSeleccionado"
       :items="aniosDisponibles"
       placeholder="Año"
       variant="solo-filled"
@@ -25,8 +25,8 @@ import { useReportesStore } from '@/stores/reportesStore'
 const reportesStore = useReportesStore()
 
 const aniosDisponibles = computed(() => {
-  const anioActual = new Date().getFullYear() // 2026
-  return [anioActual, anioActual - 1, anioActual - 2]
+  const anioActual = new Date().getFullYear()
+  return Array.from({ length: 8 }, (_, i) => anioActual - i)
 })
 </script>
 
@@ -36,9 +36,7 @@ const aniosDisponibles = computed(() => {
   flex-shrink: 0;
 }
 
-/* 🎨 AJUSTES PARA MODO OSCURO DINÁMICO */
 .custom-select-ano :deep(.v-field) {
-  /* Usamos variables de Vuetify para borde y fondo */
   border: 1px solid rgba(var(--v-border-color), 0.15) !important;
   background-color: rgba(var(--v-theme-on-surface), 0.05) !important;
   transition: all 0.2s ease;
@@ -54,7 +52,6 @@ const aniosDisponibles = computed(() => {
 .custom-select-ano :deep(.v-field__input) {
   font-size: 0.81rem !important;
   font-weight: 700 !important;
-  /* text-high-emphasis asegura que sea gris oscuro en light y blanco en dark */
   color: rgb(var(--v-theme-on-surface)) !important;
   min-height: 38px !important;
   padding-top: 0 !important;
@@ -72,11 +69,9 @@ const aniosDisponibles = computed(() => {
 .custom-select-ano :deep(.v-field__append-inner) {
   padding-top: 0 !important;
   align-items: center !important;
-  /* Color de la flecha adaptable */
   color: rgba(var(--v-theme-on-surface), 0.5) !important;
 }
 
-/* Estilo para el menú desplegable (popup) */
 :deep(.v-list) {
   background: rgb(var(--v-theme-surface)) !important;
   border: 1px solid rgba(var(--v-border-color), 0.1) !important;

@@ -23,6 +23,7 @@
       class="kpi-btn"
       size="small"
       color="primary"
+      @click="emit('view-details', card.title)"
     >
       Ver detalles
     </v-btn>
@@ -38,6 +39,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+const emit = defineEmits(['view-details'])
 
 const formattedValue = computed(() => {
   if (typeof props.card.value === 'number') {
@@ -57,7 +60,6 @@ const gradientClass = computed(() => {
 .kpi-card {
   padding: 28px 20px;
   text-align: center;
-  /* Eliminamos el gradiente blanco fijo y usamos el color de superficie del tema */
   background: rgb(var(--v-theme-surface)) !important;
   transition: transform 0.25s ease, box-shadow 0.25s ease, background-color 0.3s ease;
   border: 1px solid rgba(var(--v-border-color), 0.1) !important;
@@ -68,7 +70,6 @@ const gradientClass = computed(() => {
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.12) !important;
 }
 
-/* ICONO */
 .icon-wrapper {
   width: 56px;
   height: 56px;
@@ -80,14 +81,12 @@ const gradientClass = computed(() => {
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
 
-/* GRADIENTES (Se mantienen para dar vida al dashboard) */
 .bg-primary { background: linear-gradient(135deg, #6366f1, #818cf8); }
 .bg-green { background: linear-gradient(135deg, #22c55e, #4ade80); }
 .bg-yellow { background: linear-gradient(135deg, #facc15, #fde047); }
 .bg-pink { background: linear-gradient(135deg, #fb7185, #fda4af); }
 .bg-teal { background: linear-gradient(135deg, #2dd4bf, #5eead4); }
 
-/* TEXTO */
 .kpi-title {
   font-size: 14px;
   font-weight: 600;
@@ -103,7 +102,6 @@ const gradientClass = computed(() => {
   letter-spacing: -1px;
 }
 
-/* BOTÓN */
 .kpi-btn {
   border-radius: 10px;
   text-transform: none;

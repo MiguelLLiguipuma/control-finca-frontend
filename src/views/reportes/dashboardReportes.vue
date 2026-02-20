@@ -37,22 +37,31 @@
           </v-card>
         </header>
 
-        <section class="mb-10">
-          <v-row v-if="reportesStore.loading" dense>
+        <section ref="kpisSectionRef" class="mb-10">
+          <v-row v-if="reportesStore.loadingKpis" dense>
             <v-col v-for="n in 4" :key="n" cols="12" sm="6" lg="3">
               <v-skeleton-loader type="card-avatar" class="rounded-xl border bg-surface" />
             </v-col>
           </v-row>
           <v-row v-else-if="reportesStore.tarjetas && reportesStore.tarjetas.length" dense>
-            <v-col v-for="card in reportesStore.tarjetas" :key="card.title" cols="12" sm="6" lg="3">
-              <SummaryCards :card="card" class="kpi-card-hover h-100" />
-            </v-col>
-          </v-row>
+              <v-col v-for="card in reportesStore.tarjetas" :key="card.title" cols="12" sm="6" lg="3">
+                <SummaryCards :card="card" class="kpi-card-hover h-100" @view-details="handleViewDetails" />
+              </v-col>
+            </v-row>
+          <v-sheet
+            v-else
+            rounded="xl"
+            class="pa-8 text-center border bg-surface"
+          >
+            <v-icon size="56" color="medium-emphasis" class="mb-2">mdi-chart-box-outline</v-icon>
+            <div class="text-h6 font-weight-bold text-medium-emphasis">No hay datos para este período</div>
+            <div class="text-body-2 text-disabled mt-1">Prueba con otra finca o cambia el año.</div>
+          </v-sheet>
         </section>
 
         <v-row>
           <v-col cols="12" lg="8">
-            <v-card variant="flat" class="rounded-xl mb-6 bg-surface shadow-sm border overflow-visible">
+            <v-card ref="mensualSectionRef" variant="flat" class="rounded-xl mb-6 bg-surface shadow-sm border overflow-visible">
               <div class="pa-4 d-flex align-center border-b bg-background-opacity">
                 <v-avatar size="32" color="primary" variant="tonal" class="mr-3">
                   <v-icon size="18">mdi-chart-bar</v-icon>
@@ -60,7 +69,7 @@
                 <span class="text-overline font-weight-black text-high-emphasis">Tendencia Mensual de Cosecha</span>
               </div>
               <div class="pa-2 pa-md-4">
-                <v-skeleton-loader v-if="reportesStore.loading" type="image" height="350" class="rounded-lg bg-surface" />
+                <v-skeleton-loader v-if="reportesStore.loadingMensual" type="image" height="350" class="rounded-lg bg-surface" />
                 <EarningsChart
                   v-else-if="reportesStore.chartSeries && reportesStore.chartSeries.length"
                   :series="reportesStore.chartSeries"
@@ -70,7 +79,7 @@
               </div>
             </v-card>
 
-            <v-card variant="flat" class="rounded-xl mb-6 bg-surface shadow-sm border overflow-visible">
+            <v-card ref="semanalSectionRef" variant="flat" class="rounded-xl mb-6 bg-surface shadow-sm border overflow-visible">
               <div class="pa-4 d-flex align-center border-b bg-background-opacity">
                 <v-avatar size="32" color="info" variant="tonal" class="mr-3">
                   <v-icon size="18">mdi-calendar-week</v-icon>
@@ -78,7 +87,7 @@
                 <span class="text-overline font-weight-black text-high-emphasis">Tendencia Semanal (Últimas semanas)</span>
               </div>
               <div class="pa-2 pa-md-4">
-                <v-skeleton-loader v-if="reportesStore.loading" type="image" height="300" class="rounded-lg bg-surface" />
+                <v-skeleton-loader v-if="reportesStore.loadingSemanal" type="image" height="300" class="rounded-lg bg-surface" />
                 <TendenciaSemanal
                   v-else
                   :series="reportesStore.chartSeriesSemanal"
@@ -86,23 +95,23 @@
                 />
               </div>
             </v-card>
-
-            <v-card variant="flat" class="rounded-xl bg-surface shadow-sm border overflow-hidden">
-              <div class="pa-4 d-flex align-center border-b bg-background-opacity">
-                <v-avatar size="32" color="success" variant="tonal" class="mr-3">
-                  <v-icon size="18">mdi-label-percent</v-icon>
-                </v-avatar>
-                <span class="text-overline font-weight-black text-high-emphasis">Rendimiento por Color de Cinta</span>
-              </div>
-              <v-skeleton-loader v-if="reportesStore.loading" type="list-item-avatar-three-line" class="bg-surface" />
-              <RendimientoCintas v-else :cintas="reportesStore.cintasStats" :loading="reportesStore.loading" />
-            </v-card>
           </v-col>
 
           <v-col cols="12" lg="4">
             <div class="sticky-sidebar">
-              <v-skeleton-loader v-if="reportesStore.loading" type="article" class="rounded-xl border bg-surface" />
-              <SideStats v-else :stats="reportesStore.sideStats" :loading="reportesStore.loading" />
+              <v-skeleton-loader v-if="reportesStore.loadingKpis" type="article" class="rounded-xl border bg-surface" />
+              <SideStats v-else :stats="reportesStore.sideStats" :loading="reportesStore.loadingKpis" />
+
+              <v-card ref="cintasSectionRef" variant="flat" class="rounded-xl bg-surface shadow-sm border overflow-hidden">
+                <div class="pa-4 d-flex align-center border-b bg-background-opacity">
+                  <v-avatar size="32" color="success" variant="tonal" class="mr-3">
+                    <v-icon size="18">mdi-label-percent</v-icon>
+                  </v-avatar>
+                  <span class="text-overline font-weight-black text-high-emphasis">Rendimiento por Color de Cinta</span>
+                </div>
+                <v-skeleton-loader v-if="reportesStore.loadingCintas" type="list-item-avatar-three-line" class="bg-surface" />
+                <RendimientoCintas v-else :cintas="reportesStore.cintasStats" :loading="reportesStore.loadingCintas" />
+              </v-card>
             </div>
           </v-col>
         </v-row>
@@ -113,7 +122,7 @@
 </template>
 
 <script setup>
-import { onMounted, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
 // Stores
@@ -135,24 +144,52 @@ const fincaStore = useFincaStore()
 const enfundeStore = useEnfundeStore()
 
 const { fincaSeleccionadaId } = storeToRefs(fincaStore)
+const kpisSectionRef = ref(null)
+const mensualSectionRef = ref(null)
+const semanalSectionRef = ref(null)
+const cintasSectionRef = ref(null)
+
+const scrollToSection = (elRef) => {
+  if (!elRef?.value?.$el && !elRef?.value) return
+  const target = elRef.value.$el ?? elRef.value
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const handleViewDetails = (title) => {
+  const normalized = String(title || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+
+  if (normalized.includes('mensual') || normalized.includes('produccion')) {
+    scrollToSection(mensualSectionRef)
+    return
+  }
+
+  if (normalized.includes('semanal') || normalized.includes('semana')) {
+    scrollToSection(semanalSectionRef)
+    return
+  }
+
+  if (normalized.includes('cinta') || normalized.includes('color') || normalized.includes('rendimiento')) {
+    scrollToSection(cintasSectionRef)
+    return
+  }
+
+  scrollToSection(kpisSectionRef)
+}
 
 const refrescarTodo = async () => {
   const fincaId = fincaSeleccionadaId.value
   if (!fincaId) return
 
-  await Promise.all([
-    reportesStore.cargarReportes(fincaId),
-    enfundeStore.cargarRegistros(fincaId)
-  ])
+  await Promise.all([reportesStore.cargarReportes(fincaId), enfundeStore.cargarRegistros(fincaId)])
 }
 
 onMounted(async () => {
   await fincaStore.obtenerFincas()
   if (!fincaSeleccionadaId.value && fincaStore.fincas.length > 0) {
-    fincaSeleccionadaId.value = fincaStore.fincas[0].id
-  }
-  if (fincaSeleccionadaId.value) {
-    await refrescarTodo()
+    fincaStore.seleccionarFinca(fincaStore.fincas[0].id)
   }
 })
 
@@ -160,7 +197,8 @@ watch(
   [fincaSeleccionadaId, () => reportesStore.anioSeleccionado, () => reportesStore.mostrarComparativo],
   async () => {
     await refrescarTodo()
-  }
+  },
+  { immediate: true },
 )
 </script>
 
@@ -171,7 +209,7 @@ watch(
 .checkbox-text :deep(.v-label) { font-size: 0.85rem !important; opacity: 1; }
 .border-b { border-bottom: 1px solid rgba(var(--v-border-color), 0.05) !important; }
 .shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important; }
-.sticky-sidebar { position: sticky; top: 24px; }
+.sticky-sidebar { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 24px; }
 .gap-6 { gap: 24px; }
 .tracking-tight { letter-spacing: -0.03em; }
 

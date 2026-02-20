@@ -30,9 +30,32 @@ export interface PayloadCosecha {
 	id_local: string; // UUID para control offline
 	finca_id: number;
 	fecha: string; // "YYYY-MM-DD"
-	usuario_id: number;
 	timestamp: number;
 	detalles: DetalleEnvio[];
+}
+
+export interface PrediccionCosechaItem {
+	calendario_id: number;
+	semana_enfunde: number;
+	anio: number;
+	color_cinta: string;
+	color_hex: string;
+	saldo_en_campo: number;
+	progreso_madurez: number;
+	dias_faltantes: number;
+	fecha_estimada: string;
+	cajas_esperadas: number;
+	mensaje_clima: string;
+	tendencia_climatica: string;
+}
+
+export interface PrediccionCosechaResponse {
+	finca_id: string | number;
+	meta_aplicada: number;
+	promedio_climatico_semanal: string;
+	semana_inicio?: number;
+	semana_fin?: number;
+	proyecciones: PrediccionCosechaItem[];
 }
 
 export const cosechaService = {
@@ -48,7 +71,16 @@ export const cosechaService = {
 	// Omitimos 'id_local' si tu backend no lo espera, o lo enviamos completo si lo necesita para logs.
 	// Aquí asumo que envías todo el payload.
 	async registrarLiquidacion(payload: PayloadCosecha): Promise<any> {
-		const response = await api.post('/cosecha/registrar-liquidacion', payload);
+		const response = await api.post('/cosecha/registrar-liquidacion', payload, {
+			skipGlobalError: true,
+		} as any);
+		return response.data;
+	},
+
+	async getPrediccion(fincaId: number): Promise<PrediccionCosechaResponse> {
+		const response = await api.get<PrediccionCosechaResponse>(
+			`/cosecha/prediccion/${fincaId}`,
+		);
 		return response.data;
 	},
 };
