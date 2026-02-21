@@ -63,9 +63,15 @@ export const useFincaStore = defineStore('finca', {
 			const empresaStore = useEmpresaStore();
 
 			try {
-				const { data } = await api.get('/fincas');
+				const response = await api.get('/fincas');
+				const rawData = response?.data;
+				const fincasApi = Array.isArray(rawData)
+					? rawData
+					: Array.isArray(rawData?.data)
+						? rawData.data
+						: [];
 
-				this.fincas = data.map((finca: any): Finca => {
+				this.fincas = fincasApi.map((finca: any): Finca => {
 					const empresaInfo = empresaStore.empresas.find(
 						(e: any) => e.id === finca.empresa_id,
 					);
@@ -94,10 +100,14 @@ export const useFincaStore = defineStore('finca', {
 					this.seleccionarFinca(this.fincas[0].id);
 				}
 
-				return data;
+				return this.fincas;
 			} catch (e: any) {
 				console.error('Error en obtenerFincas:', e);
-				this.error = e.message || 'Error al cargar fincas';
+				this.error =
+					e?.response?.data?.error ||
+					e?.message ||
+					'Error al cargar fincas';
+				this.fincas = [];
 				throw e;
 			} finally {
 				this.loading = false;

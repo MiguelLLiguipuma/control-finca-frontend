@@ -1,6 +1,8 @@
-import axios from 'axios';
+import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/auth/authStore';
+
+type ApiRequestConfig = AxiosRequestConfig & { skipGlobalError?: boolean };
 
 const api = axios.create({
 	baseURL:
@@ -14,7 +16,8 @@ api.interceptors.request.use(
 	(config) => {
 		const token = localStorage.getItem('token');
 		if (token) {
-			config.headers.Authorization = `Bearer ${token}`;
+			config.headers = config.headers || {};
+			(config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
 		}
 		return config;
 	},
@@ -24,14 +27,18 @@ api.interceptors.request.use(
 // Interceptor de Respuestas: Manejo de Errores Global
 api.interceptors.response.use(
 	(response) => response,
-	(error) => {
+	(error: AxiosError) => {
 		const uiStore = useUIStore();
 		const authStore = useAuthStore();
 
 		let mensaje = 'Error de conexión con el servidor';
 
 		if (error.response) {
-			const { status, data } = error.response;
+			const status = error.response.status;
+			const data = (error.response.data || {}) as {
+				error?: string;
+				message?: string;
+			};
 
 			switch (status) {
 				case 401:
@@ -71,7 +78,8 @@ api.interceptors.response.use(
 		}
 
 		// Evitamos mostrar el error si es un error de cancelación de petición
-		if (!axios.isCancel(error) && !error.config?.skipGlobalError) {
+		const config = (error.config || {}) as ApiRequestConfig;
+		if (!axios.isCancel(error) && !config.skipGlobalError) {
 			uiStore.showError(mensaje);
 		}
 

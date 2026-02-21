@@ -2,6 +2,55 @@ import { defineStore } from 'pinia';
 import { reporteService } from '../services/reporteService.js';
 import { useUIStore } from './uiStore.js';
 
+interface TarjetaReporte {
+	title: string;
+	value: number | string;
+	icon: string;
+}
+
+interface SerieChart {
+	name: string;
+	data: number[];
+}
+
+interface SideStat {
+	label: string;
+	value: number | string;
+	change?: number;
+}
+
+interface CintaStat {
+	nombre: string;
+	total: number;
+}
+
+interface DashboardSnapshot {
+	tarjetas: TarjetaReporte[];
+	chartSeries: SerieChart[];
+	chartCategories: string[];
+	chartSeriesSemanal: SerieChart[];
+	chartCategoriesSemanal: string[];
+	sideStats: SideStat[];
+	cintasStats: CintaStat[];
+}
+
+interface DashboardCacheEntry {
+	timestamp: number;
+	data: DashboardSnapshot;
+}
+
+interface ReportesState extends DashboardSnapshot {
+	loading: boolean;
+	loadingKpis: boolean;
+	loadingMensual: boolean;
+	loadingSemanal: boolean;
+	loadingCintas: boolean;
+	error: string | null;
+	anioSeleccionado: number;
+	mostrarComparativo: boolean;
+	requestSeq: number;
+}
+
 const MESES_MAESTROS = [
 	'January',
 	'February',
@@ -23,18 +72,20 @@ const toNumber = (value, fallback = 0) => {
 };
 
 const CACHE_TTL_MS = 60 * 1000;
-const dashboardCache = new Map();
+const dashboardCache = new Map<string, DashboardCacheEntry>();
 
 const getCacheKey = (fincaId, anio, comparativo) =>
 	`${Number(fincaId)}:${Number(anio)}:${comparativo ? 1 : 0}`;
 
-const isCacheFresh = (entry) =>
-	entry &&
+const isCacheFresh = (
+	entry: DashboardCacheEntry | undefined,
+): entry is DashboardCacheEntry =>
+	!!entry &&
 	typeof entry.timestamp === 'number' &&
 	Date.now() - entry.timestamp <= CACHE_TTL_MS;
 
 export const useReportesStore = defineStore('reportes', {
-	state: () => ({
+	state: (): ReportesState => ({
 		loading: false,
 		loadingKpis: false,
 		loadingMensual: false,
@@ -80,7 +131,7 @@ export const useReportesStore = defineStore('reportes', {
 			this.actualizarLoadingGlobal();
 		},
 
-		applySnapshot(snapshot) {
+	applySnapshot(snapshot: DashboardSnapshot) {
 			this.tarjetas = snapshot.tarjetas || [];
 			this.chartSeries = snapshot.chartSeries || [];
 			this.chartCategories = snapshot.chartCategories || [];
@@ -90,7 +141,7 @@ export const useReportesStore = defineStore('reportes', {
 			this.cintasStats = snapshot.cintasStats || [];
 		},
 
-		createSnapshot() {
+	createSnapshot(): DashboardSnapshot {
 			return {
 				tarjetas: this.tarjetas,
 				chartSeries: this.chartSeries,
@@ -194,7 +245,7 @@ export const useReportesStore = defineStore('reportes', {
 					if (requestId !== this.requestSeq) return;
 					const mesesActual = mensualResp.data || [];
 
-					let mesesAnterior = [];
+					let mesesAnterior: any[] = [];
 					if (this.mostrarComparativo) {
 						const compResp = await reporteService.getComparativo(
 							fincaId,
@@ -204,7 +255,7 @@ export const useReportesStore = defineStore('reportes', {
 					}
 
 					this.chartCategories = MESES_MAESTROS;
-					const seriesMensual = [];
+					const seriesMensual: SerieChart[] = [];
 					if (this.mostrarComparativo) {
 						seriesMensual.push({
 							name: `Año ${anioAnterior}`,
@@ -292,9 +343,15 @@ export const useReportesStore = defineStore('reportes', {
 					});
 				}
 			} catch (err) {
+				const e = err as {
+					response?: { data?: { error?: string } };
+					message?: string;
+				};
 				console.error('❌ Error en cargarReportes:', err);
 				this.error =
-					err?.response?.data?.error || err.message || 'Error cargando reportes';
+					e?.response?.data?.error ||
+					e?.message ||
+					'Error cargando reportes';
 				this.resetDashboardData();
 				uiStore.showError('Error al conectar con el servidor de reportes');
 			} finally {

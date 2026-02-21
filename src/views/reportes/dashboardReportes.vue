@@ -126,7 +126,7 @@ import { onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
 // Stores
-import { useReportesStore } from '../../stores/reportesStore.js'
+import { useReportesStore } from '../../stores/reportesStore'
 import { useFincaStore } from '../../stores/fincaStore.js'
 import { useEnfundeStore } from '../../stores/enfundeStore.js'
 

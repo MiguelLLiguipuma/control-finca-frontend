@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { useEnfundeStore } from './enfundeStore.js';
-import { useReportesStore } from './reportesStore.js'; // 👈 Importado para seguridad
+import { useReportesStore } from './reportesStore'; // 👈 Importado para seguridad
 import { useFincaStore } from './fincaStore';
 
 export const useRegistroEnfundeStore = defineStore('registroEnfunde', {

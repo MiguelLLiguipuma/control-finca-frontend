@@ -58,6 +58,12 @@ const routes = [
 		meta: { requiresAuth: true },
 	},
 	{
+		path: '/voucher-embarque',
+		name: 'VoucherEmbarque',
+		component: () => import('@/views/embarque/VoucherEmbarqueView.vue'),
+		meta: { requiresAuth: true },
+	},
+	{
 		path: '/planificacion/calendario',
 		name: 'GestionCalendario',
 		component: () => import('@/views/administracion/GestionCalendarios.vue'),

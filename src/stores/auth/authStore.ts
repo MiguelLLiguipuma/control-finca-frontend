@@ -1,10 +1,37 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
 
+interface AuthUser {
+	id?: number;
+	id_usuario?: number;
+	nombre: string;
+	rol?: string;
+}
+
+interface LoginCredentials {
+	email: string;
+	password: string;
+}
+
+interface LoginResponse {
+	token: string;
+	user: AuthUser;
+}
+
+function parseStoredUser(): AuthUser | null {
+	try {
+		const raw = localStorage.getItem('user');
+		if (!raw) return null;
+		return JSON.parse(raw) as AuthUser;
+	} catch {
+		return null;
+	}
+}
+
 export const useAuthStore = defineStore('auth', {
 	state: () => ({
 		// Cargamos datos de localStorage solo si existen
-		user: JSON.parse(localStorage.getItem('user')) || null,
+		user: parseStoredUser(),
 		token: localStorage.getItem('token') || null,
 		loading: false,
 	}),
@@ -18,10 +45,13 @@ export const useAuthStore = defineStore('auth', {
 	},
 
 	actions: {
-		async login(credentials) {
+		async login(credentials: LoginCredentials) {
 			this.loading = true;
 			try {
-				const response = await api.post('/auth/login', credentials);
+				const response = await api.post<LoginResponse>(
+					'/auth/login',
+					credentials,
+				);
 				const { user, token } = response.data;
 
 				this.user = user;
@@ -33,9 +63,10 @@ export const useAuthStore = defineStore('auth', {
 
 				return { success: true };
 			} catch (error) {
+				const e = error as { response?: { data?: { message?: string } } };
 				return {
 					success: false,
-					message: error.response?.data?.message || 'Error de conexión',
+					message: e.response?.data?.message || 'Error de conexión',
 				};
 			} finally {
 				this.loading = false;

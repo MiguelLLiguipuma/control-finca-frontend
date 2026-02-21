@@ -124,6 +124,7 @@ const menuItems = ref([
 
   { title: 'Registro Enfunde', icon: 'mdi-leaf', route: '/registro-enfunde' },
   { title: 'Liquidación Cosecha', icon: 'mdi-basket-check-outline', route: '/registro-cosecha' },
+  { title: 'Voucher Embarque', icon: 'mdi-file-document-check-outline', route: '/voucher-embarque' },
   
   // Sección Administrativa
   { title: 'Gestión Empresas', icon: 'mdi-domain', route: '/empresas' },

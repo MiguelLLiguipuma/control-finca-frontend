@@ -38,7 +38,7 @@
 				</v-col>
 				<v-col cols="12" sm="4">
 					<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
-						<div class="text-caption text-medium-emphasis">Promedio UC diario</div>
+						<div class="text-caption text-medium-emphasis">Promedio UC diario (7 días)</div>
 						<div class="text-h6 font-weight-black text-high-emphasis">
 							{{ promedioUC }}
 						</div>
@@ -115,11 +115,17 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+import 'dayjs/locale/es';
 import {
 	cosechaService,
 	type PrediccionCosechaItem,
 } from '../../services/cosecha/cosechaService';
 import { useCosechaStore } from '../../stores/cosecha/cosechaStore';
+
+dayjs.extend(customParseFormat);
+dayjs.locale('es');
 
 const props = defineProps<{
 	fincaId: number | null;
@@ -138,7 +144,8 @@ const filas = computed(() =>
 
 function formatearFecha(fecha: string): string {
 	if (!fecha) return '--';
-	return new Date(`${fecha}T00:00:00`).toLocaleDateString('es-ES');
+	const d = dayjs(fecha, 'YYYY-MM-DD', true);
+	return d.isValid() ? d.format('DD/MM/YYYY') : '--';
 }
 
 async function cargarPrediccion() {
@@ -156,7 +163,8 @@ async function cargarPrediccion() {
 	try {
 		const data = await cosechaService.getPrediccion(props.fincaId);
 		metaAplicada.value = data.meta_aplicada || '--';
-		promedioUC.value = data.promedio_climatico_semanal || '--';
+		promedioUC.value =
+			data.promedio_uc_diario || data.promedio_climatico_semanal || '--';
 		proyecciones.value = data.proyecciones || [];
 		cosechaStore.configurarVentanaCorte(data.semana_inicio, data.semana_fin);
 	} catch {
