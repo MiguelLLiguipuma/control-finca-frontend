@@ -108,14 +108,35 @@
                     </v-card>
                   </template>
                   
-                  <v-date-picker 
-                    v-model="fechaObjetoPicker" 
+                  <v-date-picker
+                    v-model="fechaObjetoPicker"
                     color="primary"
                     :min="fechaMinima"
                     :max="fechaMaxima"
+                    :allowed-dates="fechaCosechaPermitida"
                     @update:model-value="menuFecha = false"
-                  ></v-date-picker>
+                  />
                 </v-menu>
+                <div class="text-caption text-medium-emphasis mt-2">
+                  Fechas con cosecha registrada se muestran bloqueadas en el calendario.
+                </div>
+                <v-alert
+                  v-if="estadoFechaSeleccionada"
+                  class="mt-3"
+                  variant="tonal"
+                  density="compact"
+                  :type="estadoFechaSeleccionada.cosecha && estadoFechaSeleccionada.voucher ? 'warning' : 'info'"
+                >
+                  <span v-if="estadoFechaSeleccionada.cosecha && estadoFechaSeleccionada.voucher">
+                    Esta fecha ya tiene registro de cosecha y voucher.
+                  </span>
+                  <span v-else-if="estadoFechaSeleccionada.cosecha">
+                    Esta fecha ya tiene registro de cosecha.
+                  </span>
+                  <span v-else>
+                    Esta fecha ya tiene voucher registrado.
+                  </span>
+                </v-alert>
               </div>
 
               <v-divider class="mb-6 border-dashed" />
@@ -350,6 +371,7 @@ import { useFincaStore } from '../../stores/fincaStore';
 import { useEmpresaStore } from '../../stores/empresaStore';
 import { storeToRefs } from 'pinia';
 import PanelPrediccionCosecha from '../../components/cosecha/PanelPrediccionCosecha.vue';
+import { cosechaService } from '../../services/cosecha/cosechaService';
 
 const cosechaStore = useCosechaStore();
 const fincaStore = useFincaStore();
@@ -361,6 +383,7 @@ const fechaCosecha = ref(new Date().toISOString().split('T')[0]);
 const fechaObjetoPicker = ref(new Date());
 const menuFecha = ref(false);
 const snackbar = ref({ show: false, message: '', color: 'info' });
+const fechasOcupadas = ref<Record<string, { cosecha: boolean; voucher: boolean }>>({});
 
 const notify = (msg: string, color = 'info') => (snackbar.value = { show: true, message: msg, color });
 
@@ -407,6 +430,8 @@ const fechaMinima = computed(() => {
   return f;
 });
 
+const estadoFechaSeleccionada = computed(() => fechasOcupadas.value[fechaCosecha.value] || null);
+
 const obtenerColorTarjeta = (item: CintaCosecha) => {
     if (cosechaStore.esCintaDeCorteActual(item.semana_enfunde, item.anio)) return 'error'; 
     if (cosechaStore.esFrutaDeCorte(item.semana_enfunde, item.anio)) return 'warning';
@@ -422,8 +447,65 @@ const obtenerVarianteTarjeta = (item: CintaCosecha) => {
 const cargarSaldos = async (id: number) => {
   if (!id || cosechaStore.loading) return;
   fincaStore.seleccionarFinca(id);
+  await cargarFechasOcupadas(id);
   await cosechaStore.cargarSaldos(id);
 };
+
+function toIsoDate(value: Date): string {
+  return new Date(value.getTime() - value.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+function toIsoDateUnknown(value: unknown): string | null {
+  if (value instanceof Date) return toIsoDate(value);
+  if (typeof value === 'string') return value.slice(0, 10);
+  if (value && typeof value === 'object') {
+    const raw = value as Record<string, unknown>;
+    if (raw.date instanceof Date) return toIsoDate(raw.date);
+    if (typeof raw.date === 'string') return raw.date.slice(0, 10);
+    if (typeof raw.isoDate === 'string') return raw.isoDate.slice(0, 10);
+    if (typeof raw.formatted === 'string') return raw.formatted.slice(0, 10);
+  }
+  return null;
+}
+
+function fechaCosechaPermitida(value: unknown): boolean {
+  const iso = toIsoDateUnknown(value);
+  if (!iso) return false;
+  const estado = fechasOcupadas.value[iso];
+  if (!estado?.cosecha) return true;
+  return iso === fechaCosecha.value;
+}
+
+async function cargarFechasOcupadas(fincaId?: number | null) {
+  const id = Number(fincaId || fincaSeleccionada.value);
+  if (!id) {
+    fechasOcupadas.value = {};
+    return;
+  }
+
+  try {
+    const data = await cosechaService.getFechasOcupadas({
+      finca_id: id,
+      fecha_desde: toIsoDate(fechaMinima.value),
+      fecha_hasta: toIsoDate(fechaMaxima.value),
+    });
+    const map: Record<string, { cosecha: boolean; voucher: boolean }> = {};
+    for (const item of data.fechas || []) {
+      if (!item?.fecha) continue;
+      map[item.fecha] = {
+        cosecha: Boolean(item.cosecha),
+        voucher: Boolean(item.voucher),
+      };
+    }
+    fechasOcupadas.value = map;
+  } catch {
+    // No bloqueamos la operación de cosecha por falla en marcado de calendario
+    fechasOcupadas.value = {};
+  } finally {
+  }
+}
 
 const guardarCosecha = async () => {
   if (cosechaStore.loading) return;
@@ -439,13 +521,39 @@ const guardarCosecha = async () => {
 };
 
 onMounted(async () => {
-  try {
-    if (!empresaStore.empresas.length) await empresaStore.fetchEmpresas();
-    await fincaStore.obtenerFincas();
-    if (fincaSeleccionada.value) await cargarSaldos(fincaSeleccionada.value);
-  } catch {
-    notify('Error inicializando datos', 'error');
+  const [empresasResult, fincasResult] = await Promise.allSettled([
+    empresaStore.empresas.length ? Promise.resolve() : empresaStore.fetchEmpresas(),
+    fincaStore.obtenerFincas(),
+  ]);
+
+  if (empresasResult.status === 'rejected') {
+    notify('No se pudieron cargar empresas, continuando con fincas.', 'warning');
   }
+
+  if (fincasResult.status === 'rejected') {
+    notify('Error al obtener fincas. Verifique conexión o sesión.', 'error');
+    return;
+  }
+
+  fincaSeleccionada.value = fincaStore.fincaSeleccionadaId;
+  if (!fincaSeleccionada.value && fincas.value.length > 0) {
+    fincaSeleccionada.value = fincas.value[0].id;
+    fincaStore.seleccionarFinca(fincaSeleccionada.value);
+  }
+
+  if (fincaSeleccionada.value) {
+    await cargarSaldos(fincaSeleccionada.value);
+  } else {
+    notify('No hay fincas disponibles para esta sesión.', 'warning');
+  }
+});
+
+watch(fincaSeleccionada, async (id) => {
+  if (!id) {
+    fechasOcupadas.value = {};
+    return;
+  }
+  await cargarFechasOcupadas(id);
 });
 </script>
 

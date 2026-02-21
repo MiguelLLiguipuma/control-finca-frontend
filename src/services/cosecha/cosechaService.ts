@@ -53,9 +53,31 @@ export interface PrediccionCosechaResponse {
 	finca_id: string | number;
 	meta_aplicada: number;
 	promedio_climatico_semanal: string;
+	promedio_uc_diario?: string;
+	ratio_aplicado?: number;
 	semana_inicio?: number;
 	semana_fin?: number;
 	proyecciones: PrediccionCosechaItem[];
+}
+
+export interface FechasOcupadasQuery {
+	finca_id?: number;
+	finca_ids?: string;
+	fecha_desde?: string;
+	fecha_hasta?: string;
+}
+
+export interface FechaOcupadaItem {
+	fecha: string;
+	cosecha: boolean;
+	voucher: boolean;
+}
+
+export interface FechasOcupadasResponse {
+	finca_ids: number[];
+	fecha_desde: string;
+	fecha_hasta: string;
+	fechas: FechaOcupadaItem[];
 }
 
 export const cosechaService = {
@@ -82,5 +104,20 @@ export const cosechaService = {
 			`/cosecha/prediccion/${fincaId}`,
 		);
 		return response.data;
+	},
+
+	async getFechasOcupadas(
+		params: FechasOcupadasQuery,
+	): Promise<FechasOcupadasResponse> {
+		const response = await api.get<
+			| FechasOcupadasResponse
+			| { success?: boolean; data?: FechasOcupadasResponse }
+		>('/cosecha/fechas-ocupadas', {
+			params,
+		});
+		const payload = response.data as
+			| FechasOcupadasResponse
+			| { success?: boolean; data?: FechasOcupadasResponse };
+		return (payload as any).data || (payload as FechasOcupadasResponse);
 	},
 };

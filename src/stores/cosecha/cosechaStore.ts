@@ -5,6 +5,10 @@ import {
 	type PayloadCosecha,
 } from '../../services/cosecha/cosechaService';
 import { useUIStore } from '../../stores/uiStore';
+import {
+	calculateIsoWeekAge,
+	getCurrentIsoWeekInfo,
+} from '../../utils/dateIso';
 
 export interface CintaCosecha {
 	calendario_id: number;
@@ -41,6 +45,9 @@ export interface ResultadoEnvioCosecha {
 const COLA_KEY = 'cola_cosecha_pendiente';
 const COLA_FALLIDA_KEY = 'cola_cosecha_fallida';
 const MAX_INTENTOS_NO_ENCOLABLE = 3;
+const VENTANA_CORTE_DEFAULT_INICIO = 11;
+const VENTANA_CORTE_DEFAULT_FIN = 13;
+const VENTANA_CORTE_MAX_AMPLITUD = 8;
 
 type PayloadPendienteCosecha = PayloadCosecha & {
 	intentos?: number;
@@ -57,14 +64,7 @@ function obtenerInfoSemana(fecha = new Date()): {
 	semana: number;
 	anio: number;
 } {
-	const d = new Date(fecha);
-	d.setHours(0, 0, 0, 0);
-	d.setDate(d.getDate() + 4 - (d.getDay() || 7));
-	const yearStart = new Date(d.getFullYear(), 0, 1);
-	const weekNo = Math.ceil(
-		((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
-	);
-	return { semana: weekNo, anio: d.getFullYear() };
+	return getCurrentIsoWeekInfo(fecha);
 }
 
 function parsearColaDesdeStorage(key: string): PayloadPendienteCosecha[] {
@@ -215,9 +215,7 @@ export const useCosechaStore = defineStore('cosecha', {
 
 	actions: {
 		calcularEdadExacta(semanaEnfunde: number, anio: number): number {
-			const { semana: sActual, anio: aActual } = this.infoSistema;
-			const diffAnios = aActual - anio;
-			return diffAnios * 52 - semanaEnfunde + sActual;
+			return calculateIsoWeekAge(semanaEnfunde, anio, new Date());
 		},
 
 		esCintaDeCorteActual(semanaEnfunde: number, anio: number): boolean {
@@ -230,10 +228,29 @@ export const useCosechaStore = defineStore('cosecha', {
 		},
 
 		configurarVentanaCorte(semanaInicio?: number, semanaFin?: number) {
-			const inicio = Math.max(1, Math.min(52, toNonNegativeInt(semanaInicio) || 11));
-			const finPropuesto = Math.max(1, Math.min(52, toNonNegativeInt(semanaFin) || 13));
-			this.semanaInicioCorte = Math.min(inicio, finPropuesto);
-			this.semanaFinCorte = Math.max(inicio, finPropuesto);
+			const inicioBase = toNonNegativeInt(semanaInicio);
+			const finBase = toNonNegativeInt(semanaFin);
+			const inicioNormalizado =
+				inicioBase >= 1 && inicioBase <= 52
+					? inicioBase
+					: VENTANA_CORTE_DEFAULT_INICIO;
+			const finNormalizado =
+				finBase >= 1 && finBase <= 52
+					? finBase
+					: VENTANA_CORTE_DEFAULT_FIN;
+
+			const inicio = Math.min(inicioNormalizado, finNormalizado);
+			const fin = Math.max(inicioNormalizado, finNormalizado);
+
+			// Blindaje: nunca permitir ventanas exageradas (ej: 1..52)
+			if (fin - inicio > VENTANA_CORTE_MAX_AMPLITUD) {
+				this.semanaInicioCorte = VENTANA_CORTE_DEFAULT_INICIO;
+				this.semanaFinCorte = VENTANA_CORTE_DEFAULT_FIN;
+				return;
+			}
+
+			this.semanaInicioCorte = inicio;
+			this.semanaFinCorte = fin;
 		},
 
 		normalizarItemDigitacion(item: CintaCosecha) {
