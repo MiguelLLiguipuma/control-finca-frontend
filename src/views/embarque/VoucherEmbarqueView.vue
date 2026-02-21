@@ -939,6 +939,26 @@ function imprimirVoucher() {
     margin: 10mm;
   }
 
+  :global(.v-navigation-drawer),
+  :global(.v-app-bar),
+  :global(.v-toolbar),
+  :global(.sidebar-menu),
+  :global(header) {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  :global(.v-main),
+  :global(.v-main__wrap),
+  :global(.v-layout) {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  :global(body) {
+    background: #fff !important;
+  }
+
   .voucher-print-root {
     background: #fff !important;
     padding: 0 !important;
