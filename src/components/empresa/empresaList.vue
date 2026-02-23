@@ -2,7 +2,7 @@
   <div class="list-container">
     <v-data-table
       :headers="headers"
-      :items="empresasFiltradas"
+      :items="props.empresas"
       :loading="loading"
       class="custom-table"
       hover
@@ -42,6 +42,7 @@
             color="primary"
             size="small"
             class="rounded-lg action-btn"
+            :disabled="!props.canManage"
             @click="$emit('edit', item)"
           />
           <v-btn
@@ -50,6 +51,7 @@
             color="error"
             size="small"
             class="rounded-lg action-btn"
+            :disabled="!props.canManage"
             @click="confirmarEliminacion(item)"
           />
         </div>
@@ -117,48 +119,54 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue';
 import { useTheme } from 'vuetify';
+import type { Empresa } from '@/stores/empresaStore';
 
-const props = defineProps({
-  empresas: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false },
-  error: { type: String, default: null },
-});
+const props = withDefaults(
+  defineProps<{
+    empresas: Empresa[];
+    loading?: boolean;
+    error?: string;
+    canManage?: boolean;
+  }>(),
+  {
+    loading: false,
+    error: undefined,
+    canManage: true,
+  },
+);
 
-const emit = defineEmits(['create', 'edit', 'delete']);
+const emit = defineEmits<{
+  (e: 'create'): void;
+  (e: 'edit', empresa: Empresa): void;
+  (e: 'delete', empresa: Empresa): void;
+}>();
 const theme = useTheme();
 
-const busqueda = ref('');
 const dialogoEliminar = ref(false);
-const empresaAEliminar = ref(null);
+const empresaAEliminar = ref<Empresa | null>(null);
 
 const isDark = computed(() => theme.global.current.value.dark);
 
-const empresasFiltradas = computed(() => {
-  if (!busqueda.value) return props.empresas;
-  const t = busqueda.value.toLowerCase();
-  return props.empresas.filter(e => 
-    e.nombre?.toLowerCase().includes(t) || e.ruc?.toLowerCase().includes(t)
-  );
-});
-
 const headers = [
-  { title: 'Empresa', key: 'nombre', align: 'start', sortable: true },
-  { title: 'RUC / Identificación', key: 'ruc', align: 'start' },
-  { title: 'Contacto', key: 'telefono', align: 'start' },
-  { title: '', key: 'actions', align: 'end', sortable: false },
+  { title: 'Empresa', key: 'nombre', align: 'start' as const, sortable: true },
+  { title: 'RUC / Identificación', key: 'ruc', align: 'start' as const },
+  { title: 'Contacto', key: 'telefono', align: 'start' as const },
+  { title: '', key: 'actions', align: 'end' as const, sortable: false },
 ];
 
-function confirmarEliminacion(empresa) {
+function confirmarEliminacion(empresa: Empresa) {
   empresaAEliminar.value = empresa;
   dialogoEliminar.value = true;
 }
 
 function ejecutarEliminacion() {
+  if (!empresaAEliminar.value) return;
   emit('delete', empresaAEliminar.value);
   dialogoEliminar.value = false;
+  empresaAEliminar.value = null;
 }
 </script>
 

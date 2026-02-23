@@ -1,12 +1,16 @@
 <template>
   <div class="form-container">
+    <v-alert v-if="empresaStore.error" type="error" variant="tonal" class="mb-4">
+      {{ empresaStore.error }}
+    </v-alert>
+
     <v-form ref="formRef" v-model="formValido" validate-on="input" @submit.prevent="handleSubmit">
       <v-row dense>
         <v-col cols="12">
           <div class="field-wrapper">
             <label class="input-label">Nombre Legal de la Empresa <span class="required">*</span></label>
             <v-text-field
-              v-model="form.nombre"
+              v-model.trim="form.nombre"
               :rules="[rules.required, rules.min]"
               placeholder="Ej: AgroExport S.A."
               prepend-inner-icon="mdi-office-building-outline"
@@ -15,13 +19,14 @@
               density="comfortable"
               class="modern-input"
               color="primary"
+              maxlength="120"
             />
           </div>
         </v-col>
 
         <v-col cols="12" md="6">
           <div class="field-wrapper">
-            <label class="input-label">RUC / Identificación</label>
+            <label class="input-label">RUC / Identificacion</label>
             <v-text-field
               v-model="form.ruc"
               :rules="[rules.ruc]"
@@ -32,30 +37,35 @@
               flat
               density="comfortable"
               class="modern-input"
+              @update:model-value="onRucInput"
             />
           </div>
         </v-col>
 
         <v-col cols="12" md="6">
           <div class="field-wrapper">
-            <label class="input-label">Teléfono</label>
+            <label class="input-label">Telefono</label>
             <v-text-field
               v-model="form.telefono"
+              :rules="[rules.telefono]"
               placeholder="+593 9..."
+              maxlength="20"
               prepend-inner-icon="mdi-phone-outline"
               variant="solo"
               flat
               density="comfortable"
               class="modern-input"
+              @update:model-value="onTelefonoInput"
             />
           </div>
         </v-col>
 
         <v-col cols="12">
           <div class="field-wrapper">
-            <label class="input-label">Dirección Matriz</label>
+            <label class="input-label">Direccion Matriz</label>
             <v-textarea
-              v-model="form.direccion"
+              v-model.trim="form.direccion"
+              :rules="[rules.direccion]"
               placeholder="Indique calle principal, secundaria y referencia..."
               prepend-inner-icon="mdi-map-marker-outline"
               variant="solo"
@@ -64,6 +74,7 @@
               rows="2"
               no-resize
               class="modern-input"
+              maxlength="220"
             />
           </div>
         </v-col>
@@ -78,13 +89,14 @@
         >
           Cancelar
         </v-btn>
-        
+
         <v-btn
           :color="mode === 'create' ? 'primary' : 'warning'"
           height="48"
-          min-width="160"
+          min-width="170"
           class="rounded-xl font-weight-black text-none shadow-btn"
           :loading="empresaStore.loading"
+          :disabled="empresaStore.loading"
           type="submit"
           elevation="0"
         >
@@ -98,18 +110,38 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, watch } from 'vue';
-import { useEmpresaStore } from '@/stores/empresaStore';
+import { useEmpresaStore, type EmpresaPayload } from '@/stores/empresaStore';
 
-const props = defineProps({
-  mode: { type: String, default: 'create' },
-  initialData: { type: Object, default: () => null },
-});
+type FormMode = 'create' | 'edit';
 
-const emit = defineEmits(['submit-success', 'cancel']);
+interface EmpresaFormData {
+  id?: number;
+  nombre?: string;
+  ruc?: string;
+  direccion?: string;
+  telefono?: string;
+}
+
+const props = withDefaults(
+  defineProps<{
+    mode?: FormMode;
+    initialData?: EmpresaFormData | null;
+  }>(),
+  {
+    mode: 'create',
+    initialData: null,
+  },
+);
+
+const emit = defineEmits<{
+  (e: 'submit-success'): void;
+  (e: 'cancel'): void;
+}>();
+
 const empresaStore = useEmpresaStore();
-const formRef = ref(null);
+const formRef = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null);
 const formValido = ref(false);
 
 const form = reactive({
@@ -120,28 +152,93 @@ const form = reactive({
 });
 
 const rules = {
-  required: v => !!v?.trim() || 'Dato necesario',
-  min: v => v?.length >= 3 || 'Nombre muy corto',
-  ruc: v => !v || /^\d{10,13}$/.test(v) || 'Formato de RUC inválido (10-13 dígitos)'
+  required: (v: string) => !!v?.trim() || 'Dato requerido',
+  min: (v: string) => (v?.trim()?.length ?? 0) >= 3 || 'Minimo 3 caracteres',
+  ruc: (v: string) => !v || /^\d{10,13}$/.test(v) || 'RUC invalido (10 a 13 digitos)',
+  telefono: (v: string) =>
+    !v || /^[+0-9()\-\s]{7,20}$/.test(v) || 'Telefono invalido',
+  direccion: (v: string) =>
+    !v || v.trim().length >= 6 || 'Direccion muy corta (minimo 6 caracteres)',
 };
 
-watch(() => props.initialData, (val) => {
-  if (val) Object.assign(form, { ...val });
-}, { immediate: true });
+function resetForm() {
+  form.nombre = '';
+  form.ruc = '';
+  form.direccion = '';
+  form.telefono = '';
+}
+
+function hydrateForm(val: EmpresaFormData | null) {
+  if (!val) {
+    resetForm();
+    return;
+  }
+
+  form.nombre = val.nombre ?? '';
+  form.ruc = (val.ruc ?? '').replace(/\D/g, '').slice(0, 13);
+  form.direccion = val.direccion ?? '';
+  form.telefono = val.telefono ?? '';
+}
+
+function onRucInput() {
+  form.ruc = (form.ruc || '').replace(/\D/g, '').slice(0, 13);
+}
+
+function onTelefonoInput() {
+  form.telefono = (form.telefono || '').replace(/[^+0-9()\-\s]/g, '').slice(0, 20);
+}
+
+function toPayload(): EmpresaPayload {
+  const payload: EmpresaPayload = {
+    nombre: form.nombre.trim(),
+  };
+
+  const ruc = form.ruc.trim();
+  const direccion = form.direccion.trim();
+  const telefono = form.telefono.trim();
+
+  if (ruc) payload.ruc = ruc;
+  if (direccion) payload.direccion = direccion;
+  if (telefono) payload.telefono = telefono;
+
+  return payload;
+}
+
+watch(
+  () => props.initialData,
+  (val) => {
+    hydrateForm(val);
+  },
+  { immediate: true },
+);
+
+watch(
+  () => props.mode,
+  () => {
+    if (props.mode === 'create' && !props.initialData) {
+      resetForm();
+    }
+  },
+);
 
 async function handleSubmit() {
-  const { valid } = await formRef.value.validate();
-  if (!valid) return;
+  const validation = await formRef.value?.validate();
+  if (!validation?.valid) return;
 
   try {
+    const payload = toPayload();
     if (props.mode === 'create') {
-      await empresaStore.crearEmpresa({ ...form });
+      await empresaStore.crearEmpresa(payload);
     } else {
-      await empresaStore.actualizarEmpresa(props.initialData.id, { ...form });
+      const empresaId = Number(props.initialData?.id);
+      if (!empresaId) {
+        throw new Error('No se encontro la empresa a editar.');
+      }
+      await empresaStore.actualizarEmpresa(empresaId, payload);
     }
     emit('submit-success');
-  } catch (err) {
-    console.error("Error en operación:", err);
+  } catch {
+    // Error ya centralizado en empresaStore.error
   }
 }
 </script>
@@ -167,7 +264,6 @@ async function handleSubmit() {
   margin-left: 2px;
 }
 
-/* Diseño de Input Moderno Adaptable */
 :deep(.v-field) {
   border-radius: 14px !important;
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);

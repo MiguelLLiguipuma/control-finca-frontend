@@ -1,19 +1,31 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-// @ts-ignore (Ignoramos el servicio hasta que lo pasemos a TS en el futuro, pero el store ya queda blindado)
 import { empresaService } from '@/services/empresaService';
 
 // --- 1. INTERFACES ---
 export interface Empresa {
 	id: number;
 	nombre: string;
-	// Puedes agregar más campos si tu DB los tiene (ruc, dirección, etc.)
-	[key: string]: any;
+	ruc?: string | null;
+	direccion?: string | null;
+	telefono?: string | null;
+	[key: string]: unknown;
 }
 
 export interface EmpresaPayload {
 	nombre: string;
-	[key: string]: any;
+	ruc?: string;
+	direccion?: string;
+	telefono?: string;
+	[key: string]: unknown;
+}
+
+function getErrorMessage(err: unknown, fallback: string): string {
+	if (typeof err === 'object' && err !== null && 'message' in err) {
+		const message = (err as { message?: string }).message;
+		if (message) return message;
+	}
+	return fallback;
 }
 
 // --- 2. STORE ---
@@ -68,8 +80,8 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 			const data = await empresaService.cargarEmpresas();
 			setEmpresas(data);
 			return data;
-		} catch (err: any) {
-			setError(err.message || 'Error al cargar empresas');
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, 'Error al cargar empresas'));
 			throw err;
 		} finally {
 			loading.value = false;
@@ -84,8 +96,8 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 			const data = await empresaService.obtenerEmpresaPorId(id);
 			setEmpresaSeleccionada(data);
 			return data;
-		} catch (err: any) {
-			setError(err.message || 'Error al obtener empresa');
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, 'Error al obtener empresa'));
 			throw err;
 		} finally {
 			loading.value = false;
@@ -101,8 +113,8 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 			agregarEmpresaLocal(creada);
 			setSuccess('Empresa creada correctamente');
 			return creada;
-		} catch (err: any) {
-			setError(err.message || 'Error al crear empresa');
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, 'Error al crear empresa'));
 			throw err;
 		} finally {
 			loading.value = false;
@@ -121,8 +133,8 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 			}
 			setSuccess('Empresa actualizada correctamente');
 			return actualizada;
-		} catch (err: any) {
-			setError(err.message || 'Error al actualizar');
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, 'Error al actualizar'));
 			throw err;
 		} finally {
 			loading.value = false;
@@ -137,8 +149,8 @@ export const useEmpresaStore = defineStore('empresaStore', () => {
 			await empresaService.eliminarEmpresa(id);
 			eliminarEmpresaLocal(id);
 			setSuccess('Empresa eliminada correctamente');
-		} catch (err: any) {
-			setError(err.message || 'Error al eliminar');
+		} catch (err: unknown) {
+			setError(getErrorMessage(err, 'Error al eliminar'));
 			throw err;
 		} finally {
 			loading.value = false;

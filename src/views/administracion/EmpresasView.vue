@@ -20,6 +20,7 @@
             class="px-8 rounded-xl font-weight-bold shadow-primary btn-hover-scale"
             prepend-icon="mdi-plus"
             elevation="0"
+            :disabled="!canManage"
             @click="openCreateDialog"
           >
             Nueva Empresa
@@ -54,12 +55,27 @@
               </div>
             </v-card>
           </v-col>
+
+          <v-col cols="12" sm="6" md="4">
+            <v-card border variant="flat" class="pa-5 rounded-xl bg-surface stats-card">
+              <div class="d-flex align-center">
+                <v-avatar color="info" variant="tonal" rounded="lg" size="48" class="mr-4">
+                  <v-icon>mdi-magnify</v-icon>
+                </v-avatar>
+                <div>
+                  <div class="text-overline font-weight-bold text-disabled leading-tight">Mostrando</div>
+                  <div class="text-h4 font-weight-black text-info">{{ empresasFiltradas.length }}</div>
+                </div>
+              </div>
+            </v-card>
+          </v-col>
         </v-row>
 
         <v-card border variant="flat" class="rounded-xl overflow-hidden bg-surface shadow-sm">
           <div class="d-flex align-center px-6 py-4 bg-header-subtle border-b">
             <v-icon color="medium-emphasis" class="mr-3">mdi-magnify</v-icon>
-            <input 
+            <input
+              v-model.trim="search"
               type="text" 
               placeholder="Buscar por nombre, RUC o representante..." 
               class="search-input text-body-1 text-high-emphasis"
@@ -77,9 +93,10 @@
 
           <div class="pa-0">
             <EmpresaList
-              :empresas="empresaStore.empresas"
+              :empresas="empresasFiltradas"
               :loading="empresaStore.loading"
-              :error="empresaStore.error"
+              :error="empresaStore.error || undefined"
+              :can-manage="canManage"
               @create="openCreateDialog"
               @edit="openEditDialog"
               @delete="handleDeleteEmpresa"
@@ -91,7 +108,7 @@
     </v-row>
 
     <v-dialog v-model="dialogCreate" max-width="550" persistent scrollable>
-      <v-card class="rounded-xl overflow-hidden shadow-2xl bg-surface">
+        <v-card class="rounded-xl overflow-hidden shadow-2xl bg-surface">
         <div class="pa-6 border-b d-flex align-center justify-space-between">
           <div class="d-flex align-center">
             <v-avatar color="primary" variant="tonal" size="40" class="mr-3">
@@ -102,8 +119,31 @@
           <v-btn icon="mdi-close" variant="text" size="small" @click="dialogCreate = false" />
         </div>
         
+          <v-card-text class="pa-6 bg-background-alt">
+            <EmpresaForm mode="create" @submit-success="handleCreateSuccess" @cancel="dialogCreate = false" />
+          </v-card-text>
+        </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="dialogEdit" max-width="550" persistent scrollable>
+      <v-card class="rounded-xl overflow-hidden shadow-2xl bg-surface">
+        <div class="pa-6 border-b d-flex align-center justify-space-between">
+          <div class="d-flex align-center">
+            <v-avatar color="warning" variant="tonal" size="40" class="mr-3">
+              <v-icon>mdi-office-building-cog</v-icon>
+            </v-avatar>
+            <h2 class="text-h6 font-weight-black text-high-emphasis">Editar Empresa</h2>
+          </div>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="dialogEdit = false" />
+        </div>
+
         <v-card-text class="pa-6 bg-background-alt">
-          <EmpresaForm mode="create" @submit-success="handleCreateSuccess" @cancel="dialogCreate = false" />
+          <EmpresaForm
+            mode="edit"
+            :initial-data="empresaToEdit"
+            @submit-success="handleEditSuccess"
+            @cancel="dialogEdit = false"
+          />
         </v-card-text>
       </v-card>
     </v-dialog>
@@ -111,24 +151,84 @@
   </v-container>
 </template>
 
-<script setup>
-import { onMounted, ref, watch } from 'vue';
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue';
 import { useEmpresaStore } from '@/stores/empresaStore';
+import { useUIStore } from '@/stores/uiStore';
+import { useAuthStore } from '@/stores/auth/authStore';
 import EmpresaList from '@/components/empresa/empresaList.vue';
 import EmpresaForm from '@/components/empresa/empresaForm.vue';
 
 const empresaStore = useEmpresaStore();
+const uiStore = useUIStore();
+const authStore = useAuthStore();
 const dialogCreate = ref(false);
 const dialogEdit = ref(false);
-const empresaToEdit = ref(null);
+const empresaToEdit = ref<any>(null);
+const search = ref('');
 
-onMounted(() => { empresaStore.fetchEmpresas(); });
+const canManage = computed(() => authStore.can('action.admin.manage'));
+const empresasFiltradas = computed(() => {
+  const q = search.value.toLowerCase();
+  if (!q) return empresaStore.empresas;
 
-// Handlers se mantienen igual
-function openCreateDialog() { empresaToEdit.value = null; dialogCreate.value = true; }
-function openEditDialog(empresa) { empresaToEdit.value = { ...empresa }; dialogEdit.value = true; }
-const handleCreateSuccess = () => dialogCreate.value = false;
-async function handleDeleteEmpresa(empresa) { await empresaStore.eliminarEmpresaAction(empresa.id); }
+  return empresaStore.empresas.filter((empresa: any) =>
+    [empresa.nombre, empresa.ruc, empresa.telefono, empresa.direccion]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(q),
+  );
+});
+
+onMounted(async () => {
+  try {
+    await empresaStore.fetchEmpresas();
+  } catch {
+    uiStore.showError('No se pudieron cargar las empresas.');
+  }
+});
+
+function openCreateDialog() {
+  if (!canManage.value) {
+    uiStore.showWarning('No tiene permisos para crear empresas.');
+    return;
+  }
+  empresaToEdit.value = null;
+  dialogCreate.value = true;
+}
+
+function openEditDialog(empresa: any) {
+  if (!canManage.value) {
+    uiStore.showWarning('No tiene permisos para editar empresas.');
+    return;
+  }
+  empresaToEdit.value = { ...empresa };
+  dialogEdit.value = true;
+}
+
+function handleCreateSuccess() {
+  dialogCreate.value = false;
+  uiStore.showSuccess('Empresa creada correctamente.');
+}
+
+function handleEditSuccess() {
+  dialogEdit.value = false;
+  uiStore.showSuccess('Empresa actualizada correctamente.');
+}
+
+async function handleDeleteEmpresa(empresa: any) {
+  if (!canManage.value) {
+    uiStore.showWarning('No tiene permisos para eliminar empresas.');
+    return;
+  }
+  try {
+    await empresaStore.eliminarEmpresaAction(empresa.id);
+    uiStore.showSuccess('Empresa eliminada correctamente.');
+  } catch {
+    uiStore.showError(empresaStore.error || 'No se pudo eliminar la empresa.');
+  }
+}
 </script>
 
 <style scoped>
