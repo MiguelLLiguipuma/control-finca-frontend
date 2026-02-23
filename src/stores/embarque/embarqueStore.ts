@@ -224,6 +224,62 @@ export const useEmbarqueStore = defineStore('embarque', {
 			this.recalcularTotales();
 		},
 
+		setCajasPorFinca(fincaId: number, totalCajas: number) {
+			if (!this.esEditable || !this.lineas.length) return;
+			const finca = Math.trunc(safeNumber(fincaId, 0));
+			if (!finca) return;
+
+			const indices = this.lineas
+				.map((linea, idx) => ({ linea, idx }))
+				.filter((item) => item.linea.finca_id === finca);
+			if (!indices.length) return;
+
+			const total = Math.max(0, safeNumber(totalCajas, 0));
+			const baseBuenos = indices.reduce(
+				(acc, item) => acc + Math.max(0, item.linea.racimos_buenos),
+				0,
+			);
+			const baseOperativa =
+				baseBuenos > 0
+					? baseBuenos
+					: indices.reduce(
+							(acc, item) => acc + Math.max(0, item.linea.total_racimos),
+							0,
+						);
+
+			if (baseOperativa <= 0) {
+				for (const item of indices) {
+					this.lineas[item.idx] = calcularRatiosLinea({
+						...this.lineas[item.idx],
+						cajas_embarcadas: 0,
+					});
+				}
+				this.recalcularTotales();
+				return;
+			}
+
+			let acumulado = 0;
+			for (let i = 0; i < indices.length; i += 1) {
+				const item = indices[i];
+				const baseLinea =
+					baseBuenos > 0
+						? Math.max(0, item.linea.racimos_buenos)
+						: Math.max(0, item.linea.total_racimos);
+				const proporcional = Number(((total * baseLinea) / baseOperativa).toFixed(2));
+				const valor =
+					i === indices.length - 1
+						? Number((total - acumulado).toFixed(2))
+						: proporcional;
+				acumulado += valor;
+				this.lineas[item.idx] = calcularRatiosLinea({
+					...this.lineas[item.idx],
+					cajas_embarcadas: Math.max(0, valor),
+				});
+			}
+
+			this.recalcularTotales();
+		},
+
 		normalizarLinea(index: number) {
 			if (index < 0 || index >= this.lineas.length) return;
 			this.lineas[index] = calcularRatiosLinea(this.lineas[index]);

@@ -77,7 +77,8 @@ export const useAuthStore = defineStore('auth', {
 		logout() {
 			this.user = null;
 			this.token = null;
-			localStorage.clear();
+			localStorage.removeItem('token');
+			localStorage.removeItem('user');
 			// Usamos replace para que no puedan volver atrás con el botón del navegador
 			window.location.replace('/login');
 		},

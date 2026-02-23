@@ -316,6 +316,61 @@
               </v-col>
             </v-row>
 
+            <v-row class="mt-3" v-if="resumenFincas.length">
+              <v-col cols="12">
+                <v-card variant="tonal" color="primary" class="rounded-lg border">
+                  <v-card-text class="pa-4">
+                    <div class="text-subtitle-1 font-weight-black mb-3">Distribucion de Cajas por Finca</div>
+                    <v-table density="compact">
+                      <thead>
+                        <tr>
+                          <th>Finca</th>
+                          <th class="text-right">Buenos</th>
+                          <th class="text-right">Total</th>
+                          <th style="width: 170px;">Cajas Finca</th>
+                          <th class="text-right">Ratio Com</th>
+                          <th class="text-right">Ratio Op</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="row in resumenFincas" :key="row.finca_id">
+                          <td>{{ row.finca_nombre }}</td>
+                          <td class="text-right">{{ row.racimos_buenos }}</td>
+                          <td class="text-right">{{ row.total_racimos }}</td>
+                          <td>
+                            <v-text-field
+                              v-model.number="cajasPorFinca[row.finca_id]"
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              density="compact"
+                              variant="outlined"
+                              hide-details
+                              :disabled="!embarqueStore.esEditable || embarqueStore.submitting"
+                            />
+                          </td>
+                          <td class="text-right">{{ row.ratio_comercial.toFixed(4) }}</td>
+                          <td class="text-right">{{ row.ratio_operativo.toFixed(4) }}</td>
+                          <td class="text-right">
+                            <v-btn
+                              size="small"
+                              color="primary"
+                              variant="tonal"
+                              :disabled="!embarqueStore.esEditable || embarqueStore.submitting"
+                              @click="aplicarCajasFinca(row.finca_id)"
+                            >
+                              Aplicar
+                            </v-btn>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </v-table>
+                  </v-card-text>
+                </v-card>
+              </v-col>
+            </v-row>
+
             <v-row class="mt-2">
               <v-col cols="12">
                 <v-alert
@@ -578,6 +633,7 @@ const numeroVoucherBusqueda = ref('');
 const modoBusquedaNumero = ref<'contains' | 'exact'>('contains');
 const mensajeBusqueda = ref('');
 const fechasOcupadas = ref<Record<string, { cosecha: boolean; voucher: boolean }>>({});
+const cajasPorFinca = ref<Record<number, number>>({});
 
 const chipEstado = computed(() => {
   const estado = embarqueStore.voucherActual?.estado;
@@ -603,6 +659,43 @@ const empresaBloqueadaId = computed<number | null>(() => {
 const fincasDisponibles = computed(() => {
   if (!empresaBloqueadaId.value) return fincas.value;
   return fincas.value.filter((finca) => finca.empresa_id === empresaBloqueadaId.value);
+});
+const resumenFincas = computed(() => {
+  const map = new Map<number, {
+    finca_id: number;
+    finca_nombre: string;
+    racimos_buenos: number;
+    total_racimos: number;
+    total_cajas: number;
+    ratio_comercial: number;
+    ratio_operativo: number;
+  }>();
+
+  for (const linea of embarqueStore.lineas) {
+    const key = linea.finca_id;
+    const base = map.get(key) || {
+      finca_id: key,
+      finca_nombre: linea.finca_nombre || `Finca ${key}`,
+      racimos_buenos: 0,
+      total_racimos: 0,
+      total_cajas: 0,
+      ratio_comercial: 0,
+      ratio_operativo: 0,
+    };
+    base.racimos_buenos += Number(linea.racimos_buenos || 0);
+    base.total_racimos += Number(linea.total_racimos || 0);
+    base.total_cajas += Number(linea.cajas_embarcadas || 0);
+    map.set(key, base);
+  }
+
+  return Array.from(map.values()).map((row) => ({
+    ...row,
+    total_cajas: Number(row.total_cajas.toFixed(2)),
+    ratio_comercial:
+      row.racimos_buenos > 0 ? Number((row.total_cajas / row.racimos_buenos).toFixed(4)) : 0,
+    ratio_operativo:
+      row.total_racimos > 0 ? Number((row.total_cajas / row.total_racimos).toFixed(4)) : 0,
+  }));
 });
 const fincasSeleccionadasTexto = computed(() => {
   const ids = new Set(embarqueStore.fincaIds);
@@ -710,6 +803,10 @@ function aplicarCajasSemana() {
   embarqueStore.setCajasTotalesSemana(cajasSemanaInput.value);
 }
 
+function aplicarCajasFinca(fincaId: number) {
+  embarqueStore.setCajasPorFinca(fincaId, Number(cajasPorFinca.value[fincaId] || 0));
+}
+
 async function guardar() {
   mensajeBusqueda.value = '';
   await embarqueStore.guardarVoucher();
@@ -802,6 +899,22 @@ watch(fechaBusquedaPicker, (value) => {
   if (!value) return;
   fechaBusqueda.value = toIsoDate(value);
 });
+
+watch(
+  resumenFincas,
+  (rows) => {
+    const next: Record<number, number> = {};
+    for (const row of rows) {
+      const current = cajasPorFinca.value[row.finca_id];
+      next[row.finca_id] =
+        typeof current === 'number' && Number.isFinite(current)
+          ? current
+          : Number(row.total_cajas.toFixed(2));
+    }
+    cajasPorFinca.value = next;
+  },
+  { immediate: true },
+);
 
 onMounted(async () => {
   await fincaStore.obtenerFincas();

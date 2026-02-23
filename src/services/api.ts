@@ -50,11 +50,6 @@ api.interceptors.response.use(
 
 					// Limpiamos el estado y redirigimos (el logout debería manejar el redireccionamiento)
 					authStore.logout();
-
-					// Opcional: Forzar recarga a login si no estás en la página de login
-					if (!window.location.pathname.includes('/login')) {
-						window.location.href = '/login';
-					}
 					break;
 
 				case 404:
