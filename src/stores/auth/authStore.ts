@@ -1,5 +1,11 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import {
+	canAccess,
+	normalizeRole,
+	permissionsForRole,
+	type AppPermission,
+} from '@/utils/rbac';
 
 interface AuthUser {
 	id?: number;
@@ -39,6 +45,12 @@ export const useAuthStore = defineStore('auth', {
 	getters: {
 		userName: (state) => state.user?.nombre || 'Usuario',
 		userRole: (state) => state.user?.rol?.toUpperCase() || 'TRABAJADOR',
+		normalizedRole: (state) => normalizeRole(state.user?.rol),
+		permissions: (state) => permissionsForRole(state.user?.rol),
+		can:
+			(state) =>
+			(permission: AppPermission): boolean =>
+				canAccess(permission, state.user?.rol),
 		userInitials: (state) =>
 			state.user?.nombre ? state.user.nombre.charAt(0).toUpperCase() : 'U',
 		isAuthenticated: (state) => !!state.token,

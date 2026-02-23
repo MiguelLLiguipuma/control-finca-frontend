@@ -38,7 +38,7 @@
 
     <v-list nav class="sidebar-list mt-2">
       <v-list-item
-        v-for="item in menuItems"
+        v-for="item in visibleMenuItems"
         :key="item.route"
         :value="item.route"
         :active="isItemActive(item.route)"
@@ -91,9 +91,11 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTheme, useDisplay } from 'vuetify'
 import { useSidebarStore } from '@/stores/sidebarStore'
+import { useAuthStore } from '@/stores/auth/authStore'
 import { storeToRefs } from 'pinia'
 
 const sidebarStore = useSidebarStore()
+const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const { mobile } = useDisplay()
@@ -110,7 +112,8 @@ const menuItems = ref([
   { 
     title: 'Dashboard', 
     icon: 'mdi-view-dashboard-outline', 
-    route: '/reportes' 
+    route: '/reportes',
+    permission: 'view.dashboard',
   },
   
   // --- NUEVO ÍTEM DE PLANIFICACIÓN ---
@@ -118,18 +121,24 @@ const menuItems = ref([
     title: 'Calendario Enfunde', 
     icon: 'mdi-calendar-range', // Icono de calendario profesional
     route: '/planificacion/calendario',
-    badge: '2026' // Opcional: Destaca que es para el nuevo año
+    badge: '2026', // Opcional: Destaca que es para el nuevo año
+    permission: 'view.calendario',
   },
   // -----------------------------------
 
-  { title: 'Registro Enfunde', icon: 'mdi-leaf', route: '/registro-enfunde' },
-  { title: 'Liquidación Cosecha', icon: 'mdi-basket-check-outline', route: '/registro-cosecha' },
-  { title: 'Voucher Embarque', icon: 'mdi-file-document-check-outline', route: '/voucher-embarque' },
+  { title: 'Registro Enfunde', icon: 'mdi-leaf', route: '/registro-enfunde', permission: 'view.enfunde' },
+  { title: 'Liquidación Cosecha', icon: 'mdi-basket-check-outline', route: '/registro-cosecha', permission: 'view.cosecha' },
+  { title: 'Voucher Embarque', icon: 'mdi-file-document-check-outline', route: '/voucher-embarque', permission: 'view.voucher' },
+  { title: 'Centro de Alertas', icon: 'mdi-bell-alert-outline', route: '/alertas', permission: 'view.alertas' },
+  { title: 'Auditoría', icon: 'mdi-clipboard-text-search-outline', route: '/auditoria', permission: 'view.auditoria' },
   
   // Sección Administrativa
-  { title: 'Gestión Empresas', icon: 'mdi-domain', route: '/empresas' },
-  { title: 'Gestión de Fincas', icon: 'mdi-map-marker-radius', route: '/fincas'} 
+  { title: 'Gestión Empresas', icon: 'mdi-domain', route: '/empresas', permission: 'view.empresas' },
+  { title: 'Gestión de Fincas', icon: 'mdi-map-marker-radius', route: '/fincas', permission: 'view.fincas'} 
 ])
+const visibleMenuItems = computed(() =>
+  menuItems.value.filter((item) => !item.permission || authStore.can(item.permission)),
+)
 
 const sidebarWidth = computed(() => sidebarStore.currentSidebarWidth)
 const shouldShowContent = computed(() => !isMiniSidebar.value || isMobileView.value)

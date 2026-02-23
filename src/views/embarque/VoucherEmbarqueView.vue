@@ -515,7 +515,7 @@
                   color="success"
                   class="font-weight-black premium-btn"
                   :loading="embarqueStore.submitting"
-                  :disabled="embarqueStore.submitting || !embarqueStore.puedeConfirmar"
+                  :disabled="embarqueStore.submitting || !embarqueStore.puedeConfirmar || !canConfirmVoucher"
                   @click="confirmar"
                 >
                   Confirmar Voucher
@@ -526,7 +526,7 @@
                   color="error"
                   variant="tonal"
                   class="font-weight-bold premium-btn"
-                  :disabled="embarqueStore.submitting || !embarqueStore.voucherActual || !embarqueStore.esEditable"
+                  :disabled="embarqueStore.submitting || !embarqueStore.voucherActual || !embarqueStore.esEditable || !canCancelVoucher"
                   @click="dialogAnular = true"
                 >
                   Anular Voucher
@@ -613,11 +613,13 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFincaStore } from '@/stores/fincaStore';
 import { useEmbarqueStore } from '@/stores/embarque/embarqueStore';
+import { useAuthStore } from '@/stores/auth/authStore';
 import type { EmbarqueEstado } from '@/services/embarque/embarqueTypes';
 import { cosechaService } from '@/services/cosecha/cosechaService';
 
 const fincaStore = useFincaStore();
 const embarqueStore = useEmbarqueStore();
+const authStore = useAuthStore();
 const { fincas } = storeToRefs(fincaStore);
 
 const dialogAnular = ref(false);
@@ -641,6 +643,8 @@ const chipEstado = computed(() => {
   if (estado === 'ANULADO') return { text: 'ANULADO', color: 'error' };
   return { text: 'BORRADOR', color: 'warning' };
 });
+const canConfirmVoucher = computed(() => authStore.can('action.voucher.confirm'));
+const canCancelVoucher = computed(() => authStore.can('action.voucher.cancel'));
 
 const fincaPorId = computed(() => {
   const map = new Map<number, { empresa_id: number }>();
