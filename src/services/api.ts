@@ -39,18 +39,25 @@ api.interceptors.response.use(
 				error?: string;
 				message?: string;
 			};
+			const backendMessage = String(data.message || data.error || '');
 
 			switch (status) {
 				case 401:
-				case 403:
-					// 401: No autorizado (falta token)
-					// 403: Prohibido (token expirado o inválido según tu log de Railway)
-					mensaje =
-						data.message || 'Su sesión ha expirado. Ingrese nuevamente.';
-
-					// Limpiamos el estado y redirigimos (el logout debería manejar el redireccionamiento)
+					mensaje = data.message || 'Su sesión ha expirado. Ingrese nuevamente.';
 					authStore.logout();
 					break;
+				case 403: {
+					mensaje = data.message || 'No tiene permisos para esta operación.';
+					const esSesionExpirada =
+						/sesion expirada|ingrese nuevamente|token de seguridad no valido|token invalido/i.test(
+							backendMessage,
+						);
+					// Solo cerramos sesión cuando el backend indica token inválido/expirado.
+					if (esSesionExpirada) {
+						authStore.logout();
+					}
+					break;
+				}
 
 				case 404:
 					mensaje = 'El recurso solicitado no existe.';

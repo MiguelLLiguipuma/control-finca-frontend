@@ -98,6 +98,10 @@ export const useFincaStore = defineStore('finca', {
 					(!this.fincaSeleccionadaId || !existeFinca)
 				) {
 					this.seleccionarFinca(this.fincas[0].id);
+				} else if (this.fincas.length === 0) {
+					// Evita reutilizar finca de una sesión anterior de otro usuario.
+					this.fincaSeleccionadaId = null;
+					localStorage.removeItem('lastFincaId');
 				}
 
 				return this.fincas;

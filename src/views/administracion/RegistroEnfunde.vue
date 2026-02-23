@@ -302,6 +302,13 @@ const usuarioActualItem = computed(() => {
   const id = Number(authStore.user?.id_usuario ?? authStore.user?.id ?? 0);
   return [{ id, nombre: authStore.user?.nombre || 'Usuario actual' }];
 });
+const canConsultarUsuarios = computed(() => authStore.can('view.usuarios'));
+const usuariosActivos = computed(() => {
+  if (Array.isArray(rawData.value.usuarios) && rawData.value.usuarios.length) {
+    return rawData.value.usuarios.filter((u) => u.activo !== false);
+  }
+  return usuarioActualItem.value;
+});
 
 const calendariosAnioActual = computed(() => {
   const anioAFiltrar = reportesStore.anioSeleccionado || new Date().getFullYear();
@@ -345,11 +352,16 @@ onMounted(async () => {
   registroStore.globalLoading = true
   registroStore.initForm()
   try {
-    const [f, u, c] = await Promise.all([
-      fincaStore.obtenerFincas(), 
-      usuarioStore.obtenerUsuarios(), 
-      calendarioStore.obtenerCalendarios()
-    ])
+    const tasks = [
+      fincaStore.obtenerFincas(),
+      calendarioStore.obtenerCalendarios(),
+      canConsultarUsuarios.value ? usuarioStore.obtenerUsuarios() : Promise.resolve([]),
+    ];
+    const [fRes, cRes, uRes] = await Promise.allSettled(tasks);
+    const f = fRes.status === 'fulfilled' ? fRes.value : [];
+    const c = cRes.status === 'fulfilled' ? cRes.value : [];
+    const u = uRes.status === 'fulfilled' ? uRes.value : [];
+
     rawData.value = { fincas: f || [], usuarios: u || [], calendarios: c || [] }
 
     if (!registroStore.formData.finca_id && fincaStore.fincaSeleccionadaId) {

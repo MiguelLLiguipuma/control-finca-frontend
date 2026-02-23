@@ -415,7 +415,7 @@
 
         <v-card variant="flat" class="rounded-xl mb-6 table-card border shadow-sm bg-surface">
           <v-card-text class="pa-0">
-            <v-table density="comfortable" fixed-header height="420px">
+            <v-table density="comfortable" fixed-header :height="lineasTableHeight">
               <thead>
                 <tr>
                   <th>Finca</th>
@@ -611,6 +611,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useDisplay } from 'vuetify';
 import { useFincaStore } from '@/stores/fincaStore';
 import { useEmbarqueStore } from '@/stores/embarque/embarqueStore';
 import { useAuthStore } from '@/stores/auth/authStore';
@@ -620,6 +621,7 @@ import { cosechaService } from '@/services/cosecha/cosechaService';
 const fincaStore = useFincaStore();
 const embarqueStore = useEmbarqueStore();
 const authStore = useAuthStore();
+const { smAndDown } = useDisplay();
 const { fincas } = storeToRefs(fincaStore);
 
 const dialogAnular = ref(false);
@@ -718,6 +720,7 @@ const fechaMinima = computed(() => {
 });
 
 const estadoFechaSeleccionada = computed(() => fechasOcupadas.value[embarqueStore.fechaEmbarque] || null);
+const lineasTableHeight = computed(() => (smAndDown.value ? '320px' : '420px'));
 
 function colorEstado(estado: EmbarqueEstado): string {
   if (estado === 'CONFIRMADO') return 'success';
@@ -987,6 +990,7 @@ function imprimirVoucher() {
 
 .premium-btn {
   letter-spacing: 0.02em;
+  min-height: 42px;
 }
 
 .table-card :deep(.v-table) {
@@ -999,6 +1003,16 @@ function imprimirVoucher() {
   text-transform: uppercase;
   background: rgba(var(--v-theme-on-surface), 0.04);
   color: rgba(var(--v-theme-on-surface), 0.72);
+}
+
+.table-card :deep(.v-table__wrapper),
+.controls-card :deep(.v-table__wrapper) {
+  overflow-x: auto;
+}
+
+.table-card :deep(table),
+.controls-card :deep(table) {
+  min-width: 760px;
 }
 
 .kpi-box {
@@ -1045,6 +1059,15 @@ function imprimirVoucher() {
     font-size: 2rem !important;
   }
 
+  .controls-card :deep(.v-field),
+  .controls-card :deep(.v-btn) {
+    min-height: 42px;
+  }
+
+  .actions-card :deep(.v-btn) {
+    min-height: 44px;
+  }
+
   .kpi-box {
     min-width: calc(50% - 8px);
     flex: 1 1 calc(50% - 8px);
@@ -1054,6 +1077,14 @@ function imprimirVoucher() {
 @media (max-width: 600px) {
   .hero-title {
     font-size: 1.65rem !important;
+  }
+
+  .section-title {
+    font-size: 1rem !important;
+  }
+
+  .controls-card :deep(.v-card-text) {
+    padding: 14px !important;
   }
 
   .kpi-box {

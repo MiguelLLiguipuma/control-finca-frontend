@@ -13,28 +13,7 @@
             </p>
           </div>
 
-          <v-card variant="flat" class="pa-2 rounded-xl bg-surface border filters-box w-100 w-lg-auto">
-            <v-row dense align="center" no-gutters>
-              <v-col cols="4" sm="auto">
-                <div class="selector-anio px-1"><AnoSelector /></div>
-              </v-col>
-              <v-divider vertical class="mx-2 d-none d-sm-flex" inset />
-              <v-col cols="8" sm="auto">
-                <div class="selector-finca px-1"><FincaSelector /></div>
-              </v-col>
-              <v-divider vertical class="mx-2 d-none d-sm-flex" inset />
-              <v-col cols="12" sm="auto" class="d-flex justify-start px-2 pt-2 pt-sm-0">
-                <v-checkbox
-                  v-model="reportesStore.mostrarComparativo"
-                  label="Año anterior"
-                  density="compact"
-                  hide-details
-                  color="primary"
-                  class="font-weight-bold checkbox-text"
-                />
-              </v-col>
-            </v-row>
-          </v-card>
+          <ReportFiltersBar class="w-100 w-lg-auto" />
         </header>
 
         <section ref="kpisSectionRef" class="mb-10">
@@ -136,8 +115,7 @@ import EarningsChart from '../../components/reportes/earningsChart.vue'
 import TendenciaSemanal from '../../components/reportes/tendenciaSemanal.vue' // ✅ Importado
 import SideStats from '../../components/reportes/sideStats.vue'
 import RendimientoCintas from '../../components/reportes/rendimientoCintas.vue'
-import FincaSelector from '../../components/ui/FincaSelector.vue'
-import AnoSelector from '../../components/ui/AnoSelector.vue'
+import ReportFiltersBar from '../../components/ui/ReportFiltersBar.vue'
 
 const reportesStore = useReportesStore()
 const fincaStore = useFincaStore()
@@ -180,21 +158,29 @@ const handleViewDetails = (title) => {
 }
 
 const refrescarTodo = async () => {
-  const fincaId = fincaSeleccionadaId.value
-  if (!fincaId) return
+  const fincaId = Number(fincaSeleccionadaId.value || 0)
+  const fincaValida = fincaStore.fincas.some((f) => f.id === fincaId)
+  if (!fincaValida) {
+    const primera = fincaStore.fincas[0]?.id
+    if (!primera) return
+    fincaStore.seleccionarFinca(primera)
+    return
+  }
 
   await Promise.all([reportesStore.cargarReportes(fincaId), enfundeStore.cargarRegistros(fincaId)])
 }
 
 onMounted(async () => {
   await fincaStore.obtenerFincas()
-  if (!fincaSeleccionadaId.value && fincaStore.fincas.length > 0) {
+  const seleccionActual = Number(fincaSeleccionadaId.value || 0)
+  const existeSeleccion = fincaStore.fincas.some((f) => f.id === seleccionActual)
+  if ((!seleccionActual || !existeSeleccion) && fincaStore.fincas.length > 0) {
     fincaStore.seleccionarFinca(fincaStore.fincas[0].id)
   }
 })
 
 watch(
-  [fincaSeleccionadaId, () => reportesStore.anioSeleccionado, () => reportesStore.mostrarComparativo],
+  [fincaSeleccionadaId, () => reportesStore.anioSeleccionado, () => reportesStore.modoComparativo],
   async () => {
     await refrescarTodo()
   },
@@ -206,7 +192,6 @@ watch(
 .transition-colors { transition: background-color 0.3s ease, color 0.3s ease; }
 .filters-box, .border { border: 1px solid rgba(var(--v-border-color), 0.1) !important; }
 .bg-background-opacity { background-color: rgba(var(--v-theme-on-surface), 0.03) !important; }
-.checkbox-text :deep(.v-label) { font-size: 0.85rem !important; opacity: 1; }
 .border-b { border-bottom: 1px solid rgba(var(--v-border-color), 0.05) !important; }
 .shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important; }
 .sticky-sidebar { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 24px; }

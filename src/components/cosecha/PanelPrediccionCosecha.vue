@@ -73,6 +73,7 @@
 							<th>Cinta</th>
 							<th>Saldo</th>
 							<th>Madurez</th>
+							<th>Confianza</th>
 							<th>Días</th>
 							<th>Fecha Estimada</th>
 							<th>Cajas</th>
@@ -92,22 +93,117 @@
 								<v-chip
 									size="small"
 									variant="tonal"
-									:color="item.progreso_madurez >= 90 ? 'error' : item.progreso_madurez >= 75 ? 'warning' : 'info'"
+									:color="colorMadurezPrediccion(item.progreso_madurez)"
 								>
 									{{ item.progreso_madurez.toFixed(1) }}%
 								</v-chip>
+							</td>
+							<td>
+								<v-tooltip location="top">
+									<template #activator="{ props: ttProps }">
+										<v-chip
+											v-bind="ttProps"
+											size="small"
+											variant="tonal"
+											:color="colorConfianzaPrediccion(item.confianza)"
+										>
+											{{ item.confianza }}
+										</v-chip>
+									</template>
+									<span>{{ item.explicacion }}</span>
+								</v-tooltip>
 							</td>
 							<td class="font-weight-medium">{{ item.dias_faltantes }}</td>
 							<td>{{ formatearFecha(item.fecha_estimada) }}</td>
 							<td class="font-weight-medium">{{ item.cajas_esperadas }}</td>
 							<td>
-								<v-chip size="small" :color="item.mensaje_clima === 'Corte Urgente' ? 'error' : item.mensaje_clima === 'Proxima Cosecha' ? 'warning' : 'success'">
+								<v-chip size="small" :color="colorEstadoPrediccion(item.mensaje_clima)">
 									{{ item.mensaje_clima }}
 								</v-chip>
 							</td>
 						</tr>
 					</tbody>
 				</v-table>
+
+				<v-divider class="my-4" />
+
+				<div class="d-flex align-center mb-3">
+					<div class="text-subtitle-2 font-weight-black text-high-emphasis">
+						Backtesting Operativo (ultimas 8 semanas)
+					</div>
+					<v-spacer />
+					<v-chip
+						v-if="backtestingSemanal.length"
+						size="small"
+						variant="tonal"
+						:color="diagnosticoBacktesting.estadoColor"
+					>
+						{{ diagnosticoBacktesting.estadoLabel }}
+					</v-chip>
+				</div>
+
+				<div v-if="backtestingSemanal.length" class="mb-3">
+					<v-row dense>
+						<v-col cols="12" sm="4">
+							<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
+								<div class="text-caption text-medium-emphasis">MAE Cajas/Sem</div>
+								<div class="text-h6 font-weight-black text-high-emphasis">
+									{{ resumenBacktesting.mae.toFixed(2) }}
+								</div>
+							</v-sheet>
+						</v-col>
+						<v-col cols="12" sm="4">
+							<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
+								<div class="text-caption text-medium-emphasis">MAPE (%)</div>
+								<div class="text-h6 font-weight-black text-high-emphasis">
+									{{ resumenBacktesting.mape.toFixed(2) }}%
+								</div>
+							</v-sheet>
+						</v-col>
+						<v-col cols="12" sm="4">
+							<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
+								<div class="text-caption text-medium-emphasis">Sesgo (%)</div>
+								<div class="text-h6 font-weight-black text-high-emphasis">
+									{{ resumenBacktesting.sesgoPct.toFixed(2) }}%
+								</div>
+							</v-sheet>
+						</v-col>
+					</v-row>
+
+					<v-table density="compact" class="pred-table mt-2">
+						<thead>
+							<tr>
+								<th>Semana</th>
+								<th>Real</th>
+								<th>Estimado</th>
+								<th>Error Abs</th>
+								<th>Error %</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr v-for="row in backtestingSemanal" :key="row.key">
+								<td>{{ row.semanaLabel }}</td>
+								<td>{{ row.cajasReales.toFixed(2) }}</td>
+								<td>{{ row.cajasEstimadas.toFixed(2) }}</td>
+								<td>{{ row.errorAbs.toFixed(2) }}</td>
+								<td>{{ row.errorPct.toFixed(2) }}%</td>
+							</tr>
+						</tbody>
+					</v-table>
+
+					<v-alert
+						v-if="diagnosticoBacktesting.recomiendaRecalibrar"
+						type="warning"
+						variant="tonal"
+						class="mt-3"
+						density="comfortable"
+					>
+						{{ diagnosticoBacktesting.mensaje }}
+					</v-alert>
+				</div>
+				<div v-else class="text-medium-emphasis text-body-2">
+					No hay suficientes vouchers confirmados para backtesting en este periodo.
+				</div>
 			</div>
 		</v-card-text>
 	</v-card>
@@ -118,13 +214,29 @@ import { computed, ref, watch } from 'vue';
 import dayjs from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
 import 'dayjs/locale/es';
+import isoWeek from 'dayjs/plugin/isoWeek';
 import {
 	cosechaService,
-	type PrediccionCosechaItem,
 } from '../../services/cosecha/cosechaService';
+import { embarqueService } from '@/services/embarque/embarqueService';
 import { useCosechaStore } from '../../stores/cosecha/cosechaStore';
+import {
+	type DiagnosticoBacktestingVM,
+	type BacktestingResumenVM,
+	type BacktestingSemanaVM,
+	type PrediccionFilaVM,
+	construirBacktestingSemanal,
+	diagnosticarBacktesting,
+	resumirBacktestingSemanal,
+	colorEstadoPrediccion,
+	colorConfianzaPrediccion,
+	colorMadurezPrediccion,
+	construirPrediccionVM,
+	crearPrediccionVacia,
+} from '@/domain/cosecha/prediccionCosecha';
 
 dayjs.extend(customParseFormat);
+dayjs.extend(isoWeek);
 dayjs.locale('es');
 
 const props = defineProps<{
@@ -133,14 +245,25 @@ const props = defineProps<{
 
 const loading = ref(false);
 const error = ref('');
-const metaAplicada = ref<number | string>('--');
-const promedioUC = ref<string>('--');
-const proyecciones = ref<PrediccionCosechaItem[]>([]);
+const metaAplicada = ref<number | string>(crearPrediccionVacia().metaAplicada);
+const promedioUC = ref<string>(String(crearPrediccionVacia().promedioUC));
+const proyecciones = ref<PrediccionFilaVM[]>(crearPrediccionVacia().filas);
+const backtestingSemanal = ref<BacktestingSemanaVM[]>([]);
+const resumenBacktesting = ref<BacktestingResumenVM>({
+	mae: 0,
+	mape: 0,
+	sesgoPct: 0,
+	totalSemanas: 0,
+});
+const diagnosticoBacktesting = ref<DiagnosticoBacktestingVM>({
+	estadoLabel: 'ESTABLE',
+	estadoColor: 'success',
+	recomiendaRecalibrar: false,
+	mensaje: '',
+});
 const cosechaStore = useCosechaStore();
 
-const filas = computed(() =>
-	[...proyecciones.value].sort((a, b) => a.dias_faltantes - b.dias_faltantes),
-);
+const filas = computed(() => proyecciones.value);
 
 function formatearFecha(fecha: string): string {
 	if (!fecha) return '--';
@@ -150,9 +273,13 @@ function formatearFecha(fecha: string): string {
 
 async function cargarPrediccion() {
 	if (!props.fincaId) {
-		proyecciones.value = [];
-		metaAplicada.value = '--';
-		promedioUC.value = '--';
+		const emptyVM = crearPrediccionVacia();
+		proyecciones.value = emptyVM.filas;
+		metaAplicada.value = emptyVM.metaAplicada;
+		promedioUC.value = String(emptyVM.promedioUC);
+		backtestingSemanal.value = [];
+		resumenBacktesting.value = { mae: 0, mape: 0, sesgoPct: 0, totalSemanas: 0 };
+		diagnosticoBacktesting.value = diagnosticarBacktesting(resumenBacktesting.value);
 		error.value = '';
 		return;
 	}
@@ -162,14 +289,33 @@ async function cargarPrediccion() {
 
 	try {
 		const data = await cosechaService.getPrediccion(props.fincaId);
-		metaAplicada.value = data.meta_aplicada || '--';
-		promedioUC.value =
-			data.promedio_uc_diario || data.promedio_climatico_semanal || '--';
-		proyecciones.value = data.proyecciones || [];
-		cosechaStore.configurarVentanaCorte(data.semana_inicio, data.semana_fin);
+		const vm = construirPrediccionVM(data);
+		metaAplicada.value = vm.metaAplicada;
+		promedioUC.value = String(vm.promedioUC);
+		proyecciones.value = vm.filas;
+		cosechaStore.configurarVentanaCorte(vm.semanaInicio, vm.semanaFin);
+
+		const fechaHasta = dayjs().format('YYYY-MM-DD');
+		const fechaDesde = dayjs().subtract(8, 'week').startOf('week').format('YYYY-MM-DD');
+		const vouchers = await embarqueService.listVouchers({
+			finca_id: props.fincaId,
+			estado: 'CONFIRMADO',
+			fecha_desde: fechaDesde,
+			fecha_hasta: fechaHasta,
+		});
+		backtestingSemanal.value = construirBacktestingSemanal(
+			vouchers.items || [],
+			vm.ratioAplicado,
+		);
+		resumenBacktesting.value = resumirBacktestingSemanal(backtestingSemanal.value);
+		diagnosticoBacktesting.value = diagnosticarBacktesting(resumenBacktesting.value);
 	} catch {
 		error.value = 'No fue posible cargar la predicción para esta finca.';
-		proyecciones.value = [];
+		const emptyVM = crearPrediccionVacia();
+		proyecciones.value = emptyVM.filas;
+		backtestingSemanal.value = [];
+		resumenBacktesting.value = { mae: 0, mape: 0, sesgoPct: 0, totalSemanas: 0 };
+		diagnosticoBacktesting.value = diagnosticarBacktesting(resumenBacktesting.value);
 	} finally {
 		loading.value = false;
 	}

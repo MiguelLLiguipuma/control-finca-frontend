@@ -18,7 +18,7 @@
             </v-avatar>
             
             <div class="flex-grow-1">
-              <h1 class="text-h4 font-weight-black mb-0 text-high-emphasis">
+              <h1 class="text-h4 font-weight-black mb-0 text-high-emphasis control-title">
                 Control de Campo · Sem {{ cosechaStore.semanaActual }}
               </h1>
               <div class="d-flex align-center text-primary font-weight-bold mt-2">
@@ -260,7 +260,7 @@
                         </v-col>
 
                         <v-col cols="12" sm="5">
-                          <div class="d-flex justify-end flex-wrap gap-4">
+                          <div class="d-flex justify-end flex-wrap gap-4 digitacion-group">
                             
                             <div class="text-center">
                               <div class="d-flex justify-space-between align-center px-1 mb-1">
@@ -596,6 +596,7 @@ watch(fincaSeleccionada, async (id) => {
 .sticky-control { position: sticky; top: 20px; z-index: 5; }
 .gap-2 { gap: 8px; }
 .gap-4 { gap: 16px; }
+.digitacion-group { width: 100%; }
 
 /* AUMENTADO: Altura de inputs para mayor comodidad táctil */
 .input-container {
@@ -603,4 +604,39 @@ watch(fincaSeleccionada, async (id) => {
     border-color: rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .border-dashed { border-style: dashed !important; opacity: 0.4; }
+
+@media (max-width: 960px) {
+  .sticky-control {
+    position: static;
+    top: auto;
+  }
+
+  .control-title {
+    font-size: 1.55rem !important;
+    line-height: 1.1;
+  }
+
+  .digitacion-group {
+    justify-content: center !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .control-title {
+    font-size: 1.25rem !important;
+  }
+
+  .touch-input {
+    width: 52px;
+    font-size: 1.15rem !important;
+  }
+
+  .input-container {
+    height: 44px;
+  }
+
+  .gap-4 {
+    gap: 10px;
+  }
+}
 </style>

@@ -47,7 +47,7 @@ interface ReportesState extends DashboardSnapshot {
 	loadingCintas: boolean;
 	error: string | null;
 	anioSeleccionado: number;
-	mostrarComparativo: boolean;
+	modoComparativo: 'actual' | 'comparativo' | 'ytd';
 	requestSeq: number;
 }
 
@@ -74,8 +74,8 @@ const toNumber = (value, fallback = 0) => {
 const CACHE_TTL_MS = 60 * 1000;
 const dashboardCache = new Map<string, DashboardCacheEntry>();
 
-const getCacheKey = (fincaId, anio, comparativo) =>
-	`${Number(fincaId)}:${Number(anio)}:${comparativo ? 1 : 0}`;
+const getCacheKey = (fincaId, anio, modoComparativo) =>
+	`${Number(fincaId)}:${Number(anio)}:${String(modoComparativo || 'actual')}`;
 
 const isCacheFresh = (
 	entry: DashboardCacheEntry | undefined,
@@ -100,7 +100,7 @@ export const useReportesStore = defineStore('reportes', {
 		sideStats: [],
 		cintasStats: [],
 		anioSeleccionado: new Date().getFullYear(),
-		mostrarComparativo: false,
+		modoComparativo: 'actual',
 		requestSeq: 0,
 	}),
 
@@ -166,7 +166,7 @@ export const useReportesStore = defineStore('reportes', {
 
 			const uiStore = useUIStore();
 			const anio = this.anioSeleccionado;
-			const cacheKey = getCacheKey(fincaId, anio, this.mostrarComparativo);
+			const cacheKey = getCacheKey(fincaId, anio, this.modoComparativo);
 			const cacheEntry = dashboardCache.get(cacheKey);
 
 			// Cache caliente: respuesta instantánea sin bloquear UI.
@@ -188,9 +188,11 @@ export const useReportesStore = defineStore('reportes', {
 
 			try {
 				const anioAnterior = anio - 1;
+				const modoApi = this.modoComparativo === 'ytd' ? 'ytd' : 'full';
+				const incluirComparativo = this.modoComparativo !== 'actual';
 
 				const [totalAnualResp, totalMensualKpiResp, mejorSemanaResp, promedioSemanalResp] =
-					await reporteService.getKpisData(fincaId, anio);
+					await reporteService.getKpisData(fincaId, anio, modoApi);
 
 				if (requestId !== this.requestSeq) return;
 
@@ -241,24 +243,32 @@ export const useReportesStore = defineStore('reportes', {
 				this.actualizarLoadingGlobal();
 
 				const mensualPromise = (async () => {
-					const mensualResp = await reporteService.getMensual(fincaId, anio);
+					const mensualResp = await reporteService.getMensual(
+						fincaId,
+						anio,
+						modoApi,
+					);
 					if (requestId !== this.requestSeq) return;
 					const mesesActual = mensualResp.data || [];
 
 					let mesesAnterior: any[] = [];
-					if (this.mostrarComparativo) {
+					if (incluirComparativo) {
 						const compResp = await reporteService.getComparativo(
 							fincaId,
 							anioAnterior,
+							modoApi,
 						);
 						mesesAnterior = compResp.data || [];
 					}
 
 					this.chartCategories = MESES_MAESTROS;
 					const seriesMensual: SerieChart[] = [];
-					if (this.mostrarComparativo) {
+					if (incluirComparativo) {
 						seriesMensual.push({
-							name: `Año ${anioAnterior}`,
+							name:
+								this.modoComparativo === 'ytd'
+									? `Año ${anioAnterior} (YTD)`
+									: `Año ${anioAnterior}`,
 							data: MESES_MAESTROS.map((m) =>
 								toNumber(
 									mesesAnterior.find((x) => x.mes?.trim() === m)?.total_mes,
@@ -267,7 +277,10 @@ export const useReportesStore = defineStore('reportes', {
 						});
 					}
 					seriesMensual.push({
-						name: `Año ${anio}`,
+						name:
+							this.modoComparativo === 'ytd'
+								? `Año ${anio} (YTD)`
+								: `Año ${anio}`,
 						data: MESES_MAESTROS.map((m) =>
 							toNumber(mesesActual.find((x) => x.mes?.trim() === m)?.total_mes),
 						),
@@ -287,7 +300,7 @@ export const useReportesStore = defineStore('reportes', {
 					});
 
 				const semanalPromise = reporteService
-					.getSemanal(fincaId, anio)
+					.getSemanal(fincaId, anio, modoApi)
 					.then((resp) => {
 						if (requestId !== this.requestSeq) return;
 						const semanasActual = resp.data || [];
@@ -296,7 +309,10 @@ export const useReportesStore = defineStore('reportes', {
 						);
 						this.chartSeriesSemanal = [
 							{
-								name: `Producción ${anio}`,
+								name:
+									this.modoComparativo === 'ytd'
+										? `Producción ${anio} (YTD)`
+										: `Producción ${anio}`,
 								data: semanasActual.map((s) => toNumber(s.total_semana)),
 							},
 						];
@@ -314,7 +330,7 @@ export const useReportesStore = defineStore('reportes', {
 					});
 
 				const cintasPromise = reporteService
-					.getRendimientoCintas(fincaId, anio)
+					.getRendimientoCintas(fincaId, anio, modoApi)
 					.then((resp) => {
 						if (requestId !== this.requestSeq) return;
 						const cintas = resp.data || [];
