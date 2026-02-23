@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { useEnfundeStore } from './enfundeStore.js';
 import { useReportesStore } from './reportesStore'; // 👈 Importado para seguridad
 import { useFincaStore } from './fincaStore';
+import { useAuthStore } from '@/stores/auth/authStore';
 
 export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 	state: () => ({
@@ -12,6 +13,7 @@ export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 		formData: {
 			finca_id: null,
 			usuario_id: null,
+			operario_id: null,
 			calendario_id: null,
 			cantidad_fundas: null,
 			calidad: null,
@@ -38,6 +40,7 @@ export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 			this.formData.cantidad_fundas = null;
 			this.formData.calidad = null;
 			this.formData.color = null;
+			this.formData.operario_id = null;
 			this.formData.observaciones = '';
 			this.initForm();
 		},
@@ -53,6 +56,27 @@ export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 		},
 
 		async guardarRegistro() {
+			const authStore = useAuthStore();
+			const usuarioAutenticadoId = Number(
+				authStore.user?.id_usuario ?? authStore.user?.id ?? 0,
+			);
+			if (!usuarioAutenticadoId) {
+				this.mostrarMensaje(
+					'No se identifico el usuario autenticado. Inicie sesion nuevamente.',
+					'error',
+				);
+				return false;
+			}
+			// Blindaje: el registro siempre queda ligado al usuario autenticado.
+			this.formData.usuario_id = usuarioAutenticadoId;
+			if (!Number(this.formData.operario_id)) {
+				this.mostrarMensaje(
+					'Debe seleccionar un operario responsable.',
+					'warning',
+				);
+				return false;
+			}
+
 			// 🛡️ VALIDACIÓN DE SEGURIDAD: Bloqueo por año
 			const reportesStore = useReportesStore();
 			const anioFormulario = new Date(

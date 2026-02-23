@@ -527,7 +527,7 @@
                   variant="tonal"
                   class="font-weight-bold premium-btn"
                   :disabled="embarqueStore.submitting || !embarqueStore.voucherActual || !embarqueStore.esEditable || !canCancelVoucher"
-                  @click="dialogAnular = true"
+                  @click="abrirDialogoAnular"
                 >
                   Anular Voucher
                 </v-btn>
@@ -820,6 +820,10 @@ async function guardar() {
 }
 
 async function confirmar() {
+  if (!canConfirmVoucher.value) {
+    embarqueStore.error = 'No tiene permisos para confirmar vouchers.';
+    return;
+  }
   mensajeBusqueda.value = '';
   await embarqueStore.confirmarVoucher();
   fechaBusqueda.value = embarqueStore.fechaEmbarque;
@@ -827,7 +831,19 @@ async function confirmar() {
   await embarqueStore.cargarListado(fechaBusqueda.value);
 }
 
+function abrirDialogoAnular() {
+  if (!canCancelVoucher.value) {
+    embarqueStore.error = 'No tiene permisos para anular vouchers.';
+    return;
+  }
+  dialogAnular.value = true;
+}
+
 async function anular() {
+  if (!canCancelVoucher.value) {
+    embarqueStore.error = 'No tiene permisos para anular vouchers.';
+    return;
+  }
   await embarqueStore.anularVoucher(motivoAnulacion.value);
   if (!embarqueStore.error) {
     dialogAnular.value = false;

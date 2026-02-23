@@ -134,7 +134,8 @@ const menuItems = ref([
   
   // Sección Administrativa
   { title: 'Gestión Empresas', icon: 'mdi-domain', route: '/empresas', permission: 'view.empresas' },
-  { title: 'Gestión de Fincas', icon: 'mdi-map-marker-radius', route: '/fincas', permission: 'view.fincas'} 
+  { title: 'Gestión de Fincas', icon: 'mdi-map-marker-radius', route: '/fincas', permission: 'view.fincas'},
+  { title: 'Gestión Usuarios', icon: 'mdi-account-cog-outline', route: '/usuarios', permission: 'view.usuarios' },
 ])
 const visibleMenuItems = computed(() =>
   menuItems.value.filter((item) => !item.permission || authStore.can(item.permission)),

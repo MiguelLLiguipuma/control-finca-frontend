@@ -27,7 +27,7 @@ const routes = [
 	},
 	{
 		path: '/',
-		redirect: '/reportes',
+		redirect: '/login',
 	},
 
 	// --- RUTAS SECUNDARIAS (LAZY LOADING) ---
@@ -44,6 +44,12 @@ const routes = [
 		name: 'Fincas',
 		component: () => import('../views/administracion/FincaView.vue'),
 		meta: { requiresAuth: true, permission: 'view.fincas' },
+	},
+	{
+		path: '/usuarios',
+		name: 'Usuarios',
+		component: () => import('@/views/administracion/UsuariosView.vue'),
+		meta: { requiresAuth: true, permission: 'view.usuarios' },
 	},
 	{
 		path: '/registro-enfunde',
@@ -108,8 +114,6 @@ router.beforeEach((to, from, next) => {
 	if (requiresAuth && !authStore.isAuthenticated) {
 		return next('/login');
 	} else if (requiredPermission && !authStore.can(requiredPermission)) {
-		return next('/reportes');
-	} else if (isPublic && authStore.isAuthenticated) {
 		return next('/reportes');
 	} else {
 		next();

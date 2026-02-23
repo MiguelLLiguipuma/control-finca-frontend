@@ -8,6 +8,7 @@ export type AppPermission =
 	| 'view.voucher'
 	| 'view.empresas'
 	| 'view.fincas'
+	| 'view.usuarios'
 	| 'view.alertas'
 	| 'view.auditoria'
 	| 'action.voucher.confirm'
@@ -33,6 +34,7 @@ const PERMISSIONS_BY_ROLE: Record<AppRole, AppPermission[]> = {
 		'view.voucher',
 		'view.empresas',
 		'view.fincas',
+		'view.usuarios',
 		'view.alertas',
 		'view.auditoria',
 		'action.voucher.confirm',
@@ -73,4 +75,3 @@ export function permissionsForRole(role?: string | null): AppPermission[] {
 export function canAccess(permission: AppPermission, role?: string | null): boolean {
 	return permissionsForRole(role).includes(permission);
 }
-

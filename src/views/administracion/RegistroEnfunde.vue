@@ -55,7 +55,7 @@
                 </div>
 
                 <v-row class="mb-10">
-                  <v-col cols="12" md="6">
+                  <v-col cols="12" md="4">
                     <label class="custom-label">Finca Destino</label>
                     <v-select
                       v-model="registroStore.formData.finca_id"
@@ -72,14 +72,14 @@
                       prepend-inner-icon="mdi-domain"
                     />
                   </v-col>
-                  <v-col cols="12" md="6">
+                  <v-col cols="12" md="4">
                     <label class="custom-label">Operario Responsable</label>
                     <v-select
-                      v-model="registroStore.formData.usuario_id"
+                      v-model="registroStore.formData.operario_id"
                       :items="usuariosActivos"
                       item-title="nombre"
                       item-value="id"
-                      placeholder="Buscar operario"
+                      placeholder="Seleccionar operario"
                       variant="solo-filled"
                       flat
                       density="comfortable"
@@ -87,6 +87,24 @@
                       class="custom-input"
                       :rules="[rules.required]"
                       prepend-inner-icon="mdi-account-circle-outline"
+                    />
+                  </v-col>
+                  <v-col cols="12" md="4">
+                    <label class="custom-label">Usuario que Registra</label>
+                    <v-select
+                      v-model="registroStore.formData.usuario_id"
+                      :items="usuarioActualItem"
+                      item-title="nombre"
+                      item-value="id"
+                      placeholder="Usuario autenticado"
+                      variant="solo-filled"
+                      flat
+                      density="comfortable"
+                      rounded="lg"
+                      class="custom-input"
+                      :rules="[rules.usuarioAutenticado]"
+                      prepend-inner-icon="mdi-shield-account-outline"
+                      :disabled="true"
                     />
                   </v-col>
                 </v-row>
@@ -251,7 +269,8 @@ const rawData = ref({ fincas: [], usuarios: [], calendarios: [] })
 
 const rules = {
   required: v => !!v || 'Requerido',
-  minCantidad: v => (v && v > 0) || 'Mínimo 1'
+  minCantidad: v => (v && v > 0) || 'Mínimo 1',
+  usuarioAutenticado: v => Number(v) > 0 || 'Sesion invalida: vuelva a iniciar sesion'
 }
 
 // LÓGICA DE AÑO Y VALIDACIÓN
@@ -279,7 +298,10 @@ const fincasFiltradas = computed(() =>
     nombre_completo: `${f.nombre} - ${f.empresa_nombre || 'Sin empresa'}`
   }))
 )
-const usuariosActivos = computed(() => rawData.value.usuarios.filter(u => u.activo !== false))
+const usuarioActualItem = computed(() => {
+  const id = Number(authStore.user?.id_usuario ?? authStore.user?.id ?? 0);
+  return [{ id, nombre: authStore.user?.nombre || 'Usuario actual' }];
+});
 
 const calendariosAnioActual = computed(() => {
   const anioAFiltrar = reportesStore.anioSeleccionado || new Date().getFullYear();
@@ -339,6 +361,9 @@ onMounted(async () => {
         authStore.user?.id_usuario ?? authStore.user?.id ?? null
       )
     }
+    if (!registroStore.formData.operario_id && usuariosActivos.value.length) {
+      registroStore.formData.operario_id = Number(usuariosActivos.value[0].id || 0);
+    }
   } catch (error) {
     console.error("Error cargando datos de inicio:", error)
   } finally { 
@@ -349,6 +374,13 @@ onMounted(async () => {
 
 const onSubmit = async () => {
   if (!esAnioValido.value) return; 
+  registroStore.formData.usuario_id = Number(
+    authStore.user?.id_usuario ?? authStore.user?.id ?? 0
+  );
+  if (!registroStore.formData.usuario_id) {
+    registroStore.mostrarMensaje('Sesion invalida: vuelva a iniciar sesion', 'error');
+    return;
+  }
   const val = await formRef.value.validate()
   if (val.valid) await registroStore.guardarRegistro()
 }

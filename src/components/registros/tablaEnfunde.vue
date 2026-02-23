@@ -65,12 +65,19 @@
         </div>
       </template>
 
-      <template #[`item.usuario`]="{ value }">
-        <div class="d-flex align-center">
+      <template #[`item.usuario`]="{ item }">
+        <div class="d-flex align-start">
           <v-avatar size="24" :color="isDark ? 'grey-darken-3' : 'grey-lighten-4'" class="mr-2">
             <v-icon size="14" color="medium-emphasis">mdi-account</v-icon>
           </v-avatar>
-          <span class="text-body-2 font-weight-medium text-high-emphasis">{{ value }}</span>
+          <div class="d-flex flex-column">
+            <span class="text-body-2 font-weight-medium text-high-emphasis">
+              {{ item.operario || item.usuario || '—' }}
+            </span>
+            <span class="text-caption text-medium-emphasis">
+              Digitado por: {{ item.usuario || '—' }}
+            </span>
+          </div>
         </div>
       </template>
 
@@ -142,7 +149,7 @@ onMounted(() => {
 const headers = [
   { title: 'Fecha de Registro', key: 'fecha', align: 'start', width: '130px' },
   { title: 'Localidad / Empresa', key: 'empresa', align: 'start' },
-  { title: 'Operario', key: 'usuario', align: 'start' },
+  { title: 'Operario / Usuario', key: 'usuario', align: 'start' },
   { title: 'Cinta', key: 'color', align: 'center', width: '100px' },
   { title: 'Producción', key: 'cantidad_fundas', align: 'end', width: '120px' },
   { title: 'Obs.', key: 'observaciones', align: 'start', sortable: false }

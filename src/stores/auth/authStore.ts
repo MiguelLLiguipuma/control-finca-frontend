@@ -57,6 +57,14 @@ export const useAuthStore = defineStore('auth', {
 	},
 
 	actions: {
+		establishSession(payload: LoginResponse) {
+			const { user, token } = payload;
+			this.user = user;
+			this.token = token;
+			localStorage.setItem('token', token);
+			localStorage.setItem('user', JSON.stringify(user));
+		},
+
 		async login(credentials: LoginCredentials) {
 			this.loading = true;
 			try {
@@ -64,14 +72,7 @@ export const useAuthStore = defineStore('auth', {
 					'/auth/login',
 					credentials,
 				);
-				const { user, token } = response.data;
-
-				this.user = user;
-				this.token = token;
-
-				// ✅ Guardamos en localStorage para persistencia durante la jornada
-				localStorage.setItem('token', token);
-				localStorage.setItem('user', JSON.stringify(user));
+				this.establishSession(response.data);
 
 				return { success: true };
 			} catch (error) {
@@ -79,6 +80,26 @@ export const useAuthStore = defineStore('auth', {
 				return {
 					success: false,
 					message: e.response?.data?.message || 'Error de conexión',
+				};
+			} finally {
+				this.loading = false;
+			}
+		},
+
+		async loginWithGoogle(idToken: string) {
+			this.loading = true;
+			try {
+				const response = await api.post<LoginResponse>('/auth/google', {
+					id_token: idToken,
+				});
+				this.establishSession(response.data);
+				return { success: true };
+			} catch (error) {
+				const e = error as { response?: { data?: { message?: string } } };
+				return {
+					success: false,
+					message:
+						e.response?.data?.message || 'No se pudo autenticar con Google',
 				};
 			} finally {
 				this.loading = false;

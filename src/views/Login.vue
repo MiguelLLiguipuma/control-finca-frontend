@@ -26,11 +26,28 @@
       >
         <v-card flat width="100%" max-width="450" class="pa-8 pa-md-12">
           <div class="mb-10 text-center text-md-left">
-            <h2 class="text-h4 font-weight-black text-slate-900 mb-2">Bienvenido</h2>
-            <p class="text-body-1 text-slate-500">Ingresa tus credenciales para continuar</p>
+            <h2 class="text-h4 font-weight-black text-slate-900 mb-2">
+              {{ isRegisterMode ? 'Crear Cuenta' : 'Bienvenido' }}
+            </h2>
+            <p class="text-body-1 text-slate-500">
+              {{ isRegisterMode ? 'Registra tu usuario para comenzar a trabajar' : 'Ingresa tus credenciales para continuar' }}
+            </p>
           </div>
 
-          <v-form @submit.prevent="handleLogin" ref="loginForm">
+          <v-form @submit.prevent="isRegisterMode ? handleRegister() : handleLogin()" ref="loginForm">
+            <div v-if="isRegisterMode" class="mb-4">
+              <label class="text-subtitle-2 font-weight-bold text-slate-700 d-block mb-2">Nombre</label>
+              <v-text-field
+                v-model="nombre"
+                placeholder="Tu nombre completo"
+                prepend-inner-icon="mdi-account-outline"
+                variant="outlined"
+                color="primary"
+                rounded="lg"
+                :rules="[v => !!v || 'El nombre es obligatorio']"
+                hide-details="auto"
+              ></v-text-field>
+            </div>
             <div class="mb-4">
               <label class="text-subtitle-2 font-weight-bold text-slate-700 d-block mb-2">Correo Electrónico</label>
               <v-text-field
@@ -48,7 +65,7 @@
             <div class="mb-6">
               <div class="d-flex justify-space-between align-center mb-2">
                 <label class="text-subtitle-2 font-weight-bold text-slate-700">Contraseña</label>
-                <a href="#" class="text-caption text-primary font-weight-bold text-decoration-none">¿Olvidaste tu contraseña?</a>
+                <a v-if="!isRegisterMode" href="#" class="text-caption text-primary font-weight-bold text-decoration-none">¿Olvidaste tu contraseña?</a>
               </div>
               <v-text-field
                 v-model="password"
@@ -64,6 +81,20 @@
                 hide-details="auto"
               ></v-text-field>
             </div>
+            <div v-if="isRegisterMode" class="mb-6">
+              <label class="text-subtitle-2 font-weight-bold text-slate-700 d-block mb-2">Confirmar Contraseña</label>
+              <v-text-field
+                v-model="confirmPassword"
+                :type="showPassword ? 'text' : 'password'"
+                placeholder="••••••••"
+                prepend-inner-icon="mdi-lock-check-outline"
+                variant="outlined"
+                color="primary"
+                rounded="lg"
+                :rules="[v => !!v || 'Confirma la contraseña']"
+                hide-details="auto"
+              ></v-text-field>
+            </div>
 
             <v-alert
               v-if="errorMessage"
@@ -74,6 +105,16 @@
               closable
             >
               {{ errorMessage }}
+            </v-alert>
+            <v-alert
+              v-if="successMessage"
+              type="success"
+              variant="tonal"
+              density="compact"
+              class="mb-6 rounded-lg"
+              closable
+            >
+              {{ successMessage }}
             </v-alert>
 
             <v-btn
@@ -86,12 +127,31 @@
               :loading="loading"
               elevation="0"
             >
-              Iniciar Sesión
+              {{ isRegisterMode ? 'Registrarme' : 'Iniciar Sesión' }}
             </v-btn>
+
+            <template v-if="!isRegisterMode">
+              <div class="d-flex align-center my-5">
+                <v-divider />
+                <span class="mx-3 text-caption text-slate-500">o</span>
+                <v-divider />
+              </div>
+              <div v-if="googleClientId" ref="googleButtonRef" class="d-flex justify-center"></div>
+              <div v-else class="text-caption text-center text-medium-emphasis">
+                Login con Google no configurado (falta `VITE_GOOGLE_CLIENT_ID`).
+              </div>
+            </template>
           </v-form>
 
           <div class="mt-8 text-center text-slate-500 text-body-2">
-            ¿No tienes una cuenta? <span class="text-primary font-weight-bold cursor-pointer">Contacta al administrador</span>
+            <span v-if="!isRegisterMode">
+              ¿No tienes una cuenta?
+              <span class="text-primary font-weight-bold cursor-pointer" @click="toggleMode(true)">Regístrate</span>
+            </span>
+            <span v-else>
+              ¿Ya tienes una cuenta?
+              <span class="text-primary font-weight-bold cursor-pointer" @click="toggleMode(false)">Inicia sesión</span>
+            </span>
           </div>
         </v-card>
       </v-col>
@@ -100,18 +160,98 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth/authStore';
+import api from '@/services/api';
 
 const router = useRouter();
 const authStore = useAuthStore();
 
 const email = ref('');
 const password = ref('');
+const nombre = ref('');
+const confirmPassword = ref('');
+const isRegisterMode = ref(false);
 const showPassword = ref(false);
 const loading = ref(false);
 const errorMessage = ref('');
+const successMessage = ref('');
+const googleButtonRef = ref(null);
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+const loadGoogleScript = () =>
+  new Promise((resolve, reject) => {
+    if (window.google?.accounts?.id) return resolve(true);
+    const existing = document.querySelector('script[data-google-identity="true"]');
+    if (existing) {
+      existing.addEventListener('load', () => resolve(true), { once: true });
+      existing.addEventListener('error', () => reject(new Error('google_script_error')), { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleIdentity = 'true';
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error('google_script_error'));
+    document.head.appendChild(script);
+  });
+
+const toggleMode = (registerMode) => {
+  isRegisterMode.value = registerMode;
+  errorMessage.value = '';
+  successMessage.value = '';
+};
+
+const handleGoogleCredential = async (response) => {
+  const idToken = String(response?.credential || '').trim();
+  if (!idToken) {
+    errorMessage.value = 'No se recibió credencial de Google';
+    return;
+  }
+  loading.value = true;
+  errorMessage.value = '';
+  successMessage.value = '';
+
+  const result = await authStore.loginWithGoogle(idToken);
+  if (result.success) {
+    router.push('/reportes');
+  } else {
+    errorMessage.value = result.message || 'No se pudo autenticar con Google';
+  }
+  loading.value = false;
+};
+
+const initGoogleButton = async () => {
+  if (!googleClientId || isRegisterMode.value) return;
+  await nextTick();
+  if (!googleButtonRef.value) return;
+
+  try {
+    await loadGoogleScript();
+    const googleApi = window.google?.accounts?.id;
+    if (!googleApi) return;
+    googleButtonRef.value.innerHTML = '';
+    googleApi.initialize({
+      client_id: googleClientId,
+      callback: handleGoogleCredential,
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+    googleApi.renderButton(googleButtonRef.value, {
+      theme: 'outline',
+      size: 'large',
+      text: 'continue_with',
+      shape: 'pill',
+      width: 320,
+    });
+  } catch {
+    errorMessage.value = 'No se pudo cargar autenticación con Google';
+  }
+};
 
 const handleLogin = async () => {
   if (!email.value || !password.value) return;
@@ -132,6 +272,54 @@ const handleLogin = async () => {
   }
   loading.value = false;
 };
+
+const handleRegister = async () => {
+  if (!nombre.value || !email.value || !password.value || !confirmPassword.value) {
+    errorMessage.value = 'Completa todos los campos para registrarte';
+    return;
+  }
+  if (password.value.length < 8) {
+    errorMessage.value = 'La contraseña debe tener al menos 8 caracteres';
+    return;
+  }
+  if (password.value !== confirmPassword.value) {
+    errorMessage.value = 'Las contraseñas no coinciden';
+    return;
+  }
+
+  loading.value = true;
+  errorMessage.value = '';
+  successMessage.value = '';
+
+  try {
+    const { data } = await api.post('/auth/register', {
+      nombre: nombre.value,
+      email: email.value,
+      password: password.value,
+    });
+    successMessage.value = data?.message || 'Cuenta creada correctamente';
+    isRegisterMode.value = false;
+    password.value = '';
+    confirmPassword.value = '';
+  } catch (error) {
+    errorMessage.value =
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      'No se pudo registrar la cuenta';
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(async () => {
+  await initGoogleButton();
+});
+
+watch(isRegisterMode, async (mode) => {
+  if (!mode) {
+    await initGoogleButton();
+  }
+});
 </script>
 
 <style scoped>

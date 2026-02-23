@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { embarqueService } from '@/services/embarque/embarqueService';
+import { useAuthStore } from '@/stores/auth/authStore';
 import type {
 	EmbarqueAnularRequest,
 	EmbarqueConfirmRequest,
@@ -402,6 +403,11 @@ export const useEmbarqueStore = defineStore('embarque', {
 		},
 
 		async confirmarVoucher() {
+			const authStore = useAuthStore();
+			if (!authStore.can('action.voucher.confirm')) {
+				this.error = 'No tiene permisos para confirmar vouchers.';
+				return;
+			}
 			if (!this.voucherActual?.id) {
 				this.error = 'Primero debes guardar el voucher.';
 				return;
@@ -431,6 +437,11 @@ export const useEmbarqueStore = defineStore('embarque', {
 		},
 
 		async anularVoucher(motivo: string) {
+			const authStore = useAuthStore();
+			if (!authStore.can('action.voucher.cancel')) {
+				this.error = 'No tiene permisos para anular vouchers.';
+				return;
+			}
 			if (!this.voucherActual?.id) {
 				this.error = 'No hay voucher para anular.';
 				return;
