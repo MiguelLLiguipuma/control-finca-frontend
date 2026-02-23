@@ -135,6 +135,39 @@ export const useFincaStore = defineStore('finca', {
 		},
 
 		/**
+		 * Actualiza una finca existente
+		 */
+		async actualizarFinca(id: number, datosFinca: FincaPayload) {
+			this.loading = true;
+			this.error = null;
+			try {
+				let data: unknown;
+				try {
+					const response = await api.put(`/fincas/${id}`, datosFinca);
+					data = response.data;
+				} catch (putError: any) {
+					const status = putError?.response?.status;
+					if (status === 404 || status === 405) {
+						const response = await api.patch(`/fincas/${id}`, datosFinca);
+						data = response.data;
+					} else {
+						throw putError;
+					}
+				}
+
+				await this.obtenerFincas();
+				return data;
+			} catch (e: any) {
+				console.error('Error en actualizarFinca:', e);
+				this.error =
+					e?.response?.data?.error || 'No se pudo actualizar la finca';
+				throw e;
+			} finally {
+				this.loading = false;
+			}
+		},
+
+		/**
 		 * Selección y persistencia
 		 */
 		seleccionarFinca(id: number | string) {
