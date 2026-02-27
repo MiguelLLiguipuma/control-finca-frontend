@@ -132,6 +132,9 @@ const safeSeries = computed(() => {
 
 const chartOptions = computed(() => {
   const isDark = theme.global.current.value.dark
+  const lineStrokeColors = isComparative.value
+    ? [isDark ? '#94a3b8' : '#64748b', '#3b82f6']
+    : ['#3b82f6']
   
   return {
     chart: {
@@ -176,9 +179,9 @@ const chartOptions = computed(() => {
     
     stroke: {
       show: true,
-      width: chartType.value === 'line' ? 3 : 2,
+      width: chartType.value === 'line' ? 3 : 1,
       curve: chartType.value === 'line' ? 'smooth' : 'straight',
-      colors: chartType.value === 'line' ? undefined : ['transparent'],
+      colors: chartType.value === 'line' ? lineStrokeColors : ['transparent'],
     },
     markers: {
       size: chartType.value === 'line' ? 4 : 0,
