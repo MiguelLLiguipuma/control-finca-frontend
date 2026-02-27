@@ -136,9 +136,9 @@
                 <span class="mx-3 text-caption text-slate-500">o</span>
                 <v-divider />
               </div>
-              <div v-if="googleClientId" ref="googleButtonRef" class="d-flex justify-center"></div>
+              <div v-if="googleClientIdValido" ref="googleButtonRef" class="d-flex justify-center"></div>
               <div v-else class="text-caption text-center text-medium-emphasis">
-                Login con Google no configurado (falta `VITE_GOOGLE_CLIENT_ID`).
+                Login con Google no configurado (Client ID faltante o invalido).
               </div>
             </template>
           </v-form>
@@ -160,7 +160,7 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth/authStore';
 import api from '@/services/api';
@@ -179,6 +179,12 @@ const errorMessage = ref('');
 const successMessage = ref('');
 const googleButtonRef = ref(null);
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const googleClientIdValido = computed(() => {
+  const raw = String(googleClientId || '').trim();
+  if (!raw) return false;
+  if (/tu_client_id_google/i.test(raw)) return false;
+  return raw.endsWith('.apps.googleusercontent.com');
+});
 
 const loadGoogleScript = () =>
   new Promise((resolve, reject) => {
@@ -226,7 +232,7 @@ const handleGoogleCredential = async (response) => {
 };
 
 const initGoogleButton = async () => {
-  if (!googleClientId || isRegisterMode.value) return;
+  if (!googleClientIdValido.value || isRegisterMode.value) return;
   await nextTick();
   if (!googleButtonRef.value) return;
 
@@ -236,7 +242,7 @@ const initGoogleButton = async () => {
     if (!googleApi) return;
     googleButtonRef.value.innerHTML = '';
     googleApi.initialize({
-      client_id: googleClientId,
+      client_id: String(googleClientId),
       callback: handleGoogleCredential,
       auto_select: false,
       cancel_on_tap_outside: true,
