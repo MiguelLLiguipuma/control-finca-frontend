@@ -626,6 +626,7 @@ import { useEmbarqueStore } from '@/stores/embarque/embarqueStore';
 import { useAuthStore } from '@/stores/auth/authStore';
 import type { EmbarqueEstado } from '@/services/embarque/embarqueTypes';
 import { cosechaService } from '@/services/cosecha/cosechaService';
+import { getCurrentIsoWeekInfo } from '@/utils/dateIso';
 
 const fincaStore = useFincaStore();
 const embarqueStore = useEmbarqueStore();
@@ -783,6 +784,21 @@ function syncBusquedaPicker() {
   fechaBusquedaPicker.value = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
+function semanaIsoDesdeFecha(fechaISO: string): number {
+  const base = String(fechaISO || '').trim();
+  const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(base)
+    ? `${base}T00:00:00`
+    : new Date();
+  const { semana } = getCurrentIsoWeekInfo(fechaValida);
+  return Math.max(1, Math.min(53, Number(semana) || 1));
+}
+
+function syncSemanaCorteAuto(force = false) {
+  // No sobreescribir vouchers ya cargados desde backend.
+  if (!force && embarqueStore.voucherActual) return;
+  embarqueStore.semanaCorte = semanaIsoDesdeFecha(embarqueStore.fechaEmbarque);
+}
+
 async function cargarFechasOcupadas() {
   const ids = embarqueStore.fincaIds.length
     ? embarqueStore.fincaIds
@@ -817,6 +833,7 @@ async function cargarFechasOcupadas() {
 async function refrescarBase() {
   mensajeBusqueda.value = '';
   embarqueStore.resetFormulario();
+  syncSemanaCorteAuto(true);
   await embarqueStore.cargarPreliquidacion();
   cajasSemanaInput.value = 0;
   fechaBusqueda.value = embarqueStore.fechaEmbarque;
@@ -894,6 +911,7 @@ watch(
   () => embarqueStore.fechaEmbarque,
   () => {
     syncPickerWithStoreDate();
+    syncSemanaCorteAuto();
     if (!fechaBusqueda.value) {
       fechaBusqueda.value = embarqueStore.fechaEmbarque;
       syncBusquedaPicker();
@@ -959,6 +977,7 @@ watch(
 
 onMounted(async () => {
   await fincaStore.obtenerFincas();
+  syncSemanaCorteAuto(true);
   syncPickerWithStoreDate();
   fechaBusqueda.value = embarqueStore.fechaEmbarque;
   syncBusquedaPicker();

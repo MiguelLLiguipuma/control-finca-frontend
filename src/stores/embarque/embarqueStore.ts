@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { embarqueService } from '@/services/embarque/embarqueService';
 import { useAuthStore } from '@/stores/auth/authStore';
+import { getCurrentIsoWeekInfo } from '@/utils/dateIso';
 import type {
 	EmbarqueAnularRequest,
 	EmbarqueConfirmRequest,
@@ -68,9 +69,18 @@ function normalizarFincaIds(ids: number[]): number[] {
 }
 
 function fechaHaceUnAnioISO(): string {
-	const d = new Date();
-	d.setFullYear(d.getFullYear() - 1);
-	return d.toISOString().slice(0, 10);
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function semanaIsoDesdeFecha(fechaISO: string): number {
+  const base = String(fechaISO || '').trim();
+  const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(base)
+    ? `${base}T00:00:00`
+    : new Date();
+  const { semana } = getCurrentIsoWeekInfo(fechaValida);
+  return Math.max(1, Math.min(53, Number(semana) || 1));
 }
 
 function calcularRatiosLinea(linea: LineaEditable): LineaEditable {
@@ -300,11 +310,12 @@ export const useEmbarqueStore = defineStore('embarque', {
 			}));
 		},
 
-		cargarVoucherEnFormulario(voucher: EmbarqueVoucher) {
-			this.voucherActual = voucher;
-			this.fechaEmbarque = normalizarFechaISO(voucher.fecha_embarque);
-			this.semanaCorte = voucher.semana_corte;
-			this.observaciones = voucher.observaciones || '';
+    cargarVoucherEnFormulario(voucher: EmbarqueVoucher) {
+      this.voucherActual = voucher;
+      this.fechaEmbarque = normalizarFechaISO(voucher.fecha_embarque);
+      this.semanaCorte =
+        voucher.semana_corte ?? semanaIsoDesdeFecha(this.fechaEmbarque);
+      this.observaciones = voucher.observaciones || '';
 			this.fincaIds = normalizarFincaIds(voucher.detalles.map((d) => d.finca_id));
 			this.lineas = voucher.detalles.map((d) =>
 				calcularRatiosLinea({
