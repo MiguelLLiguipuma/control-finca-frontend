@@ -54,6 +54,28 @@ export const useFincaStore = defineStore('finca', {
 	},
 
 	actions: {
+		mapearFincasConEmpresa(fincasApi: any[], empresas: any[]): Finca[] {
+			const empresasMap = new Map<number, string>();
+			for (const e of empresas || []) {
+				empresasMap.set(Number(e.id), String(e.nombre || ''));
+			}
+
+			return fincasApi.map((finca: any): Finca => {
+				const empresaId = Number(finca.empresa_id);
+				const nombreEmpresa = empresasMap.get(empresaId);
+
+				return {
+					id: finca.id,
+					nombre: finca.nombre,
+					empresa_id: empresaId,
+					ubicacion: finca.ubicacion,
+					latitud: finca.latitud ? Number(finca.latitud) : null,
+					longitud: finca.longitud ? Number(finca.longitud) : null,
+					empresa_nombre: nombreEmpresa || 'No asignada',
+				};
+			});
+		},
+
 		/**
 		 * Obtiene fincas e incluye la data geográfica para el mapa/clima
 		 */
@@ -63,6 +85,15 @@ export const useFincaStore = defineStore('finca', {
 			const empresaStore = useEmpresaStore();
 
 			try {
+				// Evita condición de carrera: primero aseguramos catálogo de empresas.
+				if (!empresaStore.empresas?.length) {
+					try {
+						await empresaStore.fetchEmpresas();
+					} catch {
+						// Si falla empresas, seguimos cargando fincas y mostramos fallback.
+					}
+				}
+
 				const response = await api.get('/fincas');
 				const rawData = response?.data;
 				const fincasApi = Array.isArray(rawData)
@@ -71,22 +102,10 @@ export const useFincaStore = defineStore('finca', {
 						? rawData.data
 						: [];
 
-				this.fincas = fincasApi.map((finca: any): Finca => {
-					const empresaInfo = empresaStore.empresas.find(
-						(e: any) => e.id === finca.empresa_id,
-					);
-
-					return {
-						id: finca.id,
-						nombre: finca.nombre,
-						empresa_id: finca.empresa_id,
-						ubicacion: finca.ubicacion,
-						// Aseguramos que las coordenadas se traten como números
-						latitud: finca.latitud ? Number(finca.latitud) : null,
-						longitud: finca.longitud ? Number(finca.longitud) : null,
-						empresa_nombre: empresaInfo ? empresaInfo.nombre : 'No asignada',
-					};
-				});
+				this.fincas = this.mapearFincasConEmpresa(
+					fincasApi,
+					empresaStore.empresas || [],
+				);
 
 				// Lógica de persistencia de selección
 				const existeFinca = this.fincas.some(
