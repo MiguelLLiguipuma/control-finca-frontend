@@ -371,33 +371,36 @@ export const useEmbarqueStore = defineStore('embarque', {
 			}
 		},
 
-		async guardarVoucher() {
-			if (this.submitting) return;
-			if (!this.lineas.length) {
-				this.error = 'No hay lineas para guardar.';
-				return;
+    async guardarVoucher() {
+      if (this.submitting) return;
+      if (!this.lineas.length) {
+        this.error = 'No hay lineas para guardar.';
+        return;
 			}
 
-			this.submitting = true;
-			this.error = null;
-			try {
-				const fechaEmbarque = normalizarFechaISO(this.fechaEmbarque);
-				this.fechaEmbarque = fechaEmbarque;
-				const payload = {
-					fecha_embarque: fechaEmbarque,
-					semana_corte: this.semanaCorte,
-					observaciones: this.observaciones,
-					detalles: this.construirPayloadDetalles(),
-				};
+      this.submitting = true;
+      this.error = null;
+      try {
+        const fechaEmbarque = normalizarFechaISO(this.fechaEmbarque);
+        this.fechaEmbarque = fechaEmbarque;
+        const detalles = this.construirPayloadDetalles();
+        const result = this.voucherActual?.id
+          ? await embarqueService.actualizarVoucher(this.voucherActual.id, {
+              semana_corte: this.semanaCorte,
+              observaciones: this.observaciones,
+              detalles,
+            })
+          : await embarqueService.crearVoucher({
+              fecha_embarque: fechaEmbarque,
+              semana_corte: this.semanaCorte,
+              observaciones: this.observaciones,
+              detalles,
+            });
 
-				const result = this.voucherActual?.id
-					? await embarqueService.actualizarVoucher(this.voucherActual.id, payload)
-					: await embarqueService.crearVoucher(payload);
-
-				this.cargarVoucherEnFormulario(result);
-			} catch (error) {
-				this.error = extraerMensaje(error);
-			} finally {
+        this.cargarVoucherEnFormulario(result);
+      } catch (error) {
+        this.error = extraerMensaje(error);
+      } finally {
 				this.submitting = false;
 			}
 		},

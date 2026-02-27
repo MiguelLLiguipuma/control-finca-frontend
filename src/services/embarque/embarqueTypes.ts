@@ -48,6 +48,7 @@ export interface EmbarqueCreateRequest {
 }
 
 export interface EmbarqueUpdateRequest {
+	semana_corte?: number | null;
 	observaciones?: string;
 	detalles?: EmbarqueDetalleInput[];
 }

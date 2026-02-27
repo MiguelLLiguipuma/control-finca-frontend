@@ -66,10 +66,10 @@ import { useFincaStore } from '@/stores/fincaStore'
 import { storeToRefs } from 'pinia'
 
 const fincaStore = useFincaStore()
-const { fincas, fincaSeleccionadaId, loading } = storeToRefs(fincaStore)
+const { fincasConEmpresa, fincaSeleccionadaId, loading } = storeToRefs(fincaStore)
 
 const fincaItems = computed(() =>
-  (fincas.value || []).map((f) => ({
+  (fincasConEmpresa.value || []).map((f) => ({
     ...f,
     nombre: f.nombre,
     empresa_nombre: f.empresa_nombre || 'Sin empresa',

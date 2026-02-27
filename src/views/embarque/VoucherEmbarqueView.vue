@@ -520,6 +520,15 @@
                 >
                   Confirmar Voucher
                 </v-btn>
+                <v-alert
+                  v-if="motivoBloqueoConfirmar"
+                  type="info"
+                  variant="tonal"
+                  density="compact"
+                  class="mt-1"
+                >
+                  {{ motivoBloqueoConfirmar }}
+                </v-alert>
 
                 <v-btn
                   block
@@ -647,6 +656,15 @@ const chipEstado = computed(() => {
 });
 const canConfirmVoucher = computed(() => authStore.can('action.voucher.confirm'));
 const canCancelVoucher = computed(() => authStore.can('action.voucher.cancel'));
+const motivoBloqueoConfirmar = computed(() => {
+  if (embarqueStore.submitting) return '';
+  if (!canConfirmVoucher.value) return 'Tu rol no tiene permiso para confirmar vouchers.';
+  if (!embarqueStore.voucherActual?.id) return 'Primero guarda el voucher como borrador.';
+  if (embarqueStore.voucherActual?.estado === 'CONFIRMADO') return 'Este voucher ya esta confirmado.';
+  if (embarqueStore.voucherActual?.estado === 'ANULADO') return 'Un voucher anulado no se puede confirmar.';
+  if (!embarqueStore.puedeConfirmar) return 'Ingresa cajas embarcadas para poder confirmar.';
+  return '';
+});
 
 const fincaPorId = computed(() => {
   const map = new Map<number, { empresa_id: number }>();

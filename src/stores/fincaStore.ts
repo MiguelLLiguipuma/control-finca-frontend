@@ -46,9 +46,24 @@ export const useFincaStore = defineStore('finca', {
 	}),
 
 	getters: {
-		fincaSeleccionada: (state): Finca | null => {
+		fincasConEmpresa(state): Finca[] {
+			const empresaStore = useEmpresaStore();
+			const empresasMap = new Map<number, string>();
+			for (const e of empresaStore.empresas || []) {
+				empresasMap.set(Number((e as any).id), String((e as any).nombre || ''));
+			}
+
+			return (state.fincas || []).map((f) => ({
+				...f,
+				empresa_nombre:
+					empresasMap.get(Number(f.empresa_id)) || f.empresa_nombre || 'No asignada',
+			}));
+		},
+
+		fincaSeleccionada(state): Finca | null {
 			return (
-				state.fincas.find((f) => f.id === state.fincaSeleccionadaId) || null
+				this.fincasConEmpresa.find((f) => f.id === state.fincaSeleccionadaId) ||
+				null
 			);
 		},
 	},
