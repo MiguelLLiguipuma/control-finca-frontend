@@ -142,6 +142,9 @@
                 <v-btn size="small" variant="text" color="secondary" :disabled="!canManage" @click="abrirEditar(item)">
                   Editar
                 </v-btn>
+                <v-btn size="small" variant="text" color="info" :disabled="!canManage" @click="abrirFincas(item)">
+                  Fincas
+                </v-btn>
                 <v-btn
                   size="small"
                   variant="text"
@@ -160,6 +163,39 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <v-dialog v-model="dialogFincas" max-width="640" persistent>
+      <v-card class="rounded-xl">
+        <v-card-title class="text-h6 font-weight-black py-4">
+          Asignar Fincas · {{ usuarioFincas?.nombre || '' }}
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="pt-5">
+          <v-select
+            v-model="fincaIdsAsignadas"
+            :items="fincaStore.fincas"
+            item-title="nombre"
+            item-value="id"
+            multiple
+            chips
+            closable-chips
+            variant="outlined"
+            density="comfortable"
+            label="Fincas permitidas para este usuario"
+          />
+          <div class="text-caption text-medium-emphasis mt-2">
+            Si no tiene fincas asignadas, no verá información operativa al iniciar sesión.
+          </div>
+        </v-card-text>
+        <v-card-actions class="px-6 pb-5">
+          <v-spacer />
+          <v-btn variant="text" @click="cerrarFincas">Cancelar</v-btn>
+          <v-btn color="primary" :loading="usuarioStore.loading" @click="guardarFincas">
+            Guardar Asignación
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="dialog" max-width="620" persistent>
       <v-card class="rounded-xl">
@@ -250,12 +286,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import { useUsuarioStore, type Usuario, type UsuarioPayload } from '@/stores/usuarioStore';
+import { useFincaStore } from '@/stores/fincaStore';
 import { useAuthStore } from '@/stores/auth/authStore';
 import { useUIStore } from '@/stores/uiStore';
+import api from '@/services/api';
 
 type EstadoFiltro = 'all' | 'active' | 'inactive';
 
 const usuarioStore = useUsuarioStore();
+const fincaStore = useFincaStore();
 const authStore = useAuthStore();
 const uiStore = useUIStore();
 
@@ -266,6 +305,9 @@ const isValid = ref(false);
 const search = ref('');
 const filtroRol = ref<string>('all');
 const filtroEstado = ref<EstadoFiltro>('all');
+const dialogFincas = ref(false);
+const usuarioFincas = ref<Usuario | null>(null);
+const fincaIdsAsignadas = ref<number[]>([]);
 
 const form = ref({
   nombre: '',
@@ -427,9 +469,45 @@ async function eliminar(item: Usuario) {
   }
 }
 
+function cerrarFincas() {
+  dialogFincas.value = false;
+  usuarioFincas.value = null;
+  fincaIdsAsignadas.value = [];
+}
+
+async function abrirFincas(item: Usuario) {
+  if (!canManage.value) return uiStore.showWarning('No tiene permisos para asignar fincas.');
+  usuarioFincas.value = item;
+  dialogFincas.value = true;
+  try {
+    const { data } = await api.get<{ finca_ids: number[] }>(`/usuarios/${item.id}/fincas`);
+    fincaIdsAsignadas.value = Array.isArray(data?.finca_ids) ? data.finca_ids.map(Number) : [];
+  } catch (e: any) {
+    fincaIdsAsignadas.value = [];
+    uiStore.showError(e?.response?.data?.error || 'No se pudo cargar asignaciones de fincas.');
+  }
+}
+
+async function guardarFincas() {
+  if (!usuarioFincas.value) return;
+  try {
+    await api.put(`/usuarios/${usuarioFincas.value.id}/fincas`, {
+      finca_ids: fincaIdsAsignadas.value,
+    });
+    uiStore.showSuccess('Asignación de fincas actualizada.');
+    cerrarFincas();
+  } catch (e: any) {
+    uiStore.showError(e?.response?.data?.error || 'No se pudo guardar asignaciones.');
+  }
+}
+
 async function cargarDatos() {
   try {
-    await Promise.all([usuarioStore.obtenerRoles(), usuarioStore.obtenerUsuarios()]);
+    await Promise.all([
+      usuarioStore.obtenerRoles(),
+      usuarioStore.obtenerUsuarios(),
+      fincaStore.obtenerFincas(),
+    ]);
   } catch {
     uiStore.showError(usuarioStore.error || 'No se pudieron cargar los datos de usuarios.');
   }

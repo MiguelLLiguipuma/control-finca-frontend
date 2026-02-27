@@ -53,7 +53,6 @@
                   v-else-if="reportesStore.chartSeries && reportesStore.chartSeries.length"
                   :series="reportesStore.chartSeries"
                   :categories="reportesStore.chartCategories"
-                  :height="350"
                 />
               </div>
             </v-card>
@@ -63,7 +62,7 @@
                 <v-avatar size="32" color="info" variant="tonal" class="mr-3">
                   <v-icon size="18">mdi-calendar-week</v-icon>
                 </v-avatar>
-                <span class="text-overline font-weight-black text-high-emphasis">Tendencia Semanal (Últimas semanas)</span>
+                  <span class="text-overline font-weight-black text-high-emphasis">Tendencia Semanal (Año completo)</span>
               </div>
               <div class="pa-2 pa-md-4">
                 <v-skeleton-loader v-if="reportesStore.loadingSemanal" type="image" height="300" class="rounded-lg bg-surface" />
@@ -100,7 +99,7 @@
   </v-container>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
@@ -122,18 +121,18 @@ const fincaStore = useFincaStore()
 const enfundeStore = useEnfundeStore()
 
 const { fincaSeleccionadaId } = storeToRefs(fincaStore)
-const kpisSectionRef = ref(null)
-const mensualSectionRef = ref(null)
-const semanalSectionRef = ref(null)
-const cintasSectionRef = ref(null)
+const kpisSectionRef = ref<any>(null)
+const mensualSectionRef = ref<any>(null)
+const semanalSectionRef = ref<any>(null)
+const cintasSectionRef = ref<any>(null)
 
-const scrollToSection = (elRef) => {
+const scrollToSection = (elRef: { value?: any } | null) => {
   if (!elRef?.value?.$el && !elRef?.value) return
   const target = elRef.value.$el ?? elRef.value
   target.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-const handleViewDetails = (title) => {
+const handleViewDetails = (title: string) => {
   const normalized = String(title || '')
     .toLowerCase()
     .normalize('NFD')
@@ -176,7 +175,10 @@ onMounted(async () => {
   const existeSeleccion = fincaStore.fincas.some((f) => f.id === seleccionActual)
   if ((!seleccionActual || !existeSeleccion) && fincaStore.fincas.length > 0) {
     fincaStore.seleccionarFinca(fincaStore.fincas[0].id)
+    return
   }
+
+  await refrescarTodo()
 })
 
 watch(
@@ -184,7 +186,6 @@ watch(
   async () => {
     await refrescarTodo()
   },
-  { immediate: true },
 )
 </script>
 

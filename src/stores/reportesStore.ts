@@ -39,6 +39,16 @@ interface DashboardCacheEntry {
 	data: DashboardSnapshot;
 }
 
+interface MensualRow {
+	mes?: string;
+	total_mes?: number | string;
+}
+
+interface SemanalRow {
+	semana?: number | string;
+	total_semana?: number | string;
+}
+
 interface ReportesState extends DashboardSnapshot {
 	loading: boolean;
 	loadingKpis: boolean;
@@ -83,6 +93,22 @@ const isCacheFresh = (
 	!!entry &&
 	typeof entry.timestamp === 'number' &&
 	Date.now() - entry.timestamp <= CACHE_TTL_MS;
+
+const cloneSnapshot = (snapshot: DashboardSnapshot): DashboardSnapshot => ({
+	tarjetas: (snapshot.tarjetas || []).map((t) => ({ ...t })),
+	chartSeries: (snapshot.chartSeries || []).map((s) => ({
+		name: s.name,
+		data: [...(s.data || [])],
+	})),
+	chartCategories: [...(snapshot.chartCategories || [])],
+	chartSeriesSemanal: (snapshot.chartSeriesSemanal || []).map((s) => ({
+		name: s.name,
+		data: [...(s.data || [])],
+	})),
+	chartCategoriesSemanal: [...(snapshot.chartCategoriesSemanal || [])],
+	sideStats: (snapshot.sideStats || []).map((s) => ({ ...s })),
+	cintasStats: (snapshot.cintasStats || []).map((c) => ({ ...c })),
+});
 
 export const useReportesStore = defineStore('reportes', {
 	state: (): ReportesState => ({
@@ -132,17 +158,18 @@ export const useReportesStore = defineStore('reportes', {
 		},
 
 	applySnapshot(snapshot: DashboardSnapshot) {
-			this.tarjetas = snapshot.tarjetas || [];
-			this.chartSeries = snapshot.chartSeries || [];
-			this.chartCategories = snapshot.chartCategories || [];
-			this.chartSeriesSemanal = snapshot.chartSeriesSemanal || [];
-			this.chartCategoriesSemanal = snapshot.chartCategoriesSemanal || [];
-			this.sideStats = snapshot.sideStats || [];
-			this.cintasStats = snapshot.cintasStats || [];
+			const safe = cloneSnapshot(snapshot);
+			this.tarjetas = safe.tarjetas;
+			this.chartSeries = safe.chartSeries;
+			this.chartCategories = safe.chartCategories;
+			this.chartSeriesSemanal = safe.chartSeriesSemanal;
+			this.chartCategoriesSemanal = safe.chartCategoriesSemanal;
+			this.sideStats = safe.sideStats;
+			this.cintasStats = safe.cintasStats;
 		},
 
 	createSnapshot(): DashboardSnapshot {
-			return {
+			return cloneSnapshot({
 				tarjetas: this.tarjetas,
 				chartSeries: this.chartSeries,
 				chartCategories: this.chartCategories,
@@ -150,7 +177,7 @@ export const useReportesStore = defineStore('reportes', {
 				chartCategoriesSemanal: this.chartCategoriesSemanal,
 				sideStats: this.sideStats,
 				cintasStats: this.cintasStats,
-			};
+			});
 		},
 
 		async actualizarPeriodo(nuevoAnio, fincaId = null) {
@@ -211,7 +238,11 @@ export const useReportesStore = defineStore('reportes', {
 				const mejorSemana = mejorSemanaResp.data?.[0]?.semana ?? 'N/A';
 
 				this.tarjetas = [
-					{ title: 'Total Anual', value: totalAnualNum, icon: 'mdi-calendar' },
+					{
+						title: this.modoComparativo === 'ytd' ? 'Total YTD' : 'Total Anual',
+						value: totalAnualNum,
+						icon: 'mdi-calendar',
+					},
 					{
 						title: 'Promedio Mensual',
 						value: promedioMensual,
@@ -230,7 +261,14 @@ export const useReportesStore = defineStore('reportes', {
 				];
 
 				this.sideStats = [
-					{ label: 'Fundas Totales', value: totalAnualNum, change: 0 },
+					{
+						label:
+							this.modoComparativo === 'ytd'
+								? 'Fundas Totales YTD'
+								: 'Fundas Totales',
+						value: totalAnualNum,
+						change: 0,
+					},
 					{ label: 'Promedio Mensual', value: promedioMensual, change: 0 },
 					{ label: 'Promedio Semanal', value: promedioSemanal, change: 0 },
 				];
@@ -249,9 +287,9 @@ export const useReportesStore = defineStore('reportes', {
 						modoApi,
 					);
 					if (requestId !== this.requestSeq) return;
-					const mesesActual = mensualResp.data || [];
+					const mesesActual: MensualRow[] = mensualResp.data || [];
 
-					let mesesAnterior: any[] = [];
+					let mesesAnterior: MensualRow[] = [];
 					if (incluirComparativo) {
 						const compResp = await reporteService.getComparativo(
 							fincaId,
@@ -299,24 +337,67 @@ export const useReportesStore = defineStore('reportes', {
 						this.actualizarLoadingGlobal();
 					});
 
-				const semanalPromise = reporteService
-					.getSemanal(fincaId, anio, modoApi)
-					.then((resp) => {
-						if (requestId !== this.requestSeq) return;
-						const semanasActual = resp.data || [];
-						this.chartCategoriesSemanal = semanasActual.map(
-							(s) => `Sem. ${s.semana}`,
-						);
-						this.chartSeriesSemanal = [
-							{
-								name:
-									this.modoComparativo === 'ytd'
-										? `Producción ${anio} (YTD)`
-										: `Producción ${anio}`,
-								data: semanasActual.map((s) => toNumber(s.total_semana)),
-							},
-						];
-					})
+				const semanalPromise = (async () => {
+					const respActual = await reporteService.getSemanal(fincaId, anio, modoApi);
+					if (requestId !== this.requestSeq) return;
+					const semanasActual: SemanalRow[] = respActual.data || [];
+
+					let semanasAnterior: SemanalRow[] = [];
+					if (incluirComparativo) {
+						try {
+							const respAnterior = await reporteService.getSemanal(
+								fincaId,
+								anioAnterior,
+								modoApi,
+							);
+							semanasAnterior = respAnterior.data || [];
+						} catch (e) {
+							// Fallback robusto: si falla comparativo, mantenemos serie del año actual.
+							console.warn('⚠️ Semanal comparativo no disponible, se muestra solo año actual.', e);
+							semanasAnterior = [];
+						}
+					}
+
+					const semanasSet = new Set<number>();
+					for (const s of semanasActual) semanasSet.add(Number(s.semana) || 0);
+					for (const s of semanasAnterior) semanasSet.add(Number(s.semana) || 0);
+					const semanasOrdenadas = Array.from(semanasSet)
+						.filter((s) => s > 0)
+						.sort((a, b) => a - b);
+
+					const mapaActual = new Map<number, number>();
+					for (const s of semanasActual) {
+						mapaActual.set(Number(s.semana) || 0, toNumber(s.total_semana));
+					}
+
+					const mapaAnterior = new Map<number, number>();
+					for (const s of semanasAnterior) {
+						mapaAnterior.set(Number(s.semana) || 0, toNumber(s.total_semana));
+					}
+
+					this.chartCategoriesSemanal = semanasOrdenadas.map((s) => `Sem. ${s}`);
+					const seriesSemanal: SerieChart[] = [];
+
+					if (incluirComparativo) {
+						seriesSemanal.push({
+							name:
+								this.modoComparativo === 'ytd'
+									? `Producción ${anioAnterior} (YTD)`
+									: `Producción ${anioAnterior}`,
+							data: semanasOrdenadas.map((s) => toNumber(mapaAnterior.get(s))),
+						});
+					}
+
+					seriesSemanal.push({
+						name:
+							this.modoComparativo === 'ytd'
+								? `Producción ${anio} (YTD)`
+								: `Producción ${anio}`,
+						data: semanasOrdenadas.map((s) => toNumber(mapaActual.get(s))),
+					});
+
+					this.chartSeriesSemanal = seriesSemanal;
+				})()
 					.catch((e) => {
 						if (requestId !== this.requestSeq) return;
 						console.error('❌ Error semanal:', e);

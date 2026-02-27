@@ -1,26 +1,40 @@
 <template>
   <v-card variant="flat" class="pa-5 rounded-xl custom-card overflow-visible">
-    <div class="chart-header d-flex align-center justify-space-between mb-6">
+    <div class="chart-header d-flex align-center justify-space-between flex-wrap mb-6 gap-2">
       <div class="d-flex align-center">
         <v-icon color="primary" class="mr-2" size="22">mdi-calendar-week</v-icon>
         <h3 class="chart-title text-high-emphasis">
           Tendencia Semanal {{ reportesStore.anioSeleccionado }}
         </h3>
       </div>
-      <div class="d-flex gap-2">
+      <div class="d-flex align-center gap-2 chart-actions">
         <v-chip size="x-small" color="error" variant="flat" class="font-weight-bold px-2 mr-2">
           UMBRAL BAJO ({{ UMBRAL_BAJO.toLocaleString('es-EC') }} Fundas)
         </v-chip>
         <v-chip size="x-small" color="primary" variant="tonal" class="font-weight-bold">
-          TOTAL SEMANAS
+          {{ periodoChip }}
         </v-chip>
+        <v-btn-toggle v-model="chartType" mandatory density="comfortable" divided>
+          <v-btn value="bar" size="x-small" variant="text">Barra</v-btn>
+          <v-btn value="line" size="x-small" variant="text">Línea</v-btn>
+        </v-btn-toggle>
+        <v-btn
+          size="x-small"
+          variant="tonal"
+          color="secondary"
+          prepend-icon="mdi-download"
+          @click="exportarPng"
+        >
+          PNG
+        </v-btn>
       </div>
     </div>
 
     <div class="chart-area">
       <apexchart
+        ref="chartRef"
         :key="chartKey"
-        type="bar"
+        :type="chartType"
         height="320"
         :options="chartOptions"
         :series="safeSeries"
@@ -29,42 +43,120 @@
   </v-card>
 </template>
 
-<script setup>
-import { computed } from 'vue'
+<script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useReportesStore } from '@/stores/reportesStore'
 import { useTheme } from 'vuetify'
+import { useFincaStore } from '@/stores/fincaStore'
 
 const reportesStore = useReportesStore()
 const theme = useTheme()
+const fincaStore = useFincaStore()
+const chartType = ref<'bar' | 'line'>('bar')
+const chartRef = ref<{ chart?: { dataURI?: () => Promise<{ imgURI: string }> } } | null>(null)
 
 const UMBRAL_BAJO = 500 // 🔴 Define aquí tu límite de producción baja
 
-const props = defineProps({
-  series: { type: Array, default: () => [] },
-  categories: { type: Array, default: () => [] },
-})
+interface ChartSeries {
+  name?: string
+  data?: number[]
+}
 
-const chartKey = computed(() => 
-  `chart-weekly-full-${reportesStore.anioSeleccionado}-${theme.global.name.value}-${props.series.length}`
+const props = defineProps({
+  series: { type: Array as () => ChartSeries[], default: () => [] },
+  categories: { type: Array as () => string[], default: () => [] },
+})
+const periodoChip = computed(() => {
+  if (reportesStore.modoComparativo === 'ytd') return 'YTD'
+  if (reportesStore.modoComparativo === 'comparativo') return 'COMPARATIVO'
+  return 'TOTAL SEMANAS'
+})
+const seriesSignature = computed(() =>
+  (props.series || [])
+    .map((s) => `${s.name || 'Fundas'}:${(s.data || []).length}:${(s.data || []).reduce((a, v) => a + (Number(v) || 0), 0)}`)
+    .join('|'),
 )
 
+const chartKey = computed(() => 
+  `chart-weekly-${reportesStore.anioSeleccionado}-${reportesStore.modoComparativo}-${chartType.value}-${theme.global.name.value}-${props.categories.length}-${seriesSignature.value}`
+)
+const isComparative = computed(() => (props.series?.length || 0) > 1)
+const maxSeriesLen = computed(() =>
+  Math.max(0, ...(props.series || []).map((s) => (s.data || []).length)),
+)
+const normalizedCategories = computed(() => {
+  if (props.categories?.length) return props.categories
+  if (maxSeriesLen.value > 0) {
+    return Array.from({ length: maxSeriesLen.value }, (_, i) => `Sem. ${i + 1}`)
+  }
+  return ['Sin datos']
+})
+
+function slugify(text: string): string {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
+async function exportarPng() {
+  const chart = chartRef.value?.chart
+  if (!chart?.dataURI) return
+  const { imgURI } = await chart.dataURI()
+  const finca = slugify(fincaStore.fincaSeleccionada?.nombre || 'sin-finca')
+  const modo = slugify(reportesStore.modoComparativo || 'actual')
+  const anio = reportesStore.anioSeleccionado
+  const tipo = chartType.value
+  const link = document.createElement('a')
+  link.href = imgURI
+  link.download = `reporte-semanal-${finca}-${anio}-${modo}-${tipo}.png`
+  link.click()
+}
+
 const safeSeries = computed(() => {
-  if (!props.series?.length) return [{ name: 'Fundas', data: [] }]
-  return props.series.map(s => ({
+  const len = normalizedCategories.value.length
+  if (!props.series?.length) return [{ name: 'Fundas', data: Array(len).fill(0) }]
+  return props.series.map((s) => ({
     name: s.name || 'Fundas',
-    data: (s.data || []).map(v => Number(v) || 0)
+    data: Array.from({ length: len }, (_, idx) => Number(s.data?.[idx]) || 0),
   }))
 })
 
 const chartOptions = computed(() => {
   const isDark = theme.global.current.value.dark
+  const barRanges =
+    chartType.value === 'line' || isComparative.value
+      ? []
+      : [
+          {
+            from: 0,
+            to: UMBRAL_BAJO,
+            color: '#F44336', // Rojo para producción baja
+          },
+          {
+            from: UMBRAL_BAJO + 1,
+            to: 999999,
+            color: '#3b82f6', // Azul estándar para producción normal
+          },
+        ]
   
   return {
     chart: {
       toolbar: { show: true }, // Permitimos zoom/descarga para ver detalle de semanas
       parentHeightOffset: 0,
       background: 'transparent',
+      animations: { speed: 320 },
       theme: { mode: isDark ? 'dark' : 'light' }
+    },
+    noData: {
+      text: 'Sin datos semanales',
+      align: 'center',
+      verticalAlign: 'middle',
+      style: {
+        color: isDark ? '#94a3b8' : '#64748b',
+      },
     },
     grid: {
       show: true,
@@ -74,44 +166,51 @@ const chartOptions = computed(() => {
     plotOptions: {
       bar: {
         // ✅ Ajustado para que 52 barras no se vean amontonadas
-        columnWidth: '85%', 
+        columnWidth: chartType.value === 'line' ? '70%' : isComparative.value ? '70%' : '85%',
         borderRadius: 2,
         dataLabels: { position: 'top' },
-        // ✅ LÓGICA DE COLORES CONDICIONALES
+        // ApexCharts espera estructura completa en bar.colors
         colors: {
-          ranges: [{
-            from: 0,
-            to: UMBRAL_BAJO,
-            color: '#F44336' // Rojo para producción baja
-          }, {
-            from: UMBRAL_BAJO + 1,
-            to: 999999,
-            color: '#3b82f6' // Azul estándar para producción normal
-          }]
-        }
+          ranges: barRanges,
+          backgroundBarColors: [],
+          backgroundBarOpacity: 1,
+          backgroundBarRadius: 0,
+        },
       },
     },
+    stroke: {
+      width: chartType.value === 'line' ? 3 : 0,
+      curve: chartType.value === 'line' ? 'smooth' : 'straight',
+    },
+    markers: {
+      size: chartType.value === 'line' ? 3 : 0,
+    },
     dataLabels: {
-      enabled: props.categories.length < 15, // Desactivar si hay muchas semanas para evitar ruido visual
+      enabled: normalizedCategories.value.length < 20, // Desactivar si hay muchas semanas para evitar ruido visual
       offsetY: -20,
       style: { 
         fontSize: '9px', 
         fontWeight: '700', 
         colors: [isDark ? '#cbd5e1' : '#64748b']
       },
-      formatter: (val) => val.toLocaleString('es-EC')
+      formatter: (val) => Number(val || 0).toLocaleString('es-EC')
     },
     xaxis: {
-      categories: props.categories,
+      categories: normalizedCategories.value,
       axisBorder: { show: false },
       axisTicks: { show: false },
       labels: {
         show: true,
-        rotate: -90, // Rotación total para que quepan las 52 etiquetas
+        rotate:
+          normalizedCategories.value.length > 24
+            ? -90
+            : normalizedCategories.value.length > 12
+              ? -45
+              : 0,
         rotateAlways: false,
         style: { 
           colors: isDark ? '#94a3b8' : '#64748b', 
-          fontSize: '9px' 
+          fontSize: normalizedCategories.value.length > 24 ? '9px' : '10px'
         }
       }
     },
@@ -119,14 +218,51 @@ const chartOptions = computed(() => {
       min: 0,
       labels: {
         style: { colors: isDark ? '#94a3b8' : '#64748b', fontSize: '11px' },
-        formatter: (val) => val.toLocaleString('es-EC')
+        formatter: (val) => Number(val || 0).toLocaleString('es-EC')
       }
     },
     tooltip: { 
       theme: isDark ? 'dark' : 'light',
-      y: { formatter: (val) => `${val.toLocaleString('es-EC')} Fundas` }
+      y: { formatter: (val) => `${Number(val || 0).toLocaleString('es-EC')} Fundas` }
     },
-    legend: { show: false }
+    annotations: {
+      yaxis: [
+        {
+          y: UMBRAL_BAJO,
+          borderColor: '#ef4444',
+          strokeDashArray: 4,
+          label: {
+            borderColor: '#ef4444',
+            style: {
+              color: '#fff',
+              background: '#ef4444',
+              fontSize: '10px',
+            },
+            text: `Umbral ${UMBRAL_BAJO.toLocaleString('es-EC')}`,
+          },
+        },
+      ],
+    },
+    colors: isComparative.value
+      ? [isDark ? '#475569' : '#cbd5e1', '#3b82f6']
+      : ['#3b82f6'],
+    legend: { show: isComparative.value, position: 'top', horizontalAlign: 'right' },
+    responsive: [
+      {
+        breakpoint: 960,
+        options: {
+          chart: { height: 300 },
+          dataLabels: { enabled: false },
+        },
+      },
+      {
+        breakpoint: 600,
+        options: {
+          chart: { height: 270 },
+          xaxis: { labels: { rotate: -60 } },
+        },
+      },
+    ],
   }
 })
 </script>
@@ -153,5 +289,21 @@ const chartOptions = computed(() => {
 .chart-area {
   margin-top: 10px;
   overflow: visible !important;
+}
+
+@media (max-width: 600px) {
+  .chart-header {
+    align-items: flex-start !important;
+  }
+
+  .chart-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .chart-title {
+    font-size: 0.8rem;
+  }
 }
 </style>
