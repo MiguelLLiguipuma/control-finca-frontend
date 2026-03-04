@@ -60,6 +60,12 @@ interface AlertaSanitaria {
 	mensaje: string;
 }
 
+interface ScoreSaludRow {
+	score_total?: number | string;
+	clasificacion?: string;
+	semana?: number | string;
+}
+
 interface ReportesState extends DashboardSnapshot {
 	loading: boolean;
 	loadingKpis: boolean;
@@ -292,6 +298,12 @@ export const useReportesStore = defineStore('reportes', {
 
 				const [totalAnualResp, totalMensualKpiResp, mejorSemanaResp, promedioSemanalResp] =
 					await reporteService.getKpisData(fincaId, anio, modoApi, scopeApi);
+				let scoreResp: { data?: ScoreSaludRow | null } | null = null;
+				try {
+					scoreResp = await reporteService.getScoreSalud(fincaId, anio);
+				} catch (scoreErr) {
+					console.warn('⚠️ Score de salud no disponible:', scoreErr);
+				}
 
 				if (requestId !== this.requestSeq) return;
 
@@ -308,6 +320,11 @@ export const useReportesStore = defineStore('reportes', {
 					promedioSemanalResp.data?.[0]?.promedio_semanal,
 				);
 				const mejorSemana = mejorSemanaResp.data?.[0]?.semana ?? 'N/A';
+				const scoreData: ScoreSaludRow | null = scoreResp?.data || null;
+				const scoreTotal = toNumber(scoreData?.score_total, 0);
+				const scoreClasificacion = String(
+					scoreData?.clasificacion || 'SIN DATOS',
+				).toUpperCase();
 
 				this.tarjetas = [
 					{
@@ -329,6 +346,11 @@ export const useReportesStore = defineStore('reportes', {
 						title: 'Mejor Semana',
 						value: mejorSemana,
 						icon: 'mdi-calendar-star',
+					},
+					{
+						title: 'Salud Producción',
+						value: `${scoreTotal.toFixed(1)} · ${scoreClasificacion}`,
+						icon: 'mdi-heart-pulse',
 					},
 				];
 

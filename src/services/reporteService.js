@@ -57,4 +57,15 @@ export const reporteService = {
 			withParams(modo, scope),
 		);
 	},
+
+	getScoreSalud(fincaId, anio, semana = null, refresh = false) {
+		const params = {};
+		if (Number.isInteger(Number(semana)) && Number(semana) > 0) {
+			params.semana = Number(semana);
+		}
+		if (refresh) params.refresh = 'true';
+		return api.get(`/reportes/score-salud/${fincaId}/${anio}`, {
+			params,
+		});
+	},
 };
