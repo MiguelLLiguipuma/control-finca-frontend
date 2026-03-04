@@ -3,6 +3,11 @@ import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/auth/authStore';
 
 type ApiRequestConfig = AxiosRequestConfig & { skipGlobalError?: boolean };
+const hasCrypto = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function';
+const buildRequestId = () =>
+	hasCrypto
+		? crypto.randomUUID()
+		: `req-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 const api = axios.create({
 	baseURL:
@@ -15,10 +20,13 @@ const api = axios.create({
 api.interceptors.request.use(
 	(config) => {
 		const token = localStorage.getItem('token');
+		const requestId = buildRequestId();
 		if (token) {
 			config.headers = config.headers || {};
 			(config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
 		}
+		config.headers = config.headers || {};
+		(config.headers as Record<string, string>)['x-request-id'] = requestId;
 		return config;
 	},
 	(error) => Promise.reject(error),

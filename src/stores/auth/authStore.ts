@@ -12,6 +12,7 @@ interface AuthUser {
 	id_usuario?: number;
 	nombre: string;
 	rol?: string;
+	empresa_id?: number | null;
 }
 
 interface LoginCredentials {
@@ -45,6 +46,10 @@ export const useAuthStore = defineStore('auth', {
 	getters: {
 		userName: (state) => state.user?.nombre || 'Usuario',
 		userRole: (state) => state.user?.rol?.toUpperCase() || 'TRABAJADOR',
+		userEmpresaId: (state) =>
+			Number(state.user?.empresa_id || 0) > 0
+				? Number(state.user?.empresa_id)
+				: null,
 		normalizedRole: (state) => normalizeRole(state.user?.rol),
 		permissions: (state) => permissionsForRole(state.user?.rol),
 		can:
