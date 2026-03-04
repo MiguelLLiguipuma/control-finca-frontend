@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "lint": "vue-tsc --noEmit"
+    "lint": "vue-tsc --noEmit",
+    "verify:release": "npm run lint && npm run build"
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",
