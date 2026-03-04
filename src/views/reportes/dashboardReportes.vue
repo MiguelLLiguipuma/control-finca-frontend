@@ -18,7 +18,7 @@
 
         <section ref="kpisSectionRef" class="mb-10">
           <v-row v-if="reportesStore.loadingKpis" dense>
-            <v-col v-for="n in 4" :key="n" cols="12" sm="6" lg="3">
+            <v-col v-for="n in 5" :key="n" cols="12" sm="6" lg="3">
               <v-skeleton-loader type="card-avatar" class="rounded-xl border bg-surface" />
             </v-col>
           </v-row>
@@ -182,7 +182,12 @@ onMounted(async () => {
 })
 
 watch(
-  [fincaSeleccionadaId, () => reportesStore.anioSeleccionado, () => reportesStore.modoComparativo],
+  [
+    fincaSeleccionadaId,
+    () => reportesStore.anioSeleccionado,
+    () => reportesStore.modoComparativo,
+    () => reportesStore.scopeDatos,
+  ],
   async () => {
     await refrescarTodo()
   },

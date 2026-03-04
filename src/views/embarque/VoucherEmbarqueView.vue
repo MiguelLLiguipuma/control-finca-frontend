@@ -1,5 +1,9 @@
 <template>
-  <v-container fluid class="bg-background min-h-screen pa-4 pa-md-6 transition-colors voucher-shell voucher-print-root">
+  <v-container
+    fluid
+    class="bg-background min-h-screen pa-4 pa-md-6 transition-colors voucher-shell voucher-print-root voucher-bg"
+    :class="voucherEstadoClass"
+  >
     <v-row justify="center">
       <v-col cols="12" xl="11">
         <div class="print-header">
@@ -13,10 +17,14 @@
 
         <div class="print-only">
           <div class="print-sheet">
+            <div class="print-sheet__watermark">ControlFinca</div>
             <header class="print-sheet__header">
-              <div>
-                <div class="print-sheet__eyebrow">ControlFinca · Operacion de Embarque</div>
-                <h1 class="print-sheet__title">Voucher de Embarque</h1>
+              <div class="print-brand">
+                <div class="print-brand__logo">CF</div>
+                <div>
+                  <div class="print-sheet__eyebrow">ControlFinca · Operacion de Embarque</div>
+                  <h1 class="print-sheet__title">Voucher de Embarque</h1>
+                </div>
               </div>
               <div class="print-sheet__badge">
                 {{ embarqueStore.voucherActual?.numero_voucher || 'BORRADOR' }}
@@ -28,6 +36,8 @@
               <div><strong>Estado:</strong> {{ embarqueStore.voucherActual?.estado || 'BORRADOR' }}</div>
               <div><strong>Semana Corte:</strong> {{ embarqueStore.semanaCorte || '--' }}</div>
               <div><strong>Fincas:</strong> {{ fincasSeleccionadasTexto }}</div>
+              <div><strong>Emitido por:</strong> {{ authStore.userName }}</div>
+              <div><strong>Impreso:</strong> {{ fechaImpresionTexto }}</div>
             </section>
 
             <section class="print-sheet__totals">
@@ -99,11 +109,15 @@
                 <span>Supervisor de Campo</span>
               </div>
             </section>
+
+            <footer class="print-sheet__footer">
+              Documento generado por ControlFinca. Uso interno operativo.
+            </footer>
           </div>
         </div>
 
-        <div class="print-hidden">
-        <v-card variant="flat" class="rounded-xl mb-6 hero-card border shadow-sm bg-surface">
+        <div class="print-hidden voucher-redesign" :class="{ 'voucher-swap': animarCambioVoucher }">
+        <v-card variant="flat" class="rounded-xl mb-6 hero-card border shadow-sm bg-surface premium-panel reveal-block reveal-1">
           <v-card-text class="d-flex align-center justify-space-between flex-wrap gap-4 pa-6">
             <div>
               <div class="d-flex align-center gap-2 mb-2">
@@ -127,8 +141,65 @@
           </v-card-text>
         </v-card>
 
-        <v-card variant="flat" class="rounded-xl mb-6 controls-card border shadow-sm bg-surface">
+        <v-card variant="flat" class="rounded-xl mb-6 command-card border shadow-sm bg-surface premium-panel reveal-block reveal-2">
+          <v-card-text class="pa-4 pa-md-5">
+            <div class="command-grid">
+              <div class="command-item">
+                <div class="command-label">Racimos</div>
+                <div class="command-value">{{ embarqueStore.totales.total_racimos }}</div>
+              </div>
+              <div class="command-item">
+                <div class="command-label">Cajas</div>
+                <div class="command-value">{{ embarqueStore.totales.total_cajas.toFixed(2) }}</div>
+              </div>
+              <div class="command-item">
+                <div class="command-label">Ratio Comercial</div>
+                <div class="command-value text-primary">{{ embarqueStore.totales.ratio_comercial_global.toFixed(4) }}</div>
+              </div>
+              <div class="command-actions">
+                <v-btn
+                  color="primary"
+                  class="font-weight-black premium-btn btn-save"
+                  :loading="embarqueStore.submitting"
+                  :disabled="embarqueStore.submitting || !embarqueStore.esEditable || !embarqueStore.lineas.length"
+                  @click="guardar"
+                >
+                  Guardar
+                </v-btn>
+                <v-btn
+                  color="success"
+                  class="font-weight-black premium-btn btn-confirm"
+                  :loading="embarqueStore.submitting"
+                  :disabled="embarqueStore.submitting || !embarqueStore.puedeConfirmar || !canConfirmVoucher"
+                  @click="confirmar"
+                >
+                  Confirmar
+                </v-btn>
+                <v-btn
+                  color="secondary"
+                  variant="outlined"
+                  class="font-weight-bold premium-btn"
+                  :disabled="embarqueStore.submitting || !embarqueStore.lineas.length"
+                  @click="imprimirVoucher"
+                >
+                  Imprimir
+                </v-btn>
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+
+        <v-card variant="flat" class="rounded-xl mb-6 controls-card border shadow-sm bg-surface premium-panel reveal-block reveal-3">
           <v-card-text class="pa-5">
+            <div class="panel-head mb-4">
+              <div class="panel-head__left">
+                <v-avatar size="34" color="primary" variant="tonal"><v-icon size="18">mdi-tune-variant</v-icon></v-avatar>
+                <div>
+                  <div class="panel-title">Configuracion Operativa</div>
+                  <div class="panel-subtitle">Parametros del voucher y filtros de carga</div>
+                </div>
+              </div>
+            </div>
             <v-row>
               <v-col cols="12" md="3">
                 <label class="custom-label">Fecha Embarque</label>
@@ -413,8 +484,14 @@
           {{ mensajeBusqueda }}
         </v-alert>
 
-        <v-card variant="flat" class="rounded-xl mb-6 table-card border shadow-sm bg-surface">
+        <v-card variant="flat" class="rounded-xl mb-6 table-card border shadow-sm bg-surface premium-panel reveal-block reveal-4">
           <v-card-text class="pa-0">
+            <div class="panel-head px-4 py-3 border-b-soft">
+              <div class="panel-head__left">
+                <v-avatar size="30" color="secondary" variant="tonal"><v-icon size="17">mdi-table</v-icon></v-avatar>
+                <div class="panel-title">Detalle por Cinta y Finca</div>
+              </div>
+            </div>
             <v-table density="comfortable" fixed-header :height="lineasTableHeight">
               <thead>
                 <tr>
@@ -466,7 +543,7 @@
 
         <v-row>
           <v-col cols="12" md="8">
-            <v-card variant="flat" class="rounded-xl totals-card border shadow-sm bg-surface">
+            <v-card variant="flat" class="rounded-xl totals-card border shadow-sm bg-surface premium-panel reveal-block reveal-5">
               <v-card-text class="pa-6 d-flex flex-wrap gap-6">
                 <div class="kpi-box">
                   <div class="text-caption text-medium-emphasis">Racimos Buenos</div>
@@ -497,12 +574,13 @@
           </v-col>
 
           <v-col cols="12" md="4">
-            <v-card variant="flat" class="rounded-xl actions-card border shadow-sm bg-surface">
+            <v-card variant="flat" class="rounded-xl actions-card border shadow-sm bg-surface premium-panel sticky-actions reveal-block reveal-6">
               <v-card-text class="pa-5 d-flex flex-column gap-2">
+                <div class="panel-title mb-2">Acciones del Documento</div>
                 <v-btn
                   block
                   color="primary"
-                  class="font-weight-black premium-btn"
+                  class="font-weight-black premium-btn btn-save"
                   :loading="embarqueStore.submitting"
                   :disabled="embarqueStore.submitting || !embarqueStore.esEditable || !embarqueStore.lineas.length"
                   @click="guardar"
@@ -513,7 +591,7 @@
                 <v-btn
                   block
                   color="success"
-                  class="font-weight-black premium-btn"
+                  class="font-weight-black premium-btn btn-confirm"
                   :loading="embarqueStore.submitting"
                   :disabled="embarqueStore.submitting || !embarqueStore.puedeConfirmar || !canConfirmVoucher"
                   @click="confirmar"
@@ -534,7 +612,7 @@
                   block
                   color="error"
                   variant="tonal"
-                  class="font-weight-bold premium-btn"
+                  class="font-weight-bold premium-btn btn-cancel"
                   :disabled="embarqueStore.submitting || !embarqueStore.voucherActual || !embarqueStore.esEditable || !canCancelVoucher"
                   @click="abrirDialogoAnular"
                 >
@@ -556,7 +634,7 @@
           </v-col>
         </v-row>
 
-        <v-card variant="flat" class="rounded-xl mt-6 border shadow-sm bg-surface">
+        <v-card variant="flat" class="rounded-xl mt-6 border shadow-sm bg-surface premium-panel reveal-block reveal-7">
           <v-card-text class="pa-4">
             <div class="text-h6 font-weight-black mb-3 section-title">Vouchers del dia</div>
             <v-table density="compact">
@@ -618,7 +696,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useDisplay } from 'vuetify';
 import { useFincaStore } from '@/stores/fincaStore';
@@ -648,12 +726,20 @@ const modoBusquedaNumero = ref<'contains' | 'exact'>('contains');
 const mensajeBusqueda = ref('');
 const fechasOcupadas = ref<Record<string, { cosecha: boolean; voucher: boolean }>>({});
 const cajasPorFinca = ref<Record<number, number>>({});
+const animarCambioVoucher = ref(false);
+let timerAnimacionVoucher: ReturnType<typeof setTimeout> | null = null;
 
 const chipEstado = computed(() => {
   const estado = embarqueStore.voucherActual?.estado;
   if (estado === 'CONFIRMADO') return { text: 'CONFIRMADO', color: 'success' };
   if (estado === 'ANULADO') return { text: 'ANULADO', color: 'error' };
   return { text: 'BORRADOR', color: 'warning' };
+});
+const voucherEstadoClass = computed(() => {
+  const estado = embarqueStore.voucherActual?.estado || 'BORRADOR';
+  if (estado === 'CONFIRMADO') return 'voucher-theme-confirmado';
+  if (estado === 'ANULADO') return 'voucher-theme-anulado';
+  return 'voucher-theme-borrador';
 });
 const canConfirmVoucher = computed(() => authStore.can('action.voucher.confirm'));
 const canCancelVoucher = computed(() => authStore.can('action.voucher.cancel'));
@@ -740,6 +826,15 @@ const fechaMinima = computed(() => {
 
 const estadoFechaSeleccionada = computed(() => fechasOcupadas.value[embarqueStore.fechaEmbarque] || null);
 const lineasTableHeight = computed(() => (smAndDown.value ? '320px' : '420px'));
+const fechaImpresionTexto = computed(() =>
+  new Date().toLocaleString('es-EC', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }),
+);
 
 function colorEstado(estado: EmbarqueEstado): string {
   if (estado === 'CONFIRMADO') return 'success';
@@ -986,6 +1081,25 @@ onMounted(async () => {
   await embarqueStore.cargarListado(fechaBusqueda.value);
 });
 
+watch(
+  () => embarqueStore.voucherActual?.id ?? null,
+  (next, prev) => {
+    if (!next || next === prev) return;
+    animarCambioVoucher.value = false;
+    requestAnimationFrame(() => {
+      animarCambioVoucher.value = true;
+      if (timerAnimacionVoucher) clearTimeout(timerAnimacionVoucher);
+      timerAnimacionVoucher = setTimeout(() => {
+        animarCambioVoucher.value = false;
+      }, 520);
+    });
+  },
+);
+
+onBeforeUnmount(() => {
+  if (timerAnimacionVoucher) clearTimeout(timerAnimacionVoucher);
+});
+
 function imprimirVoucher() {
   window.print();
 }
@@ -993,19 +1107,91 @@ function imprimirVoucher() {
 
 <style scoped>
 .transition-colors { transition: background-color 0.3s ease, color 0.3s ease; }
-.voucher-shell { position: relative; }
-.border { border: 1px solid rgba(var(--v-border-color), 0.1) !important; }
-.shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important; }
+.voucher-shell { position: relative; z-index: 1; }
+.voucher-shell {
+  --voucher-accent-rgb: var(--v-theme-primary);
+  --voucher-accent-2-rgb: var(--v-theme-secondary);
+  --voucher-accent-soft: rgba(var(--v-theme-primary), 0.2);
+}
+
+.voucher-theme-borrador {
+  --voucher-accent-rgb: var(--v-theme-warning);
+  --voucher-accent-2-rgb: var(--v-theme-primary);
+  --voucher-accent-soft: rgba(var(--v-theme-warning), 0.22);
+}
+
+.voucher-theme-confirmado {
+  --voucher-accent-rgb: var(--v-theme-success);
+  --voucher-accent-2-rgb: var(--v-theme-primary);
+  --voucher-accent-soft: rgba(var(--v-theme-success), 0.2);
+}
+
+.voucher-theme-anulado {
+  --voucher-accent-rgb: var(--v-theme-error);
+  --voucher-accent-2-rgb: var(--v-theme-secondary);
+  --voucher-accent-soft: rgba(var(--v-theme-error), 0.2);
+}
+
+.voucher-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 9% 7%, rgba(var(--voucher-accent-rgb), 0.2), transparent 36%),
+    radial-gradient(circle at 93% 90%, rgba(var(--voucher-accent-2-rgb), 0.17), transparent 33%),
+    conic-gradient(from 220deg at 65% 40%, rgba(var(--voucher-accent-rgb), 0.08), transparent 32%, rgba(var(--voucher-accent-2-rgb), 0.08), transparent 70%);
+  z-index: -1;
+}
+
+.border { border: 1px solid rgba(var(--v-border-color), 0.12) !important; }
+.shadow-sm { box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06) !important; }
 .bg-background-opacity { background-color: rgba(var(--v-theme-on-surface), 0.03) !important; }
 
 .hero-card {
   background:
-    linear-gradient(120deg, rgba(var(--v-theme-primary), 0.1), rgba(var(--v-theme-secondary), 0.08)),
+    linear-gradient(112deg, rgba(var(--voucher-accent-rgb), 0.3), rgba(var(--voucher-accent-2-rgb), 0.2) 58%, rgba(var(--voucher-accent-rgb), 0.11)),
     rgb(var(--v-theme-surface));
+  overflow: hidden;
+  border-color: rgba(var(--voucher-accent-rgb), 0.32) !important;
+  box-shadow: 0 24px 46px rgba(15, 23, 42, 0.12) !important;
+}
+
+.voucher-redesign .hero-card :deep(.v-chip) {
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.hero-card::after {
+  content: '';
+  position: absolute;
+  right: -40px;
+  top: -42px;
+  width: 240px;
+  height: 240px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 40%, rgba(var(--voucher-accent-rgb), 0.33), rgba(var(--voucher-accent-rgb), 0.06) 60%, transparent 80%);
+  filter: blur(1px);
+}
+
+.hero-card::before {
+  content: '';
+  position: absolute;
+  left: -48px;
+  bottom: -66px;
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 50% 50%, rgba(var(--voucher-accent-2-rgb), 0.22), transparent 70%);
 }
 
 .hero-title {
   letter-spacing: -0.02em;
+  background: linear-gradient(95deg, rgba(var(--v-theme-on-surface), 1), rgba(var(--voucher-accent-rgb), 0.95));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  text-shadow: 0 10px 28px rgba(var(--voucher-accent-rgb), 0.2);
 }
 
 .section-eyebrow {
@@ -1020,14 +1206,151 @@ function imprimirVoucher() {
   letter-spacing: -0.01em;
 }
 
+.command-card {
+  border-style: dashed !important;
+  border-width: 1.5px !important;
+}
+
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 1.4fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.command-item {
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--v-border-color), 0.2);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--voucher-accent-rgb), 0.09),
+    rgba(var(--voucher-accent-rgb), 0.03)
+  );
+}
+
+.command-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-weight: 700;
+}
+
+.command-value {
+  margin-top: 5px;
+  font-size: 1.4rem;
+  line-height: 1;
+  font-weight: 900;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.command-actions {
+  border-radius: 14px;
+  border: 1px solid rgba(var(--v-border-color), 0.2);
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.025);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-head__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-title {
+  font-size: 0.95rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  font-weight: 900;
+  color: rgba(var(--v-theme-on-surface), 0.9);
+}
+
+.panel-subtitle {
+  font-size: 0.78rem;
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-weight: 600;
+}
+
+.border-b-soft {
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
+}
+
+.premium-panel {
+  backdrop-filter: blur(8px);
+  background: linear-gradient(
+      170deg,
+      rgba(var(--v-theme-surface), 0.98),
+      rgba(var(--v-theme-surface), 0.93)
+    )
+    !important;
+  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.premium-panel:hover {
+  border-color: rgba(var(--voucher-accent-rgb), 0.28) !important;
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.1) !important;
+  transform: translateY(-2px);
+}
+
 .controls-card :deep(.v-field),
 .actions-card :deep(.v-btn) {
   border-radius: 12px;
 }
 
+.controls-card :deep(.v-field__outline),
+.table-card :deep(.v-field__outline) {
+  --v-field-border-opacity: 0.2;
+}
+
+.controls-card :deep(.v-field--focused .v-field__outline) {
+  --v-field-border-opacity: 1;
+  color: rgb(var(--voucher-accent-rgb));
+}
+
 .premium-btn {
-  letter-spacing: 0.02em;
-  min-height: 42px;
+  letter-spacing: 0.05em;
+  min-height: 46px;
+  font-weight: 800 !important;
+  border-radius: 14px !important;
+  text-transform: none;
+  overflow: hidden;
+  position: relative;
+}
+
+.premium-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.22), transparent 50%);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
+.premium-btn:hover::after {
+  opacity: 1;
+}
+
+.btn-save {
+  background: linear-gradient(100deg, rgba(var(--voucher-accent-rgb), 1), rgba(var(--voucher-accent-rgb), 0.82)) !important;
+}
+
+.btn-confirm {
+  background: linear-gradient(100deg, rgba(var(--voucher-accent-2-rgb), 1), rgba(var(--voucher-accent-2-rgb), 0.82)) !important;
+}
+
+.btn-cancel {
+  border: 1px solid rgba(var(--voucher-accent-rgb), 0.34);
 }
 
 .table-card :deep(.v-table) {
@@ -1038,8 +1361,21 @@ function imprimirVoucher() {
   font-size: 0.74rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: rgba(var(--v-theme-on-surface), 0.04);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--v-theme-on-surface), 0.06),
+    rgba(var(--v-theme-on-surface), 0.03)
+  );
   color: rgba(var(--v-theme-on-surface), 0.72);
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.25);
+}
+
+.table-card :deep(.v-table tbody tr:hover td) {
+  background: rgba(var(--voucher-accent-rgb), 0.06);
+}
+
+.table-card :deep(.v-table tbody td) {
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.14);
 }
 
 .table-card :deep(.v-table__wrapper),
@@ -1054,15 +1390,25 @@ function imprimirVoucher() {
 
 .kpi-box {
   min-width: 140px;
-  padding: 10px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgba(var(--v-theme-on-surface), 0.02);
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--v-border-color), 0.2);
+  background: linear-gradient(
+    180deg,
+    rgba(var(--v-theme-on-surface), 0.04),
+    rgba(var(--v-theme-on-surface), 0.02)
+  );
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.kpi-box:hover {
+  transform: translateY(-2px);
+  border-color: rgba(var(--voucher-accent-rgb), 0.25);
 }
 
 .kpi-highlight {
-  background: rgba(var(--v-theme-primary), 0.12);
-  border-color: rgba(var(--v-theme-primary), 0.3);
+  background: linear-gradient(130deg, rgba(var(--voucher-accent-rgb), 0.24), rgba(var(--voucher-accent-2-rgb), 0.12));
+  border-color: rgba(var(--voucher-accent-rgb), 0.35);
 }
 
 .custom-label {
@@ -1083,6 +1429,55 @@ function imprimirVoucher() {
   min-height: 100vh;
 }
 
+.sticky-actions {
+  position: sticky;
+  top: 88px;
+}
+
+.reveal-block {
+  opacity: 0;
+  transform: translateY(16px) scale(0.995);
+  animation: voucher-reveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.reveal-1 { animation-delay: 0.03s; }
+.reveal-2 { animation-delay: 0.08s; }
+.reveal-3 { animation-delay: 0.13s; }
+.reveal-4 { animation-delay: 0.17s; }
+.reveal-5 { animation-delay: 0.21s; }
+.reveal-6 { animation-delay: 0.25s; }
+.reveal-7 { animation-delay: 0.29s; }
+
+.voucher-swap .premium-panel {
+  animation: voucher-swap-pulse 0.48s ease;
+}
+
+@keyframes voucher-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes voucher-swap-pulse {
+  0% {
+    filter: saturate(0.92);
+    transform: translateY(2px);
+  }
+  55% {
+    filter: saturate(1.08);
+    transform: translateY(0);
+  }
+  100% {
+    filter: saturate(1);
+    transform: translateY(0);
+  }
+}
+
 .print-header {
   display: none;
 }
@@ -1094,6 +1489,30 @@ function imprimirVoucher() {
 @media (max-width: 960px) {
   .hero-title {
     font-size: 2rem !important;
+  }
+
+  .command-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .command-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .premium-panel:hover {
+    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06) !important;
+    transform: none;
+  }
+
+  .sticky-actions {
+    position: static;
+    top: auto;
+  }
+
+  .reveal-block {
+    animation-duration: 0.45s;
+    animation-delay: 0s !important;
   }
 
   .controls-card :deep(.v-field),
@@ -1112,6 +1531,20 @@ function imprimirVoucher() {
 }
 
 @media (max-width: 600px) {
+  .voucher-bg::before {
+    background:
+      radial-gradient(circle at 20% 4%, rgba(var(--v-theme-primary), 0.16), transparent 34%),
+      radial-gradient(circle at 80% 98%, rgba(var(--v-theme-secondary), 0.12), transparent 30%);
+  }
+
+  .command-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .command-actions {
+    grid-template-columns: 1fr;
+  }
+
   .hero-title {
     font-size: 1.65rem !important;
   }
@@ -1132,32 +1565,27 @@ function imprimirVoucher() {
   .section-eyebrow {
     font-size: 0.66rem;
   }
+
+  .table-card :deep(table),
+  .controls-card :deep(table) {
+    min-width: 680px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-block,
+  .voucher-swap .premium-panel {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+  }
 }
 
 @media print {
   @page {
     size: A4 portrait;
     margin: 10mm;
-  }
-
-  :global(.v-navigation-drawer),
-  :global(.v-app-bar),
-  :global(.v-toolbar),
-  :global(.sidebar-menu),
-  :global(header) {
-    display: none !important;
-    visibility: hidden !important;
-  }
-
-  :global(.v-main),
-  :global(.v-main__wrap),
-  :global(.v-layout) {
-    padding: 0 !important;
-    margin: 0 !important;
-  }
-
-  :global(body) {
-    background: #fff !important;
   }
 
   .voucher-print-root {
@@ -1185,9 +1613,23 @@ function imprimirVoucher() {
   }
 
   .print-sheet {
+    position: relative;
     border: 1px solid #d1d5db;
     border-radius: 8px;
-    padding: 10px;
+    padding: 11px;
+    overflow: hidden;
+  }
+
+  .print-sheet__watermark {
+    position: absolute;
+    right: 10px;
+    bottom: 2px;
+    font-size: 40px;
+    line-height: 1;
+    font-weight: 800;
+    color: rgba(17, 24, 39, 0.04);
+    letter-spacing: 1px;
+    user-select: none;
   }
 
   .print-sheet__header {
@@ -1201,7 +1643,7 @@ function imprimirVoucher() {
   .print-sheet__eyebrow {
     font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.6px;
     color: #4b5563;
   }
 
@@ -1223,7 +1665,7 @@ function imprimirVoucher() {
 
   .print-sheet__meta {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px 10px;
     font-size: 10px;
     margin-bottom: 8px;
@@ -1278,6 +1720,8 @@ function imprimirVoucher() {
     font-size: 10px;
     display: grid;
     gap: 2px;
+    border-top: 1px dashed #d1d5db;
+    padding-top: 6px;
   }
 
   .print-sheet__signatures {
@@ -1296,6 +1740,37 @@ function imprimirVoucher() {
   .print-sheet__signatures span {
     font-size: 9px;
     color: #374151;
+  }
+
+  .print-sheet__footer {
+    margin-top: 10px;
+    padding-top: 6px;
+    border-top: 1px dashed #d1d5db;
+    font-size: 9px;
+    color: #6b7280;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .print-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .print-brand__logo {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #9ca3af;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 800;
+    color: #1f2937;
+    background: #f8fafc;
   }
 
   .print-title {

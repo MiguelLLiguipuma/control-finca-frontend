@@ -3,8 +3,8 @@
     app
     flat
     height="100"
-    color="transparent"
-    class="px-4"
+    color="surface"
+    class="px-4 header-shell"
   >
     <v-card class="floating-header mx-auto w-100 bg-surface" elevation="2">
       <v-container fluid class="py-1">
@@ -21,7 +21,7 @@
             </v-btn>
             
             <v-breadcrumbs 
-              :items="['Dashboard', 'Reportes']" 
+              :items="breadcrumbItems" 
               class="breadcrumbs d-none d-sm-flex"
             />
           </v-col>
@@ -88,10 +88,13 @@
 import { useTheme } from 'vuetify'; // 1. Importamos el hook de tema
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useAuthStore } from '../stores/auth/authStore';
+import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 
 const theme = useTheme(); // 2. Instanciamos el tema
 const sidebarStore = useSidebarStore();
 const authStore = useAuthStore();
+const route = useRoute();
 
 const toggleSidebar = () => sidebarStore.toggleSidebar();
 
@@ -99,16 +102,36 @@ const toggleSidebar = () => sidebarStore.toggleSidebar();
 const toggleDarkMode = () => {
   theme.global.name.value = theme.global.current.value.dark ? 'light' : 'dark';
 };
+
+const breadcrumbItems = computed(() => {
+  if (route.name === 'Login') return [];
+
+  const currentLabel =
+    String(route.meta?.breadcrumb || '') ||
+    String(route.name || '').replace(/([a-z])([A-Z])/g, '$1 $2') ||
+    'Vista';
+
+  if (route.name === 'Reportes') {
+    return [{ title: 'Dashboard', disabled: true }];
+  }
+
+  return [
+    { title: 'Dashboard', to: '/reportes' },
+    { title: currentLabel, disabled: true },
+  ];
+});
 </script>
 
 <style scoped>
 .floating-header {
   border-radius: 16px !important;
-  /* 4. Quitamos el blanco fijo y usamos opacidad sobre el color de superficie del tema */
-  background: rgba(var(--v-theme-surface), 0.8) !important;
-  backdrop-filter: blur(12px);
+  background: rgb(var(--v-theme-surface)) !important;
   border: 1px solid rgba(var(--v-border-color), 0.1) !important;
   max-width: 1400px;
+}
+
+.header-shell {
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.08);
 }
 
 .brand-text {

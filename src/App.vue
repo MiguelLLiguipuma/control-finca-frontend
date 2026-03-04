@@ -1,12 +1,12 @@
 <template>
   <v-app>
-    <SidebarMenu />
-    <Header/>
+    <template v-if="!isPublicRoute">
+      <SidebarMenu />
+      <Header />
+    </template>
 
-    <v-main>
-      <v-container fluid class="pa-0">
-        <RouterView />
-      </v-container>
+    <v-main :class="{ 'auth-main': isPublicRoute }">
+      <RouterView />
     </v-main>
 
     <v-snackbar
@@ -40,14 +40,17 @@
 </template>
 
 <script setup>
+import { computed, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import Header from './components/HeaderView.vue'
 import SidebarMenu from './components/SidebarMenu.vue'
 import { RouterView } from 'vue-router';
 import { useUIStore } from './stores/uiStore'; // ✅ Importamos el store de UI
-import { onMounted } from 'vue';
 import { useCosechaStore } from './stores/cosecha/cosechaStore';
 
 const cosechaStore = useCosechaStore();
+const route = useRoute();
+const isPublicRoute = computed(() => route.matched.some((record) => record.meta.public));
 
 onMounted(() => {
   // Esto activa los escuchadores de window.addEventListener
@@ -66,5 +69,9 @@ body { font-family: 'Plus Jakarta Sans', sans-serif; }
 .v-snackbar__content {
   font-size: 0.95rem !important;
   letter-spacing: 0.3px;
+}
+
+.auth-main {
+  padding-top: 0 !important;
 }
 </style>

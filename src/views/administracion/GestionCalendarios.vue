@@ -90,21 +90,24 @@
 
         <v-card border variant="flat" class="rounded-xl bg-surface shadow-sm mb-12">
           
-          <v-overlay
-             :model-value="!store.empresaSeleccionada"
-             contained
-             class="align-center justify-center rounded-xl"
-             scrim="background"
-             opacity="0.8"
-             persistent
-          >
-            <div class="text-center">
-              <v-icon size="64" color="medium-emphasis" class="mb-4">mdi-domain-off</v-icon>
-              <div class="text-h6 font-weight-bold text-medium-emphasis">Selecciona una empresa<br>para configurar sus cintas</div>
-            </div>
-          </v-overlay>
-
           <div class="pa-8 pa-md-12">
+            <v-alert
+              v-if="Boolean(listaEmpresas.length) && !store.empresaSeleccionada"
+              type="info"
+              variant="tonal"
+              class="mb-6"
+            >
+              Selecciona una empresa para configurar sus cintas.
+            </v-alert>
+
+            <v-alert
+              v-if="!listaEmpresas.length && !loadingEmpresas"
+              type="warning"
+              variant="tonal"
+              class="mb-6"
+            >
+              No hay empresas disponibles para configurar calendario.
+            </v-alert>
             
             <div class="d-flex align-center mb-8">
               <div class="section-badge mr-4">1</div>
@@ -213,46 +216,37 @@
                 :key="semana.numero"
                 cols="6" sm="4" md="3" lg="2"
               >
-                <v-hover v-slot="{ isHovering, props }">
-                  <v-card
-                    v-bind="props"
-                    border
-                    flat
-                    class="d-flex flex-column align-center justify-center py-4 rounded-xl cursor-pointer transition-all position-relative overflow-hidden bg-surface"
-                    :class="[isHovering ? 'elevation-4 transform-up' : '', !semana.cinta ? 'border-dashed' : '']"
-                    height="120"
-                    @click="abrirDialogoEdicion(semana)"
+                <v-card
+                  border
+                  flat
+                  class="semana-card d-flex flex-column align-center justify-center py-4 rounded-xl cursor-pointer transition-all position-relative overflow-hidden bg-surface"
+                  :class="[!semana.cinta ? 'border-dashed' : '']"
+                  height="120"
+                  @click="abrirDialogoEdicion(semana)"
+                >
+                  <div v-if="semana.cinta" class="position-absolute w-100 h-100 top-0 left-0" :style="`background: linear-gradient(135deg, ${semana.cinta.color_hex}15 0%, transparent 100%); border-bottom: 4px solid ${semana.cinta.color_hex}`"></div>
+                  
+                  <div class="text-h4 font-weight-black z-10 text-high-emphasis">{{ semana.numero }}</div>
+                  
+                  <v-chip 
+                    v-if="semana.cinta" 
+                    size="x-small" 
+                    variant="flat" 
+                    :color="semana.cinta.color_hex" 
+                    class="mt-2 font-weight-bold text-white z-10 px-3" 
+                    style="text-shadow: 0 1px 2px rgba(0,0,0,0.3);"
                   >
-                    <div v-if="semana.cinta" class="position-absolute w-100 h-100 top-0 left-0" :style="`background: linear-gradient(135deg, ${semana.cinta.color_hex}15 0%, transparent 100%); border-bottom: 4px solid ${semana.cinta.color_hex}`"></div>
-                    
-                    <div class="text-h4 font-weight-black z-10 text-high-emphasis">{{ semana.numero }}</div>
-                    
-                    <v-chip 
-                      v-if="semana.cinta" 
-                      size="x-small" 
-                      variant="flat" 
-                      :color="semana.cinta.color_hex" 
-                      class="mt-2 font-weight-bold text-white z-10 px-3" 
-                      style="text-shadow: 0 1px 2px rgba(0,0,0,0.3);"
-                    >
-                      {{ semana.cinta.color }}
-                    </v-chip>
-                    
-                    <span v-else class="text-caption text-disabled mt-2 font-weight-bold">VACÍO</span>
-                    
-                    <div class="position-absolute top-0 right-0 ma-3 z-10">
-                      <span class="text-[10px] font-weight-black text-medium-emphasis opacity-60">
-                        {{ obtenerMesUI(semana.numero) }}
-                      </span>
-                    </div>
-
-                    <v-overlay :model-value="isHovering" contained class="align-center justify-center" scrim="black" opacity="0.1">
-                      <v-avatar color="surface" size="40" class="elevation-2">
-                        <v-icon color="primary">mdi-pencil</v-icon>
-                      </v-avatar>
-                    </v-overlay>
-                  </v-card>
-                </v-hover>
+                    {{ semana.cinta.color }}
+                  </v-chip>
+                  
+                  <span v-else class="text-caption text-disabled mt-2 font-weight-bold">VACÍO</span>
+                  
+                  <div class="position-absolute top-0 right-0 ma-3 z-10">
+                    <span class="text-[10px] font-weight-black text-medium-emphasis opacity-60">
+                      {{ obtenerMesUI(semana.numero) }}
+                    </span>
+                  </div>
+                </v-card>
               </v-col>
             </v-row>
           </v-fade-transition>
@@ -426,13 +420,28 @@ const baseYear = new Date().getFullYear();
 const aniosDisponibles = Array.from({ length: 5 }, (_, i) => baseYear - 1 + i);
 
 onMounted(async () => {
-  // Carga paralela de datos necesarios
-  await Promise.all([
-    store.inicializarCalendario(),
+  store.inicializarCalendario();
+  const [cintasResult, empresasResult, resumenResult] = await Promise.allSettled([
     store.cargarCintas(),
     empresaStore.fetchEmpresas(),
-    store.obtenerResumen() 
+    store.obtenerResumen(),
   ]);
+
+  if (!store.empresaSeleccionada && listaEmpresas.value.length > 0) {
+    store.empresaSeleccionada = listaEmpresas.value[0].id;
+  }
+
+  if (cintasResult.status === 'rejected') {
+    store.mostrarNotificacion('No se pudo cargar el catálogo de cintas.', 'warning', 'mdi-alert');
+  }
+
+  if (empresasResult.status === 'rejected') {
+    store.mostrarNotificacion('No se pudieron cargar empresas para esta vista.', 'warning', 'mdi-alert');
+  }
+
+  if (resumenResult.status === 'rejected') {
+    store.mostrarNotificacion('No se pudo cargar el resumen de planificaciones.', 'warning', 'mdi-alert');
+  }
 });
 
 // --- UI HANDLERS ---
@@ -478,6 +487,10 @@ const obtenerMesUI = (semana) => {
 .transform-up { transform: translateY(-4px); }
 .z-10 { z-index: 10; }
 .transition-all { transition: all 0.2s ease-in-out; }
+.semana-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+}
 /* Burbujas de color en la tabla */
 .color-dot {
   width: 14px;

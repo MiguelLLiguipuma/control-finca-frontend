@@ -17,13 +17,27 @@ const routes = [
 		path: '/login',
 		name: 'Login',
 		component: LoginView, // Carga inmediata
-		meta: { public: true },
+		meta: { public: true, breadcrumb: 'Login' },
 	},
 	{
 		path: '/reportes',
 		name: 'Reportes',
 		component: DashboardReportes, // Carga inmediata (porque es el Home)
-		meta: { requiresAuth: true, permission: 'view.dashboard' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.dashboard',
+			breadcrumb: 'Dashboard',
+		},
+	},
+	{
+		path: '/balanza',
+		name: 'Balanza',
+		component: () => import('@/views/reportes/BalanzaView.vue'),
+		meta: {
+			requiresAuth: true,
+			permission: 'view.balanza',
+			breadcrumb: 'Balanza',
+		},
 	},
 	{
 		path: '/',
@@ -37,55 +51,91 @@ const routes = [
 		path: '/empresas',
 		name: 'Empresas',
 		component: () => import('@/views/administracion/EmpresasView.vue'),
-		meta: { requiresAuth: true, permission: 'view.empresas' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.empresas',
+			breadcrumb: 'Empresas',
+		},
 	},
 	{
 		path: '/fincas',
 		name: 'Fincas',
 		component: () => import('../views/administracion/FincaView.vue'),
-		meta: { requiresAuth: true, permission: 'view.fincas' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.fincas',
+			breadcrumb: 'Fincas',
+		},
 	},
 	{
 		path: '/usuarios',
 		name: 'Usuarios',
 		component: () => import('@/views/administracion/UsuariosView.vue'),
-		meta: { requiresAuth: true, permission: 'view.usuarios' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.usuarios',
+			breadcrumb: 'Usuarios',
+		},
 	},
 	{
 		path: '/registro-enfunde',
 		name: 'Enfunde',
 		component: () => import('@/views/administracion/RegistroEnfunde.vue'),
-		meta: { requiresAuth: true, permission: 'view.enfunde' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.enfunde',
+			breadcrumb: 'Registro Enfunde',
+		},
 	},
 	{
 		path: '/registro-cosecha',
 		name: 'Cosecha',
 		component: () => import('@/views/cosecha/RegistroCosechaView.vue'),
-		meta: { requiresAuth: true, permission: 'view.cosecha' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.cosecha',
+			breadcrumb: 'Liquidación Cosecha',
+		},
 	},
 	{
 		path: '/voucher-embarque',
 		name: 'VoucherEmbarque',
 		component: () => import('@/views/embarque/VoucherEmbarqueView.vue'),
-		meta: { requiresAuth: true, permission: 'view.voucher' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.voucher',
+			breadcrumb: 'Voucher Embarque',
+		},
 	},
 	{
 		path: '/planificacion/calendario',
 		name: 'GestionCalendario',
 		component: () => import('@/views/administracion/GestionCalendarios.vue'),
-		meta: { requiresAuth: true, permission: 'view.calendario' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.calendario',
+			breadcrumb: 'Gestión Calendario',
+		},
 	},
 	{
 		path: '/alertas',
 		name: 'CentroAlertas',
 		component: () => import('@/views/reportes/CentroAlertasView.vue'),
-		meta: { requiresAuth: true, permission: 'view.alertas' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.alertas',
+			breadcrumb: 'Centro de Alertas',
+		},
 	},
 	{
 		path: '/auditoria',
 		name: 'Auditoria',
 		component: () => import('@/views/reportes/AuditoriaView.vue'),
-		meta: { requiresAuth: true, permission: 'view.auditoria' },
+		meta: {
+			requiresAuth: true,
+			permission: 'view.auditoria',
+			breadcrumb: 'Auditoría',
+		},
 	},
 
 	// --- 404 ---

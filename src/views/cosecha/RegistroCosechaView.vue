@@ -1,5 +1,5 @@
 <template>
-  <v-container fluid class="bg-background fill-height align-start pa-0 pa-md-4">
+  <v-container fluid class="pa-4 pt-6 pb-16 bg-background min-h-screen transition-colors">
     
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top">
       {{ snackbar.message }}
@@ -8,12 +8,12 @@
       </template>
     </v-snackbar>
 
-    <v-row justify="center" no-gutters>
-      <v-col cols="12" lg="11">
+    <v-row justify="center">
+      <v-col cols="12" class="cosecha-shell">
 
         <v-card class="mb-6" elevation="3" rounded="xl" color="surface">
-          <v-card-text class="d-flex align-center py-4 flex-wrap">
-            <v-avatar color="primary" class="me-4" variant="tonal" size="56">
+          <v-card-text class="d-flex align-start align-sm-center py-4 flex-wrap gap-3">
+            <v-avatar color="primary" class="me-1 me-sm-4 hero-avatar" variant="tonal" size="56">
               <v-icon size="32">mdi-tablet-dashboard</v-icon>
             </v-avatar>
             
@@ -21,13 +21,13 @@
               <h1 class="text-h4 font-weight-black mb-0 text-high-emphasis control-title">
                 Control de Campo · Sem {{ cosechaStore.semanaActual }}
               </h1>
-              <div class="d-flex align-center text-primary font-weight-bold mt-2">
+              <div class="d-flex align-center text-primary font-weight-bold mt-2 header-subtitle">
                 <v-icon size="20" class="me-2">mdi-calendar-check</v-icon>
                 <span class="text-body-1">Corte sugerido: {{ cosechaStore.rangoCorteSugerido?.join(', ') }} semanas</span>
               </div>
             </div>
 
-            <div class="text-right d-none d-sm-block">
+            <div class="text-right d-none d-md-block header-kpi">
               <div class="text-h2 font-weight-black text-primary line-height-1">
                 {{ cosechaStore.totalDigitado }}
               </div>
@@ -42,8 +42,8 @@
         </v-card>
 
         <v-row>
-          <v-col cols="12" md="4" lg="3">
-            <v-card class="rounded-xl elevation-10 pa-5 sticky-control" color="surface">
+          <v-col cols="12" lg="4" xl="3">
+            <v-card class="rounded-xl elevation-10 pa-5 sticky-control config-card" color="surface">
               <div class="text-subtitle-2 font-weight-bold text-medium-emphasis mb-5 ml-1">
                 CONFIGURACIÓN DE REPORTE
               </div>
@@ -63,12 +63,16 @@
                   @update:model-value="cargarSaldos"
                 >
                   <template v-slot:selection="{ item }">
-                    <div class="d-flex align-center py-2 overflow-hidden">
+                    <div class="d-flex align-center py-2 selection-finca">
                       <v-avatar color="success" variant="tonal" rounded="lg" size="44" class="mr-3">
                         <v-icon size="28">mdi-tree</v-icon>
                       </v-avatar>
-                      <div class="d-flex flex-column text-truncate">
-                        <span class="text-h6 font-weight-black text-truncate text-high-emphasis" style="line-height: 1.2;">
+                      <div class="d-flex flex-column selection-finca-text">
+                        <span
+                          class="text-h6 font-weight-black text-high-emphasis finca-title-wrap"
+                          :title="String(item.title || '')"
+                          style="line-height: 1.2;"
+                        >
                           {{ item.title }}
                         </span>
                         <span class="text-body-2 font-weight-bold text-medium-emphasis">
@@ -156,7 +160,7 @@
               </v-btn>
 
               <div class="text-center">
-                <v-chip size="default" variant="text" class="font-weight-bold text-medium-emphasis">
+                <v-chip size="default" variant="text" class="font-weight-bold text-medium-emphasis remaining-chip">
                   <v-icon start size="small" color="success">mdi-circle-medium</v-icon>
                   RESTAN EN CAMPO: <strong class="ml-1 text-high-emphasis text-h5">{{ cosechaStore.totalRestante }}</strong>
                 </v-chip>
@@ -165,8 +169,8 @@
             </v-card>
           </v-col>
 
-          <v-col cols="12" md="8" lg="9">
-            <PanelPrediccionCosecha :finca-id="fincaSeleccionada" />
+          <v-col cols="12" lg="8" xl="9">
+            <PanelPrediccionCosecha v-if="fincaSeleccionada" :finca-id="fincaSeleccionada" />
             
             <div v-if="cosechaStore.loading" class="text-center pa-12">
               <v-progress-circular indeterminate size="80" width="8" color="primary" />
@@ -542,7 +546,11 @@ onMounted(async () => {
   }
 
   if (fincaSeleccionada.value) {
-    await cargarSaldos(fincaSeleccionada.value);
+    try {
+      await cargarSaldos(fincaSeleccionada.value);
+    } catch {
+      notify('No se pudieron cargar saldos de cosecha.', 'error');
+    }
   } else {
     notify('No hay fincas disponibles para esta sesión.', 'warning');
   }
@@ -588,6 +596,10 @@ watch(fincaSeleccionada, async (id) => {
 .super-select :deep(.v-field__outline) { --v-field-border-opacity: 0.15; }
 .super-select :deep(.v-field--focused .v-field__outline) { --v-field-border-opacity: 1; color: rgb(var(--v-theme-primary)); }
 .super-select :deep(.v-field) { border-radius: 12px !important; padding-top: 8px; padding-bottom: 8px; }
+.super-select :deep(.v-select__selection-text) {
+  white-space: normal;
+  line-height: 1.15;
+}
 
 .hover-effect:hover { border-color: rgb(var(--v-theme-primary)); background-color: rgba(var(--v-theme-on-surface), 0.05); }
 .button-glow { box-shadow: 0 10px 25px -5px rgba(var(--v-theme-primary), 0.5) !important; }
@@ -597,6 +609,19 @@ watch(fincaSeleccionada, async (id) => {
 .gap-2 { gap: 8px; }
 .gap-4 { gap: 16px; }
 .digitacion-group { width: 100%; }
+.selection-finca { min-width: 0; }
+.selection-finca-text { min-width: 0; }
+.finca-title-wrap {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+.remaining-chip {
+  max-width: 100%;
+  white-space: normal;
+}
 
 /* AUMENTADO: Altura de inputs para mayor comodidad táctil */
 .input-container {
@@ -604,6 +629,10 @@ watch(fincaSeleccionada, async (id) => {
     border-color: rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .border-dashed { border-style: dashed !important; opacity: 0.4; }
+
+.cosecha-shell {
+  max-width: 1880px;
+}
 
 @media (max-width: 960px) {
   .sticky-control {
@@ -619,11 +648,41 @@ watch(fincaSeleccionada, async (id) => {
   .digitacion-group {
     justify-content: center !important;
   }
+
+  .header-kpi {
+    width: 100%;
+    text-align: left !important;
+  }
 }
 
 @media (max-width: 600px) {
+  .config-card {
+    padding: 16px !important;
+  }
+
+  .hero-avatar {
+    display: none;
+  }
+
+  .custom-label {
+    font-size: 0.72rem;
+  }
+
   .control-title {
     font-size: 1.25rem !important;
+  }
+
+  .finca-title-wrap {
+    font-size: 1rem !important;
+  }
+
+  .header-subtitle {
+    align-items: flex-start !important;
+  }
+
+  .header-subtitle .text-body-1 {
+    font-size: 0.98rem !important;
+    line-height: 1.25;
   }
 
   .touch-input {

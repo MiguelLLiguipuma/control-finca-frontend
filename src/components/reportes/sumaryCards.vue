@@ -18,6 +18,10 @@
       {{ formattedValue }}
     </h2>
 
+    <p v-if="card.helperText" class="kpi-helper text-medium-emphasis">
+      {{ card.helperText }}
+    </p>
+
     <v-btn
       variant="tonal"
       class="kpi-btn"
@@ -98,8 +102,15 @@ const gradientClass = computed(() => {
 .kpi-value {
   font-size: 32px;
   font-weight: 800;
-  margin-bottom: 18px;
+  margin-bottom: 8px;
   letter-spacing: -1px;
+}
+
+.kpi-helper {
+  min-height: 32px;
+  font-size: 12px;
+  margin-bottom: 14px;
+  line-height: 1.35;
 }
 
 .kpi-btn {

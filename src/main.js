@@ -3,6 +3,7 @@ import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 import App from './App.vue';
 import router from './router';
+import './styles/auth-theme.css';
 // Material Icons (o cualquier otro icon set que quieras usar)
 import '@mdi/font/css/materialdesignicons.css';
 // Importa los estilos y componentes de Vuetify 3

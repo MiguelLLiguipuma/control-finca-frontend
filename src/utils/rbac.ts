@@ -2,6 +2,7 @@ export type AppRole = 'ADMIN' | 'SUPERVISOR' | 'OPERADOR' | 'INVITADO';
 
 export type AppPermission =
 	| 'view.dashboard'
+	| 'view.balanza'
 	| 'view.calendario'
 	| 'view.enfunde'
 	| 'view.cosecha'
@@ -28,6 +29,7 @@ const ROLE_MAP: Record<string, AppRole> = {
 const PERMISSIONS_BY_ROLE: Record<AppRole, AppPermission[]> = {
 	ADMIN: [
 		'view.dashboard',
+		'view.balanza',
 		'view.calendario',
 		'view.enfunde',
 		'view.cosecha',
@@ -43,6 +45,7 @@ const PERMISSIONS_BY_ROLE: Record<AppRole, AppPermission[]> = {
 	],
 	SUPERVISOR: [
 		'view.dashboard',
+		'view.balanza',
 		'view.calendario',
 		'view.enfunde',
 		'view.cosecha',
@@ -54,6 +57,7 @@ const PERMISSIONS_BY_ROLE: Record<AppRole, AppPermission[]> = {
 	],
 	OPERADOR: [
 		'view.dashboard',
+		'view.balanza',
 		'view.calendario',
 		'view.enfunde',
 		'view.cosecha',

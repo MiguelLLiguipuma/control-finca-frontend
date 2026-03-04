@@ -41,6 +41,30 @@
           </v-btn>
         </v-btn-toggle>
       </v-col>
+
+      <v-divider
+        v-if="showScopeToggle && (showComparativo || showYear || showFinca)"
+        vertical
+        class="mx-2 d-none d-sm-flex"
+        inset
+      />
+
+      <v-col v-if="showScopeToggle" cols="12" sm="auto" class="d-flex justify-start px-2 pt-0 pt-sm-0">
+        <v-btn-toggle
+          v-model="scopeDatos"
+          mandatory
+          divided
+          density="comfortable"
+          class="modo-analisis-toggle w-100"
+        >
+          <v-btn :value="'finca'" size="small" color="primary" variant="text" class="flex-grow-1">
+            Mi finca
+          </v-btn>
+          <v-btn :value="'propio'" size="small" color="primary" variant="text" class="flex-grow-1">
+            Mi producción
+          </v-btn>
+        </v-btn-toggle>
+      </v-col>
     </v-row>
   </v-card>
 </template>
@@ -48,6 +72,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useReportesStore } from '@/stores/reportesStore';
+import { useAuthStore } from '@/stores/auth/authStore';
 import AnoSelector from '@/components/ui/AnoSelector.vue';
 import FincaSelector from '@/components/ui/FincaSelector.vue';
 
@@ -65,11 +90,21 @@ withDefaults(
 );
 
 const reportesStore = useReportesStore();
+const authStore = useAuthStore();
 
 const modoComparativo = computed({
   get: () => reportesStore.modoComparativo || 'actual',
   set: (value: 'actual' | 'comparativo' | 'ytd') => {
     reportesStore.modoComparativo = value;
+  },
+});
+
+const showScopeToggle = computed(() => authStore.normalizedRole === 'OPERADOR');
+
+const scopeDatos = computed({
+  get: () => reportesStore.scopeDatos || 'finca',
+  set: (value: 'finca' | 'propio') => {
+    reportesStore.scopeDatos = value;
   },
 });
 </script>

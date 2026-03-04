@@ -115,6 +115,12 @@ const menuItems = ref([
     route: '/reportes',
     permission: 'view.dashboard',
   },
+  {
+    title: 'Balanza',
+    icon: 'mdi-scale',
+    route: '/balanza',
+    permission: 'view.balanza',
+  },
   
   // --- NUEVO ÍTEM DE PLANIFICACIÓN ---
   { 

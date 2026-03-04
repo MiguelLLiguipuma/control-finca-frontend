@@ -1,11 +1,14 @@
 import { defineStore } from 'pinia';
 import { reporteService } from '../services/reporteService.js';
 import { useUIStore } from './uiStore.js';
+import { reportesSeguridadService } from '@/services/reportes/reportesSeguridadService';
 
 interface TarjetaReporte {
 	title: string;
 	value: number | string;
 	icon: string;
+	gradient?: string;
+	helperText?: string;
 }
 
 interface SerieChart {
@@ -49,6 +52,14 @@ interface SemanalRow {
 	total_semana?: number | string;
 }
 
+interface AlertaSanitaria {
+	tipo: string;
+	severidad: 'alta' | 'media' | 'baja';
+	referencia_id: string;
+	fecha_evento: string;
+	mensaje: string;
+}
+
 interface ReportesState extends DashboardSnapshot {
 	loading: boolean;
 	loadingKpis: boolean;
@@ -58,6 +69,7 @@ interface ReportesState extends DashboardSnapshot {
 	error: string | null;
 	anioSeleccionado: number;
 	modoComparativo: 'actual' | 'comparativo' | 'ytd';
+	scopeDatos: 'finca' | 'propio';
 	requestSeq: number;
 }
 
@@ -81,11 +93,64 @@ const toNumber = (value, fallback = 0) => {
 	return Number.isFinite(n) ? n : fallback;
 };
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const parseDateOnly = (value: string): Date | null => {
+	const text = String(value || '').trim();
+	if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+	const date = new Date(`${text}T00:00:00`);
+	return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const calcularDiasDesde = (fechaEvento: string): number | null => {
+	const fecha = parseDateOnly(fechaEvento);
+	if (!fecha) return null;
+	const hoy = new Date();
+	const hoyCero = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+	return Math.max(0, Math.floor((hoyCero.getTime() - fecha.getTime()) / MS_PER_DAY));
+};
+
+const construirTarjetaSigatoka = (alerta: AlertaSanitaria | null): TarjetaReporte => {
+	if (!alerta) {
+		return {
+			title: 'Sigatoka',
+			value: 'Sin dato',
+			icon: 'mdi-shield-search',
+			gradient: 'primary',
+			helperText: 'No hay semaforo sanitario disponible.',
+		};
+	}
+
+	const estado = String(alerta.tipo || 'SANIDAD_GRIS').replace('SANIDAD_', '');
+	const dias = calcularDiasDesde(alerta.fecha_evento);
+	const helperText =
+		dias === null
+			? alerta.mensaje || 'Sin registro de fumigacion.'
+			: `${dias} dias desde la ultima fumigacion.`;
+
+	const gradient =
+		estado === 'VERDE'
+			? 'green'
+			: estado === 'AMARILLO'
+				? 'yellow'
+				: estado === 'ROJO'
+					? 'pink'
+					: 'primary';
+
+	return {
+		title: 'Sigatoka',
+		value: estado,
+		icon: 'mdi-sprout',
+		gradient,
+		helperText,
+	};
+};
+
 const CACHE_TTL_MS = 60 * 1000;
 const dashboardCache = new Map<string, DashboardCacheEntry>();
 
-const getCacheKey = (fincaId, anio, modoComparativo) =>
-	`${Number(fincaId)}:${Number(anio)}:${String(modoComparativo || 'actual')}`;
+const getCacheKey = (fincaId, anio, modoComparativo, scopeDatos) =>
+	`${Number(fincaId)}:${Number(anio)}:${String(modoComparativo || 'actual')}:${String(scopeDatos || 'finca')}`;
 
 const isCacheFresh = (
 	entry: DashboardCacheEntry | undefined,
@@ -127,6 +192,7 @@ export const useReportesStore = defineStore('reportes', {
 		cintasStats: [],
 		anioSeleccionado: new Date().getFullYear(),
 		modoComparativo: 'actual',
+		scopeDatos: 'finca',
 		requestSeq: 0,
 	}),
 
@@ -193,7 +259,13 @@ export const useReportesStore = defineStore('reportes', {
 
 			const uiStore = useUIStore();
 			const anio = this.anioSeleccionado;
-			const cacheKey = getCacheKey(fincaId, anio, this.modoComparativo);
+			const scopeApi = this.scopeDatos || 'finca';
+			const cacheKey = getCacheKey(
+				fincaId,
+				anio,
+				this.modoComparativo,
+				scopeApi,
+			);
 			const cacheEntry = dashboardCache.get(cacheKey);
 
 			// Cache caliente: respuesta instantánea sin bloquear UI.
@@ -219,7 +291,7 @@ export const useReportesStore = defineStore('reportes', {
 				const incluirComparativo = this.modoComparativo !== 'actual';
 
 				const [totalAnualResp, totalMensualKpiResp, mejorSemanaResp, promedioSemanalResp] =
-					await reporteService.getKpisData(fincaId, anio, modoApi);
+					await reporteService.getKpisData(fincaId, anio, modoApi, scopeApi);
 
 				if (requestId !== this.requestSeq) return;
 
@@ -260,6 +332,23 @@ export const useReportesStore = defineStore('reportes', {
 					},
 				];
 
+				try {
+					const alertas = await reportesSeguridadService.getAlertas({
+						finca_id: Number(fincaId),
+					});
+					const alertaSanitaria =
+						(alertas.find((item) =>
+							String(item.tipo || '').startsWith('SANIDAD_'),
+						) as AlertaSanitaria | undefined) || null;
+					this.tarjetas.push(construirTarjetaSigatoka(alertaSanitaria));
+				} catch (sanidadErr) {
+					console.warn(
+						'⚠️ No se pudo obtener semaforo sanitario para dashboard:',
+						sanidadErr,
+					);
+					this.tarjetas.push(construirTarjetaSigatoka(null));
+				}
+
 				this.sideStats = [
 					{
 						label:
@@ -285,6 +374,7 @@ export const useReportesStore = defineStore('reportes', {
 						fincaId,
 						anio,
 						modoApi,
+						scopeApi,
 					);
 					if (requestId !== this.requestSeq) return;
 					const mesesActual: MensualRow[] = mensualResp.data || [];
@@ -295,6 +385,7 @@ export const useReportesStore = defineStore('reportes', {
 							fincaId,
 							anioAnterior,
 							modoApi,
+							scopeApi,
 						);
 						mesesAnterior = compResp.data || [];
 					}
@@ -338,7 +429,12 @@ export const useReportesStore = defineStore('reportes', {
 					});
 
 				const semanalPromise = (async () => {
-					const respActual = await reporteService.getSemanal(fincaId, anio, modoApi);
+					const respActual = await reporteService.getSemanal(
+						fincaId,
+						anio,
+						modoApi,
+						scopeApi,
+					);
 					if (requestId !== this.requestSeq) return;
 					const semanasActual: SemanalRow[] = respActual.data || [];
 
@@ -349,6 +445,7 @@ export const useReportesStore = defineStore('reportes', {
 								fincaId,
 								anioAnterior,
 								modoApi,
+								scopeApi,
 							);
 							semanasAnterior = respAnterior.data || [];
 						} catch (e) {
@@ -411,7 +508,7 @@ export const useReportesStore = defineStore('reportes', {
 					});
 
 				const cintasPromise = reporteService
-					.getRendimientoCintas(fincaId, anio, modoApi)
+					.getRendimientoCintas(fincaId, anio, modoApi, scopeApi)
 					.then((resp) => {
 						if (requestId !== this.requestSeq) return;
 						const cintas = resp.data || [];

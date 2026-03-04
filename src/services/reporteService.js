@@ -1,10 +1,15 @@
 import api from './api.js';
 
-const withModo = (modo) => (modo === 'ytd' ? { params: { modo: 'ytd' } } : undefined);
+const withParams = (modo, scope) => {
+	const params = {};
+	if (modo === 'ytd') params.modo = 'ytd';
+	if (scope === 'propio' || scope === 'finca') params.scope = scope;
+	return Object.keys(params).length ? { params } : undefined;
+};
 
 export const reporteService = {
-	getKpisData(fincaId, anio, modo = 'full') {
-		const config = withModo(modo);
+	getKpisData(fincaId, anio, modo = 'full', scope = 'finca') {
+		const config = withParams(modo, scope);
 		return Promise.all([
 			api.get(`/reportes/total-anual/${fincaId}/${anio}`, config),
 			api.get(`/reportes/total-mensual/${fincaId}/${anio}`, config),
@@ -13,18 +18,24 @@ export const reporteService = {
 		]);
 	},
 
-	getMensual(fincaId, anio, modo = 'full') {
-		return api.get(`/reportes/total-mensual/${fincaId}/${anio}`, withModo(modo));
+	getMensual(fincaId, anio, modo = 'full', scope = 'finca') {
+		return api.get(
+			`/reportes/total-mensual/${fincaId}/${anio}`,
+			withParams(modo, scope),
+		);
 	},
 
-	getSemanal(fincaId, anio, modo = 'full') {
-		return api.get(`/reportes/total-semanal/${fincaId}/${anio}`, withModo(modo));
+	getSemanal(fincaId, anio, modo = 'full', scope = 'finca') {
+		return api.get(
+			`/reportes/total-semanal/${fincaId}/${anio}`,
+			withParams(modo, scope),
+		);
 	},
 
-	getRendimientoCintas(fincaId, anio, modo = 'full') {
+	getRendimientoCintas(fincaId, anio, modo = 'full', scope = 'finca') {
 		return api.get(
 			`/reportes/rendimiento-cintas/${fincaId}/${anio}`,
-			withModo(modo),
+			withParams(modo, scope),
 		);
 	},
 
@@ -40,10 +51,10 @@ export const reporteService = {
 		]);
 	},
 
-	getComparativo(fincaId, anioAnterior, modo = 'full') {
+	getComparativo(fincaId, anioAnterior, modo = 'full', scope = 'finca') {
 		return api.get(
 			`/reportes/total-mensual/${fincaId}/${anioAnterior}`,
-			withModo(modo),
+			withParams(modo, scope),
 		);
 	},
 };

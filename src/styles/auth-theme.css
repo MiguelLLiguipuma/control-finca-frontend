@@ -1,0 +1,79 @@
+:root {
+  --auth-radius-xl: 28px;
+  --auth-radius-lg: 18px;
+  --auth-card-blur: 10px;
+  --auth-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --auth-shadow-soft: 0 18px 50px rgba(15, 23, 42, 0.13);
+  --auth-shadow-strong: 0 28px 50px rgba(2, 44, 34, 0.28);
+}
+
+.v-theme--dark {
+  --auth-shadow-soft: 0 20px 44px rgba(0, 0, 0, 0.38);
+}
+
+@keyframes auth-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-fade-right {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes auth-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.auth-enter-up {
+  animation: auth-fade-up 0.55s var(--auth-ease-standard) both;
+}
+
+.auth-enter-right {
+  animation: auth-fade-right 0.65s var(--auth-ease-standard) both;
+}
+
+.auth-enter-fade {
+  animation: auth-fade 0.7s var(--auth-ease-standard) both;
+}
+
+.auth-stagger > * {
+  opacity: 0;
+  animation: auth-fade-up 0.55s var(--auth-ease-standard) both;
+}
+
+.auth-stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.auth-stagger > *:nth-child(2) { animation-delay: 0.08s; }
+.auth-stagger > *:nth-child(3) { animation-delay: 0.12s; }
+.auth-stagger > *:nth-child(4) { animation-delay: 0.16s; }
+.auth-stagger > *:nth-child(5) { animation-delay: 0.2s; }
+.auth-stagger > *:nth-child(6) { animation-delay: 0.24s; }
+.auth-stagger > *:nth-child(7) { animation-delay: 0.28s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-enter-up,
+  .auth-enter-right,
+  .auth-enter-fade,
+  .auth-stagger > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

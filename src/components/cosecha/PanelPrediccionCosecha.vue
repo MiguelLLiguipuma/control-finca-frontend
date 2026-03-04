@@ -1,7 +1,7 @@
 <template>
 	<v-card class="mb-6" rounded="xl" elevation="3" color="surface">
 		<v-card-text class="pa-4 pa-md-5">
-			<div class="d-flex align-center mb-4">
+			<div class="d-flex align-center mb-4 pred-head">
 				<v-avatar color="info" variant="tonal" size="42" class="mr-3">
 					<v-icon>mdi-chart-timeline-variant</v-icon>
 				</v-avatar>
@@ -13,11 +13,12 @@
 						Proyección basada en clima y unidades calor acumuladas
 					</div>
 				</div>
-				<v-spacer />
+				<v-spacer class="d-none d-sm-flex" />
 				<v-btn
 					size="small"
 					variant="tonal"
 					color="info"
+					class="pred-refresh-btn"
 					prepend-icon="mdi-refresh"
 					:disabled="!fincaId || loading"
 					:loading="loading"
@@ -67,7 +68,8 @@
 				No hay lotes con saldo para proyectar.
 			</div>
 			<div v-else>
-				<v-table density="comfortable" class="pred-table">
+				<div class="table-scroll">
+					<v-table density="comfortable" class="pred-table">
 					<thead>
 						<tr>
 							<th>Cinta</th>
@@ -123,7 +125,8 @@
 							</td>
 						</tr>
 					</tbody>
-				</v-table>
+					</v-table>
+				</div>
 
 				<v-divider class="my-4" />
 
@@ -170,7 +173,8 @@
 						</v-col>
 					</v-row>
 
-					<v-table density="compact" class="pred-table mt-2">
+					<div class="table-scroll">
+						<v-table density="compact" class="pred-table mt-2">
 						<thead>
 							<tr>
 								<th>Semana</th>
@@ -189,7 +193,8 @@
 								<td>{{ row.errorPct.toFixed(2) }}%</td>
 							</tr>
 						</tbody>
-					</v-table>
+						</v-table>
+					</div>
 
 					<v-alert
 						v-if="diagnosticoBacktesting.recomiendaRecalibrar"
@@ -329,6 +334,15 @@ watch(() => props.fincaId, cargarPrediccion, { immediate: true });
 	border: 1px solid rgba(var(--v-border-color), 0.12);
 }
 
+.table-scroll {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.table-scroll :deep(table) {
+	min-width: 760px;
+}
+
 .pred-table th {
 	font-size: 0.72rem;
 	text-transform: uppercase;
@@ -340,5 +354,16 @@ watch(() => props.fincaId, cargarPrediccion, { immediate: true });
 	height: 10px;
 	border-radius: 50%;
 	display: inline-block;
+}
+
+@media (max-width: 600px) {
+	.pred-head {
+		align-items: flex-start !important;
+		gap: 10px;
+	}
+
+	.pred-refresh-btn {
+		width: 100%;
+	}
 }
 </style>

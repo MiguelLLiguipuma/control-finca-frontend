@@ -34,6 +34,23 @@ export interface AuditoriaQuery {
 	limit?: number;
 }
 
+export interface FumigacionPayload {
+	finca_id: number;
+	fecha_fumigacion: string;
+	observacion?: string;
+}
+
+export interface FumigacionItem {
+	id: number;
+	finca_id: number;
+	finca_nombre: string;
+	fecha_fumigacion: string;
+	observacion: string | null;
+	usuario_id: number | null;
+	usuario_nombre: string | null;
+	created_at: string;
+}
+
 export const reportesSeguridadService = {
 	async getAlertas(params: AlertasQuery): Promise<AlertaItem[]> {
 		const { data } = await api.get<AlertaItem[]>('/reportes/alertas', { params });
@@ -44,5 +61,14 @@ export const reportesSeguridadService = {
 		const { data } = await api.get<AuditoriaItem[]>('/reportes/auditoria', { params });
 		return data;
 	},
-};
 
+	async registrarFumigacion(payload: FumigacionPayload): Promise<FumigacionItem> {
+		const { data } = await api.post<FumigacionItem>('/reportes/fumigaciones', payload);
+		return data;
+	},
+
+	async getFumigaciones(params: { finca_id?: number; limit?: number }): Promise<FumigacionItem[]> {
+		const { data } = await api.get<FumigacionItem[]>('/reportes/fumigaciones', { params });
+		return data;
+	},
+};

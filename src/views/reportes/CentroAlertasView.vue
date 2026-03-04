@@ -55,6 +55,61 @@
 
     <v-alert v-if="error" type="error" variant="tonal" class="mb-4">{{ error }}</v-alert>
 
+    <v-card class="rounded-xl mb-4" elevation="1">
+      <v-card-text>
+        <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-2">
+          <div class="text-subtitle-1 font-weight-bold">Registro de Fumigación</div>
+          <v-chip size="small" variant="tonal" color="success">
+            Semáforo: Verde ≤15 · Amarillo 16-20 · Rojo >20 días
+          </v-chip>
+        </div>
+        <v-row dense>
+          <v-col cols="12" md="4">
+            <label class="text-caption font-weight-bold">Finca</label>
+            <v-select
+              v-model="fincaFumigacionId"
+              :items="fincas"
+              item-title="nombre"
+              item-value="id"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+            />
+          </v-col>
+          <v-col cols="12" md="3">
+            <label class="text-caption font-weight-bold">Fecha fumigación</label>
+            <v-text-field
+              v-model="fechaFumigacion"
+              type="date"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+            />
+          </v-col>
+          <v-col cols="12" md="3">
+            <label class="text-caption font-weight-bold">Observación</label>
+            <v-text-field
+              v-model="observacionFumigacion"
+              placeholder="Opcional"
+              variant="outlined"
+              density="comfortable"
+              hide-details
+            />
+          </v-col>
+          <v-col cols="12" md="2" class="d-flex align-end">
+            <v-btn
+              block
+              color="primary"
+              :loading="loadingGuardarFumigacion"
+              @click="guardarFumigacion"
+            >
+              Guardar
+            </v-btn>
+          </v-col>
+        </v-row>
+      </v-card-text>
+    </v-card>
+
     <v-row>
       <v-col cols="12" md="4">
         <v-card rounded="xl" class="pa-4" color="error" variant="tonal">
@@ -105,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFincaStore } from '@/stores/fincaStore';
 import { reportesSeguridadService, type AlertaItem } from '@/services/reportes/reportesSeguridadService';
@@ -119,6 +174,10 @@ const rechazoMinPct = ref(20);
 const loading = ref(false);
 const error = ref('');
 const alertas = ref<AlertaItem[]>([]);
+const fechaFumigacion = ref(new Date().toISOString().slice(0, 10));
+const fincaFumigacionId = ref<number | null>(null);
+const observacionFumigacion = ref('');
+const loadingGuardarFumigacion = ref(false);
 
 const resumen = computed(() => ({
   altas: alertas.value.filter((a) => a.severidad === 'alta').length,
@@ -150,8 +209,38 @@ async function cargarAlertas() {
   }
 }
 
+async function guardarFumigacion() {
+  const fincaIdTarget = Number(fincaFumigacionId.value || fincaId.value || 0);
+  if (!fincaIdTarget) {
+    error.value = 'Seleccione una finca para registrar fumigación.';
+    return;
+  }
+
+  loadingGuardarFumigacion.value = true;
+  error.value = '';
+  try {
+    await reportesSeguridadService.registrarFumigacion({
+      finca_id: fincaIdTarget,
+      fecha_fumigacion: fechaFumigacion.value,
+      observacion: observacionFumigacion.value || undefined,
+    });
+    observacionFumigacion.value = '';
+    await cargarAlertas();
+  } catch (e) {
+    const err = e as { response?: { data?: { error?: string; message?: string } } };
+    error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo registrar fumigación';
+  } finally {
+    loadingGuardarFumigacion.value = false;
+  }
+}
+
 onMounted(async () => {
   await fincaStore.obtenerFincas();
+  fincaFumigacionId.value = fincaId.value;
   await cargarAlertas();
+});
+
+watch(fincaId, (next) => {
+  fincaFumigacionId.value = next;
 });
 </script>
