@@ -157,19 +157,12 @@ export const useCosechaStore = defineStore('cosecha', {
 		},
 
 		saldosAgrupadosPorAnio(state): Record<number, CintaCosecha[]> {
-			const { semana: sActual, anio: aActual } = this.infoSistema;
+			const { anio: aActual } = this.infoSistema;
 			const grupos: Record<number, CintaCosecha[]> = {};
 
 			let lista = state.saldosPendientes.filter(
 				(item) => toNonNegativeInt(item.saldo_en_campo) > 0,
 			);
-
-			// Mantener referencias al estado (sin clonar) para que la edición en la vista
-			// impacte correctamente totalDigitado/totalRestante.
-			lista.forEach((item) => {
-				const diffAnios = aActual - item.anio;
-				item.edad = diffAnios * 52 - item.semana_enfunde + sActual;
-			});
 
 			if (state.mostrarSoloAnioActual) {
 				lista = lista.filter((item) => item.anio === aActual);

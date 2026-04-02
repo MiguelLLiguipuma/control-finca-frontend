@@ -352,9 +352,9 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="cal in store.resumenCalendarios" :key="cal.empresa + cal.anio">
+            <tr v-for="cal in store.resumenCalendarios" :key="`${cal.empresa_id || 'sin-empresa'}-${cal.anio}`">
               <td class="pl-6">
-                <div class="font-weight-bold text-primary">{{ cal.empresa }}</div>
+                <div class="font-weight-bold text-primary">{{ cal.empresa_nombre || 'No asignada' }}</div>
               </td>
               <td class="text-center">
                 <v-chip size="small" variant="flat" color="secondary" class="font-weight-black">
@@ -399,9 +399,13 @@
   </v-container>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, onMounted } from 'vue';
-import { useCalendarioStore } from '@/stores/calendarioStore';
+import {
+  useCalendarioStore,
+  type CintaCatalogo,
+  type SemanaGenerada,
+} from '@/stores/calendarioStore';
 import { useEmpresaStore } from '@/stores/empresaStore';
 import { storeToRefs } from 'pinia';
 
@@ -411,7 +415,12 @@ const empresaStore = useEmpresaStore();
 // Usamos storeToRefs para que la lista de empresas sea reactiva
 const { empresas: listaEmpresas, loading: loadingEmpresas } = storeToRefs(empresaStore);
 
-const uiState = reactive({
+interface UiState {
+  dialogoAbierto: boolean
+  semanaEditando: SemanaGenerada | null
+}
+
+const uiState = reactive<UiState>({
   dialogoAbierto: false,
   semanaEditando: null
 });
@@ -446,12 +455,12 @@ onMounted(async () => {
 
 // --- UI HANDLERS ---
 
-const abrirDialogoEdicion = (semana) => {
+const abrirDialogoEdicion = (semana: SemanaGenerada) => {
   uiState.semanaEditando = semana;
   uiState.dialogoAbierto = true;
 };
 
-const seleccionarCintaManual = (cinta) => {
+const seleccionarCintaManual = (cinta: CintaCatalogo | null) => {
   if (uiState.semanaEditando) {
     store.asignarCintaSemana(uiState.semanaEditando.numero, cinta);
   }
@@ -464,7 +473,7 @@ const handleGuardar = async () => {
 };
 
 // Helper para mostrar mes aproximado
-const obtenerMesUI = (semana) => {
+const obtenerMesUI = (semana: number) => {
   const meses = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
   const mesIndex = Math.floor((semana - 1) / 4.34812); 
   return meses[Math.min(mesIndex, 11)];

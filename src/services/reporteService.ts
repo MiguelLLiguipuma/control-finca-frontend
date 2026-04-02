@@ -1,14 +1,27 @@
-import api from './api.js';
+import type { AxiosRequestConfig, AxiosResponse } from 'axios';
+import api from './api';
 
-const withParams = (modo, scope) => {
-	const params = {};
+type ModoReporte = 'full' | 'ytd';
+type ScopeReporte = 'finca' | 'propio';
+type QueryParams = Record<string, string | number>;
+
+const withParams = (
+	modo: ModoReporte,
+	scope: ScopeReporte,
+): AxiosRequestConfig<QueryParams> | undefined => {
+	const params: QueryParams = {};
 	if (modo === 'ytd') params.modo = 'ytd';
 	if (scope === 'propio' || scope === 'finca') params.scope = scope;
 	return Object.keys(params).length ? { params } : undefined;
 };
 
 export const reporteService = {
-	getKpisData(fincaId, anio, modo = 'full', scope = 'finca') {
+	getKpisData(
+		fincaId: number,
+		anio: number,
+		modo: ModoReporte = 'full',
+		scope: ScopeReporte = 'finca',
+	): Promise<AxiosResponse[]> {
 		const config = withParams(modo, scope);
 		return Promise.all([
 			api.get(`/reportes/total-anual/${fincaId}/${anio}`, config),
@@ -18,29 +31,43 @@ export const reporteService = {
 		]);
 	},
 
-	getMensual(fincaId, anio, modo = 'full', scope = 'finca') {
+	getMensual(
+		fincaId: number,
+		anio: number,
+		modo: ModoReporte = 'full',
+		scope: ScopeReporte = 'finca',
+	) {
 		return api.get(
 			`/reportes/total-mensual/${fincaId}/${anio}`,
 			withParams(modo, scope),
 		);
 	},
 
-	getSemanal(fincaId, anio, modo = 'full', scope = 'finca') {
+	getSemanal(
+		fincaId: number,
+		anio: number,
+		modo: ModoReporte = 'full',
+		scope: ScopeReporte = 'finca',
+	) {
 		return api.get(
 			`/reportes/total-semanal/${fincaId}/${anio}`,
 			withParams(modo, scope),
 		);
 	},
 
-	getRendimientoCintas(fincaId, anio, modo = 'full', scope = 'finca') {
+	getRendimientoCintas(
+		fincaId: number,
+		anio: number,
+		modo: ModoReporte = 'full',
+		scope: ScopeReporte = 'finca',
+	) {
 		return api.get(
 			`/reportes/rendimiento-cintas/${fincaId}/${anio}`,
 			withParams(modo, scope),
 		);
 	},
 
-	getDashboardData(fincaId, anio) {
-		// Agrupamos las peticiones relacionadas
+	getDashboardData(fincaId: number, anio: number): Promise<AxiosResponse[]> {
 		return Promise.all([
 			api.get(`/reportes/total-anual/${fincaId}/${anio}`),
 			api.get(`/reportes/total-mensual/${fincaId}/${anio}`),
@@ -51,15 +78,25 @@ export const reporteService = {
 		]);
 	},
 
-	getComparativo(fincaId, anioAnterior, modo = 'full', scope = 'finca') {
+	getComparativo(
+		fincaId: number,
+		anioAnterior: number,
+		modo: ModoReporte = 'full',
+		scope: ScopeReporte = 'finca',
+	) {
 		return api.get(
 			`/reportes/total-mensual/${fincaId}/${anioAnterior}`,
 			withParams(modo, scope),
 		);
 	},
 
-	getScoreSalud(fincaId, anio, semana = null, refresh = false) {
-		const params = {};
+	getScoreSalud(
+		fincaId: number,
+		anio: number,
+		semana: number | null = null,
+		refresh = false,
+	) {
+		const params: QueryParams = {};
 		if (Number.isInteger(Number(semana)) && Number(semana) > 0) {
 			params.semana = Number(semana);
 		}

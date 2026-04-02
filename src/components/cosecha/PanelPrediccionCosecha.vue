@@ -28,6 +28,18 @@
 				</v-btn>
 			</div>
 
+			<v-alert
+				type="info"
+				variant="tonal"
+				density="comfortable"
+				class="mb-4"
+			>
+				<div class="text-body-2">
+					<strong>Cómo leer este panel:</strong> "Meta UC" es la meta de unidades calor para madurez,
+					"Rango" es el escenario esperado de racimos y "Confianza" indica estabilidad del pronóstico.
+				</div>
+			</v-alert>
+
 			<v-row dense class="mb-4">
 				<v-col cols="12" sm="4">
 					<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
@@ -54,6 +66,113 @@
 					</v-sheet>
 				</v-col>
 			</v-row>
+
+			<v-row v-if="proximoEmbarqueVista" dense class="mb-4">
+				<v-col cols="12" md="8">
+					<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
+						<div class="d-flex flex-wrap align-center justify-space-between gap-2">
+							<div>
+								<div class="text-caption text-medium-emphasis">Próximo embarque estimado</div>
+								<div class="text-h6 font-weight-black text-high-emphasis">
+									Sem {{ proximoEmbarqueVista.semana_objetivo }}/{{ proximoEmbarqueVista.anio_objetivo }} · {{ proximoEmbarqueVista.racimos_estimados }} racimos
+								</div>
+							</div>
+							<div class="d-flex flex-wrap align-center gap-2">
+								<v-chip size="small" variant="tonal" color="info">
+									Rango: {{ proximoEmbarqueVista.rango_minimo }} - {{ proximoEmbarqueVista.rango_maximo }}
+								</v-chip>
+								<v-chip size="small" variant="tonal" color="success">
+									Ideal: {{ proximoEmbarqueVista.racimos_rango_ideal }}
+								</v-chip>
+								<v-chip size="small" variant="tonal" color="warning">
+									Riesgo: {{ proximoEmbarqueVista.racimos_en_riesgo }}
+								</v-chip>
+							</div>
+						</div>
+					</v-sheet>
+				</v-col>
+				<v-col cols="12" md="4">
+					<v-sheet class="pa-3 rounded-lg metric-card h-100" color="surface">
+						<div class="text-caption text-medium-emphasis mb-2">Calidad de predicción</div>
+						<div class="d-flex flex-wrap align-center gap-2 mb-2">
+							<v-chip size="small" :color="colorConfianzaAvanzada(proximoEmbarqueVista.confianza)">
+								{{ proximoEmbarqueVista.confianza }}
+							</v-chip>
+							<v-chip size="small" variant="tonal" color="primary">
+								{{ proximoEmbarqueVista.tendencia }}
+							</v-chip>
+						</div>
+						<div class="text-body-2 text-medium-emphasis">
+							Rechazo estimado: <strong class="text-high-emphasis">{{ proximoEmbarqueVista.rechazo_estimado_pct }}%</strong> ·
+							Edad promedio: <strong class="text-high-emphasis">{{ proximoEmbarqueVista.edad_promedio_corte }}</strong> sem
+						</div>
+						<div v-if="cachePrediccion" class="text-caption text-disabled mt-2">
+							{{ cachePrediccion.hit ? 'Desde cache' : 'Recalculado' }} · {{ cachePrediccion.algoritmo_version }}
+						</div>
+						<div v-else class="text-caption text-disabled mt-2">
+							Datos derivados localmente (sin bloque avanzado del backend)
+						</div>
+					</v-sheet>
+				</v-col>
+			</v-row>
+
+			<v-sheet class="pa-3 rounded-lg metric-card mb-4" color="surface">
+				<div class="d-flex align-center justify-space-between mb-3 flex-wrap gap-2">
+					<div class="text-subtitle-2 font-weight-black text-high-emphasis">
+						Modelo Embarque (Demo)
+					</div>
+					<v-switch
+						v-model="usarModeloDemo"
+						hide-details
+						density="compact"
+						color="primary"
+						label="Usar datos de prueba"
+					/>
+				</div>
+
+				<div v-if="usarModeloDemo">
+					<div class="text-body-2 text-medium-emphasis mb-3">
+						Compara aproximado actual del sistema vs modelo ponderado (base + estacional + tendencia).
+					</div>
+					<v-row dense>
+						<v-col cols="12" sm="6" md="3">
+							<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
+								<div class="text-caption text-medium-emphasis">Aprox. actual sistema</div>
+								<div class="text-h6 font-weight-black">{{ aproximadoSistemaDemo }}</div>
+							</v-sheet>
+						</v-col>
+						<v-col cols="12" sm="6" md="3">
+							<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
+								<div class="text-caption text-medium-emphasis">Estimado nuevo neto</div>
+								<div class="text-h6 font-weight-black">{{ modeloDemo?.estimadoNeto ?? '--' }}</div>
+							</v-sheet>
+						</v-col>
+						<v-col cols="12" sm="6" md="3">
+							<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
+								<div class="text-caption text-medium-emphasis">Rango confiable</div>
+								<div class="text-h6 font-weight-black">
+									{{ modeloDemo?.rangoMin ?? '--' }} - {{ modeloDemo?.rangoMax ?? '--' }}
+								</div>
+							</v-sheet>
+						</v-col>
+						<v-col cols="12" sm="6" md="3">
+							<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
+								<div class="text-caption text-medium-emphasis">Delta vs sistema</div>
+								<div class="text-h6 font-weight-black">
+									{{ deltaDemoAbs }} ({{ deltaDemoPct }}%)
+								</div>
+							</v-sheet>
+						</v-col>
+					</v-row>
+
+					<div class="mt-3 text-body-2 text-medium-emphasis">
+						Pesos dinámicos:
+						base <strong>{{ modeloDemo?.pesos.base ?? '--' }}</strong>,
+						estacional <strong>{{ modeloDemo?.pesos.estacional ?? '--' }}</strong>,
+						tendencia <strong>{{ modeloDemo?.pesos.tendencia ?? '--' }}</strong>.
+					</div>
+				</div>
+			</v-sheet>
 
 			<div v-if="!fincaId" class="text-medium-emphasis text-body-2 py-2">
 				Selecciona una finca para ver proyección.
@@ -226,6 +345,7 @@ import {
 import { embarqueService } from '@/services/embarque/embarqueService';
 import { useCosechaStore } from '../../stores/cosecha/cosechaStore';
 import {
+	type PrediccionCosechaVM,
 	type DiagnosticoBacktestingVM,
 	type BacktestingResumenVM,
 	type BacktestingSemanaVM,
@@ -239,6 +359,10 @@ import {
 	construirPrediccionVM,
 	crearPrediccionVacia,
 } from '@/domain/cosecha/prediccionCosecha';
+import {
+	HISTORICO_EMBARQUE_DEMO,
+	calcularModeloDemo,
+} from '@/domain/cosecha/prediccionEmbarqueDemo';
 
 dayjs.extend(customParseFormat);
 dayjs.extend(isoWeek);
@@ -253,6 +377,9 @@ const error = ref('');
 const metaAplicada = ref<number | string>(crearPrediccionVacia().metaAplicada);
 const promedioUC = ref<string>(String(crearPrediccionVacia().promedioUC));
 const proyecciones = ref<PrediccionFilaVM[]>(crearPrediccionVacia().filas);
+const proximoEmbarque = ref<PrediccionCosechaVM['proximoEmbarque']>(null);
+const cachePrediccion = ref<PrediccionCosechaVM['cache']>(null);
+const usarModeloDemo = ref(true);
 const backtestingSemanal = ref<BacktestingSemanaVM[]>([]);
 const resumenBacktesting = ref<BacktestingResumenVM>({
 	mae: 0,
@@ -269,11 +396,63 @@ const diagnosticoBacktesting = ref<DiagnosticoBacktestingVM>({
 const cosechaStore = useCosechaStore();
 
 const filas = computed(() => proyecciones.value);
+const proximoEmbarqueVista = computed(() => {
+	if (proximoEmbarque.value) return proximoEmbarque.value;
+	if (!filas.value.length) return null;
+	const anio = new Date().getFullYear();
+	const estimado = filas.value.reduce((acc, item) => acc + Number(item.saldo_en_campo || 0), 0);
+	const ideal = Math.round(estimado * 0.65);
+	const riesgo = Math.max(0, estimado - ideal);
+	return {
+		anio_objetivo: anio,
+		semana_objetivo: cosechaStore.semanaActual || 0,
+		racimos_estimados: Math.round(estimado),
+		rango_minimo: Math.round(estimado * 0.9),
+		rango_maximo: Math.round(estimado * 1.1),
+		racimos_rango_ideal: ideal,
+		racimos_en_riesgo: riesgo,
+		rechazo_estimado_pct: 0,
+		edad_promedio_corte: 0,
+		tendencia: 'ESTABLE',
+		confianza: 'MEDIA',
+		sigma: 0,
+		factor_estacional: 1,
+		metodo: 'fallback_ui',
+	};
+});
+
+const modeloDemo = computed(() => {
+	if (!usarModeloDemo.value) return null;
+	return calcularModeloDemo(HISTORICO_EMBARQUE_DEMO, cosechaStore.semanaActual || 1, 8.5);
+});
+
+const aproximadoSistemaDemo = computed(() => {
+	return Number(proximoEmbarqueVista.value?.racimos_estimados || 0);
+});
+
+const deltaDemoAbs = computed(() => {
+	if (!modeloDemo.value) return '--';
+	const delta = modeloDemo.value.estimadoNeto - aproximadoSistemaDemo.value;
+	return delta.toFixed(2);
+});
+
+const deltaDemoPct = computed(() => {
+	if (!modeloDemo.value || aproximadoSistemaDemo.value <= 0) return '--';
+	const pct = ((modeloDemo.value.estimadoNeto - aproximadoSistemaDemo.value) / aproximadoSistemaDemo.value) * 100;
+	return pct.toFixed(2);
+});
 
 function formatearFecha(fecha: string): string {
 	if (!fecha) return '--';
 	const d = dayjs(fecha, 'YYYY-MM-DD', true);
 	return d.isValid() ? d.format('DD/MM/YYYY') : '--';
+}
+
+function colorConfianzaAvanzada(confianza: string): string {
+	const c = String(confianza || '').toUpperCase();
+	if (c === 'ALTA') return 'success';
+	if (c === 'MEDIA') return 'warning';
+	return 'error';
 }
 
 async function cargarPrediccion() {
@@ -298,6 +477,8 @@ async function cargarPrediccion() {
 		metaAplicada.value = vm.metaAplicada;
 		promedioUC.value = String(vm.promedioUC);
 		proyecciones.value = vm.filas;
+		proximoEmbarque.value = vm.proximoEmbarque;
+		cachePrediccion.value = vm.cache;
 		cosechaStore.configurarVentanaCorte(vm.semanaInicio, vm.semanaFin);
 
 		const fechaHasta = dayjs().format('YYYY-MM-DD');
@@ -318,6 +499,8 @@ async function cargarPrediccion() {
 		error.value = 'No fue posible cargar la predicción para esta finca.';
 		const emptyVM = crearPrediccionVacia();
 		proyecciones.value = emptyVM.filas;
+		proximoEmbarque.value = null;
+		cachePrediccion.value = null;
 		backtestingSemanal.value = [];
 		resumenBacktesting.value = { mae: 0, mape: 0, sesgoPct: 0, totalSemanas: 0 };
 		diagnosticoBacktesting.value = diagnosticarBacktesting(resumenBacktesting.value);

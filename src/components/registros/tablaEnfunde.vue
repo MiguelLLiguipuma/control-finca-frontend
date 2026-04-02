@@ -112,10 +112,10 @@
   </v-card>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useTheme } from 'vuetify'
-import { useEnfundeStore } from '@/stores/enfundeStore'
+import { useEnfundeStore, type RegistroEnfundeItem } from '@/stores/enfundeStore'
 import { useFincaStore } from '@/stores/fincaStore'
 
 const theme = useTheme()
@@ -125,8 +125,27 @@ const enfundeStore = useEnfundeStore()
 const fincaStore = useFincaStore()
 const search = ref('')
 
+interface RegistroTablaItem extends RegistroEnfundeItem {
+  empresa?: string
+  finca?: string
+  usuario?: string
+  operario?: string
+  cinta?: string | null
+  observaciones?: string | null
+}
+
+type HeaderAlign = 'start' | 'center' | 'end'
+
+interface DataTableHeaderItem {
+  title: string
+  key: string
+  align: HeaderAlign
+  width?: string
+  sortable?: boolean
+}
+
 // NORMALIZACIÓN DE REGISTROS: Asegura que el campo se llame 'color' para la tabla
-const registros = computed(() => {
+const registros = computed<RegistroTablaItem[]>(() => {
   return (enfundeStore.registrosFiltrados || []).map(reg => ({
     ...reg,
     // Si el backend envía 'cinta' en lugar de 'color', lo unificamos aquí
@@ -146,7 +165,7 @@ onMounted(() => {
   }
 })
 
-const headers = [
+const headers: DataTableHeaderItem[] = [
   { title: 'Fecha de Registro', key: 'fecha', align: 'start', width: '130px' },
   { title: 'Localidad / Empresa', key: 'empresa', align: 'start' },
   { title: 'Operario / Usuario', key: 'usuario', align: 'start' },
@@ -155,10 +174,12 @@ const headers = [
   { title: 'Obs.', key: 'observaciones', align: 'start', sortable: false }
 ]
 
-const formatFecha = (f) => f ? new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
-const formatDiaSemana = (f) => f ? new Date(f).toLocaleDateString('es-ES', { weekday: 'long' }) : ''
+const formatFecha = (f: string | undefined) =>
+  f ? new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+const formatDiaSemana = (f: string | undefined) =>
+  f ? new Date(f).toLocaleDateString('es-ES', { weekday: 'long' }) : ''
 
-const colores = { 
+const colores: Record<string, string> = { 
   Blanca: '#ffffff', 
   Negra: '#1e293b', 
   Lila: '#a855f7', 
@@ -169,18 +190,18 @@ const colores = {
   Azul: '#3b82f6' 
 }
 
-const getColor = (c) => {
+const getColor = (c: string | null | undefined) => {
   if (c === 'Negra' && isDark.value) return '#64748b'
-  return colores[c] || '#94a3b8'
+  return c ? colores[c] || '#94a3b8' : '#94a3b8'
 }
 
-const getTextColor = (c) => {
+const getTextColor = (c: string | null | undefined) => {
   if (c === 'Negra' && isDark.value) return '#ffffff'
-  return ['Blanca', 'Amarilla'].includes(c) ? '#475569' : '#ffffff'
+  return c && ['Blanca', 'Amarilla'].includes(c) ? '#475569' : '#ffffff'
 }
 
-const getCantidadColor = (c) => c >= 200 ? 'success' : (c >= 100 ? 'warning' : 'error')
-const getCantidadIcon = (c) => c >= 150 ? 'mdi-trending-up' : 'mdi-trending-down'
+const getCantidadColor = (c: number) => c >= 200 ? 'success' : (c >= 100 ? 'warning' : 'error')
+const getCantidadIcon = (c: number) => c >= 150 ? 'mdi-trending-up' : 'mdi-trending-down'
 </script>
 
 <style scoped>

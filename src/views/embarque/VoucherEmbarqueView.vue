@@ -1,7 +1,7 @@
 <template>
   <v-container
     fluid
-    class="bg-background min-h-screen pa-4 pa-md-6 transition-colors voucher-shell voucher-print-root voucher-bg"
+    class="bg-background voucher-min-h-screen pa-4 pa-md-6 voucher-transition-colors voucher-shell voucher-print-root voucher-bg"
     :class="voucherEstadoClass"
   >
     <v-row justify="center">
@@ -10,1126 +10,190 @@
           <div class="print-title">Voucher de Embarque</div>
           <div class="print-meta">
             <span>Fecha: {{ embarqueStore.fechaEmbarque }}</span>
-            <span v-if="embarqueStore.voucherActual"> · Nro: {{ embarqueStore.voucherActual.numero_voucher }}</span>
-            <span v-if="embarqueStore.voucherActual"> · Estado: {{ embarqueStore.voucherActual.estado }}</span>
+            <span v-if="embarqueStore.voucherActual">
+              · Nro: {{ embarqueStore.voucherActual.numero_voucher }}
+            </span>
+            <span v-if="embarqueStore.voucherActual">
+              · Estado: {{ embarqueStore.voucherActual.estado }}
+            </span>
           </div>
         </div>
 
-        <div class="print-only">
-          <div class="print-sheet">
-            <div class="print-sheet__watermark">ControlFinca</div>
-            <header class="print-sheet__header">
-              <div class="print-brand">
-                <div class="print-brand__logo">CF</div>
-                <div>
-                  <div class="print-sheet__eyebrow">ControlFinca · Operacion de Embarque</div>
-                  <h1 class="print-sheet__title">Voucher de Embarque</h1>
-                </div>
-              </div>
-              <div class="print-sheet__badge">
-                {{ embarqueStore.voucherActual?.numero_voucher || 'BORRADOR' }}
-              </div>
-            </header>
+        <VoucherPrintSheet
+          :embarque-store="embarqueStore"
+          :fincas-seleccionadas-texto="fincasSeleccionadasTexto"
+          :fecha-impresion-texto="fechaImpresionTexto"
+          :auth-user-name="authStore.userName"
+        />
 
-            <section class="print-sheet__meta">
-              <div><strong>Fecha:</strong> {{ embarqueStore.fechaEmbarque }}</div>
-              <div><strong>Estado:</strong> {{ embarqueStore.voucherActual?.estado || 'BORRADOR' }}</div>
-              <div><strong>Semana Corte:</strong> {{ embarqueStore.semanaCorte || '--' }}</div>
-              <div><strong>Fincas:</strong> {{ fincasSeleccionadasTexto }}</div>
-              <div><strong>Emitido por:</strong> {{ authStore.userName }}</div>
-              <div><strong>Impreso:</strong> {{ fechaImpresionTexto }}</div>
-            </section>
+        <div class="print-hidden voucher-redesign-alt" :class="{ 'voucher-swap': animarCambioVoucher }">
+          <VoucherHeroSection :embarque-store="embarqueStore" :chip-estado="chipEstado" />
 
-            <section class="print-sheet__totals">
-              <table>
-                <tbody>
-                  <tr>
-                    <th>Racimos Buenos</th>
-                    <td>{{ embarqueStore.totales.racimos_buenos }}</td>
-                    <th>Total Cajas</th>
-                    <td>{{ embarqueStore.totales.total_cajas.toFixed(2) }}</td>
-                  </tr>
-                  <tr>
-                    <th>Racimos Rechazo</th>
-                    <td>{{ embarqueStore.totales.racimos_rechazo }}</td>
-                    <th>Ratio Comercial</th>
-                    <td>{{ embarqueStore.totales.ratio_comercial_global.toFixed(4) }}</td>
-                  </tr>
-                  <tr>
-                    <th>Total Racimos</th>
-                    <td>{{ embarqueStore.totales.total_racimos }}</td>
-                    <th>Ratio Operativo</th>
-                    <td>{{ embarqueStore.totales.ratio_operativo_global.toFixed(4) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
+          <ViewHelpHint
+            class="mb-4"
+            title="¿Qué haces en Voucher de Embarque?"
+            summary="Esta vista es el cierre operativo del día. Consolida cosecha por finca, asigna cajas reales y calcula ratios antes de confirmar."
+            :steps="[
+              'Define fecha, fincas y semana de corte.',
+              'Carga la base del día para traer líneas de cosecha.',
+              'Asigna cajas totales o por finca y ajusta líneas.',
+              'Guarda borrador y confirma cuando esté validado.',
+            ]"
+            :notes="[
+              'Solo se permite combinar fincas de la misma empresa.',
+              'Al confirmar, el documento queda cerrado operativamente.',
+              'Puedes imprimir el voucher para control físico o auditoría.',
+            ]"
+          />
 
-            <section class="print-sheet__lines">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Finca</th>
-                    <th>Cinta</th>
-                    <th>Sem</th>
-                    <th>Buenos</th>
-                    <th>Rechazo</th>
-                    <th>Total</th>
-                    <th>Cajas</th>
-                    <th>Ratio Com</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(linea, idx) in embarqueStore.lineas" :key="`print-${linea.finca_id}-${linea.calendario_id}-${idx}`">
-                    <td>{{ linea.finca_nombre }}</td>
-                    <td>{{ linea.cinta_color }}</td>
-                    <td>{{ linea.semana_enfunde ?? '--' }}</td>
-                    <td class="text-right">{{ linea.racimos_buenos }}</td>
-                    <td class="text-right">{{ linea.racimos_rechazo }}</td>
-                    <td class="text-right">{{ linea.total_racimos }}</td>
-                    <td class="text-right">{{ linea.cajas_embarcadas.toFixed(2) }}</td>
-                    <td class="text-right">{{ linea.ratio_comercial_linea.toFixed(4) }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </section>
+          <v-alert v-if="embarqueStore.error" type="error" variant="tonal" class="mb-4">
+            {{ embarqueStore.error }}
+          </v-alert>
+          <v-alert v-else-if="mensajeBusqueda" type="info" variant="tonal" class="mb-4">
+            {{ mensajeBusqueda }}
+          </v-alert>
 
-            <section class="print-sheet__obs">
-              <strong>Observaciones:</strong>
-              <span>{{ embarqueStore.observaciones || 'Sin observaciones.' }}</span>
-            </section>
+          <v-row class="mb-6">
+            <v-col cols="12" lg="8">
+              <VoucherWorkflowPanel
+                v-model:menu-fecha="menuFecha"
+                v-model:fecha-voucher-picker="fechaVoucherPicker"
+                v-model:menu-fecha-busqueda="menuFechaBusqueda"
+                v-model:fecha-busqueda="fechaBusqueda"
+                v-model:fecha-busqueda-picker="fechaBusquedaPicker"
+                v-model:numero-voucher-busqueda="numeroVoucherBusqueda"
+                v-model:modo-busqueda-numero="modoBusquedaNumero"
+                v-model:cajas-semana-input="cajasSemanaInput"
+                v-model:cajas-por-finca="cajasPorFinca"
+                :embarque-store="embarqueStore"
+                :fincas-disponibles="fincasDisponibles"
+                :fecha-minima="fechaMinima"
+                :fecha-maxima="fechaMaxima"
+                :fecha-voucher-permitida="fechaVoucherPermitida"
+                :estado-fecha-seleccionada="estadoFechaSeleccionada"
+                :aviso-empresa="avisoEmpresa"
+                :resumen-fincas="resumenFincas"
+                @refresh-base="refrescarBase"
+                @buscar-vouchers="buscarVouchers"
+                @aplicar-cajas-semana="aplicarCajasSemana"
+                @aplicar-cajas-finca="aplicarCajasFinca"
+              />
+            </v-col>
 
-            <section class="print-sheet__signatures">
-              <div>
-                <div class="line"></div>
-                <span>Responsable de Embarque</span>
-              </div>
-              <div>
-                <div class="line"></div>
-                <span>Supervisor de Campo</span>
-              </div>
-            </section>
+            <v-col cols="12" lg="4">
+              <VoucherSummaryCard
+                :embarque-store="embarqueStore"
+                :can-confirm-voucher="canConfirmVoucher"
+                :can-cancel-voucher="canCancelVoucher"
+                :motivo-bloqueo-confirmar="motivoBloqueoConfirmar"
+                @guardar="guardar"
+                @confirmar="confirmar"
+                @abrir-dialogo-anular="abrirDialogoAnular"
+                @imprimir="imprimirVoucher"
+              />
+            </v-col>
+          </v-row>
 
-            <footer class="print-sheet__footer">
-              Documento generado por ControlFinca. Uso interno operativo.
-            </footer>
-          </div>
-        </div>
+          <VoucherLineasTable
+            :embarque-store="embarqueStore"
+            :lineas-table-height="lineasTableHeight"
+          />
 
-        <div class="print-hidden voucher-redesign" :class="{ 'voucher-swap': animarCambioVoucher }">
-        <v-card variant="flat" class="rounded-xl mb-6 hero-card border shadow-sm bg-surface premium-panel reveal-block reveal-1">
-          <v-card-text class="d-flex align-center justify-space-between flex-wrap gap-4 pa-6">
-            <div>
-              <div class="d-flex align-center gap-2 mb-2">
-                <v-avatar color="primary" variant="tonal" size="42">
-                  <v-icon size="24">mdi-ferry</v-icon>
-                </v-avatar>
-                <div class="section-eyebrow">Operacion de Embarque</div>
-              </div>
-              <h1 class="text-h3 font-weight-black text-high-emphasis hero-title">Voucher de Embarque</h1>
-              <div class="text-subtitle-1 text-medium-emphasis">Cierre diario de cosecha y ratio de cajas</div>
-            </div>
-
-            <div class="d-flex align-center gap-2">
-              <v-chip v-if="embarqueStore.voucherActual" :color="chipEstado.color" size="large" label>
-                {{ chipEstado.text }}
-              </v-chip>
-              <v-chip v-if="embarqueStore.voucherActual" color="primary" variant="tonal" size="large">
-                {{ embarqueStore.voucherActual.numero_voucher }}
-              </v-chip>
-            </div>
-          </v-card-text>
-        </v-card>
-
-        <v-card variant="flat" class="rounded-xl mb-6 command-card border shadow-sm bg-surface premium-panel reveal-block reveal-2">
-          <v-card-text class="pa-4 pa-md-5">
-            <div class="command-grid">
-              <div class="command-item">
-                <div class="command-label">Racimos</div>
-                <div class="command-value">{{ embarqueStore.totales.total_racimos }}</div>
-              </div>
-              <div class="command-item">
-                <div class="command-label">Cajas</div>
-                <div class="command-value">{{ embarqueStore.totales.total_cajas.toFixed(2) }}</div>
-              </div>
-              <div class="command-item">
-                <div class="command-label">Ratio Comercial</div>
-                <div class="command-value text-primary">{{ embarqueStore.totales.ratio_comercial_global.toFixed(4) }}</div>
-              </div>
-              <div class="command-actions">
-                <v-btn
-                  color="primary"
-                  class="font-weight-black premium-btn btn-save"
-                  :loading="embarqueStore.submitting"
-                  :disabled="embarqueStore.submitting || !embarqueStore.esEditable || !embarqueStore.lineas.length"
-                  @click="guardar"
-                >
-                  Guardar
-                </v-btn>
-                <v-btn
-                  color="success"
-                  class="font-weight-black premium-btn btn-confirm"
-                  :loading="embarqueStore.submitting"
-                  :disabled="embarqueStore.submitting || !embarqueStore.puedeConfirmar || !canConfirmVoucher"
-                  @click="confirmar"
-                >
-                  Confirmar
-                </v-btn>
-                <v-btn
-                  color="secondary"
-                  variant="outlined"
-                  class="font-weight-bold premium-btn"
-                  :disabled="embarqueStore.submitting || !embarqueStore.lineas.length"
-                  @click="imprimirVoucher"
-                >
-                  Imprimir
-                </v-btn>
-              </div>
-            </div>
-          </v-card-text>
-        </v-card>
-
-        <v-card variant="flat" class="rounded-xl mb-6 controls-card border shadow-sm bg-surface premium-panel reveal-block reveal-3">
-          <v-card-text class="pa-5">
-            <div class="panel-head mb-4">
-              <div class="panel-head__left">
-                <v-avatar size="34" color="primary" variant="tonal"><v-icon size="18">mdi-tune-variant</v-icon></v-avatar>
-                <div>
-                  <div class="panel-title">Configuracion Operativa</div>
-                  <div class="panel-subtitle">Parametros del voucher y filtros de carga</div>
-                </div>
-              </div>
-            </div>
-            <v-row>
-              <v-col cols="12" md="3">
-                <label class="custom-label">Fecha Embarque</label>
-                <v-menu v-model="menuFecha" :close-on-content-click="false" location="bottom center">
-                  <template #activator="{ props }">
-                    <v-text-field
-                      v-bind="props"
-                      :model-value="embarqueStore.fechaEmbarque"
-                      density="comfortable"
-                      variant="outlined"
-                      hide-details
-                      readonly
-                      prepend-inner-icon="mdi-calendar"
-                      :disabled="embarqueStore.submitting"
-                    />
-                  </template>
-                  <v-date-picker
-                    v-model="fechaVoucherPicker"
-                    color="primary"
-                    :min="fechaMinima"
-                    :max="fechaMaxima"
-                    :allowed-dates="fechaVoucherPermitida"
-                    @update:model-value="menuFecha = false"
-                  />
-                </v-menu>
-                <div class="text-caption text-medium-emphasis mt-2">
-                  Fechas con voucher existente se muestran bloqueadas.
-                </div>
-                <v-alert
-                  v-if="estadoFechaSeleccionada"
-                  class="mt-2"
-                  variant="tonal"
-                  density="compact"
-                  :type="estadoFechaSeleccionada.cosecha && estadoFechaSeleccionada.voucher ? 'warning' : 'info'"
-                >
-                  <span v-if="estadoFechaSeleccionada.cosecha && estadoFechaSeleccionada.voucher">
-                    Fecha con cosecha y voucher existentes.
-                  </span>
-                  <span v-else-if="estadoFechaSeleccionada.cosecha">
-                    Fecha con cosecha registrada.
-                  </span>
-                  <span v-else>
-                    Fecha con voucher registrado.
-                  </span>
-                </v-alert>
-              </v-col>
-
-              <v-col cols="12" md="3">
-                <label class="custom-label">Fincas (misma empresa)</label>
-                <v-autocomplete
-                  v-model="embarqueStore.fincaIds"
-                  :items="fincasDisponibles"
-                  item-title="nombre"
-                  item-value="id"
-                  density="comfortable"
-                  variant="outlined"
-                  hide-details
-                  clearable
-                  multiple
-                  chips
-                  closable-chips
-                  :disabled="embarqueStore.submitting"
-                >
-                  <template #item="{ props, item }">
-                    <v-list-item v-bind="props" :subtitle="item.raw.empresa_nombre || `Empresa ${item.raw.empresa_id}`" />
-                  </template>
-                </v-autocomplete>
-              </v-col>
-
-              <v-col cols="12" md="2">
-                <label class="custom-label">Semana Corte</label>
-                <v-text-field
-                  v-model.number="embarqueStore.semanaCorte"
-                  type="number"
-                  min="1"
-                  max="52"
-                  density="comfortable"
-                  variant="outlined"
-                  hide-details
-                  :disabled="!embarqueStore.esEditable || embarqueStore.submitting"
-                />
-              </v-col>
-
-              <v-col cols="12" md="4" class="d-flex align-end gap-2 flex-wrap">
-                <v-btn
-                  color="primary"
-                  class="font-weight-bold premium-btn"
-                  :loading="embarqueStore.loading"
-                  :disabled="embarqueStore.submitting"
-                  @click="refrescarBase"
-                >
-                  Cargar Base del Dia
-                </v-btn>
-
-                <v-btn
-                  variant="tonal"
-                  color="secondary"
-                  class="font-weight-bold premium-btn"
-                  :loading="embarqueStore.loading"
-                  :disabled="embarqueStore.submitting"
-                  @click="buscarVouchers"
-                >
-                  Buscar Vouchers
-                </v-btn>
-              </v-col>
-            </v-row>
-
-            <v-row class="mt-1">
-              <v-col cols="12" md="5">
-                <label class="custom-label">Ingreso General de Cajas (Semana)</label>
-                <v-text-field
-                  v-model.number="cajasSemanaInput"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  density="comfortable"
-                  variant="outlined"
-                  hide-details
-                  :disabled="!embarqueStore.esEditable || embarqueStore.submitting"
-                />
-              </v-col>
-              <v-col cols="12" md="3" class="d-flex align-end">
-                <v-btn
-                  block
-                  color="primary"
-                  variant="tonal"
-                  class="font-weight-bold premium-btn"
-                  :disabled="!embarqueStore.esEditable || embarqueStore.submitting || !embarqueStore.lineas.length"
-                  @click="aplicarCajasSemana"
-                >
-                  Aplicar a Lineas
-                </v-btn>
-              </v-col>
-              <v-col cols="12" md="4">
-                <label class="custom-label">Buscar Voucher por Fecha</label>
-                <v-menu v-model="menuFechaBusqueda" :close-on-content-click="false" location="bottom center">
-                  <template #activator="{ props }">
-                    <v-text-field
-                      v-bind="props"
-                      :model-value="fechaBusqueda"
-                      density="comfortable"
-                      variant="outlined"
-                      hide-details
-                      readonly
-                      prepend-inner-icon="mdi-magnify"
-                      :disabled="embarqueStore.submitting"
-                    />
-                  </template>
-                  <v-date-picker
-                    v-model="fechaBusquedaPicker"
-                    color="secondary"
-                    :min="fechaMinima"
-                    :max="fechaMaxima"
-                    @update:model-value="menuFechaBusqueda = false"
-                  />
-                </v-menu>
-              </v-col>
-              <v-col cols="12" md="3">
-                <label class="custom-label">Buscar por Numero</label>
-                <v-text-field
-                  v-model="numeroVoucherBusqueda"
-                  density="comfortable"
-                  variant="outlined"
-                  hide-details
-                  clearable
-                  placeholder="VCH-2026-0001"
-                  prepend-inner-icon="mdi-pound"
-                  :disabled="embarqueStore.submitting"
-                  @keyup.enter="buscarVouchers"
-                />
-              </v-col>
-              <v-col cols="12" md="2">
-                <label class="custom-label">Modo Numero</label>
-                <v-btn-toggle
-                  v-model="modoBusquedaNumero"
-                  mandatory
-                  density="comfortable"
-                  divided
-                  color="secondary"
-                  class="w-100"
-                >
-                  <v-btn value="contains" size="small">Parcial</v-btn>
-                  <v-btn value="exact" size="small">Exacto</v-btn>
-                </v-btn-toggle>
-              </v-col>
-            </v-row>
-
-            <v-row class="mt-3" v-if="resumenFincas.length">
-              <v-col cols="12">
-                <v-card variant="tonal" color="primary" class="rounded-lg border">
-                  <v-card-text class="pa-4">
-                    <div class="text-subtitle-1 font-weight-black mb-3">Distribucion de Cajas por Finca</div>
-                    <v-table density="compact">
-                      <thead>
-                        <tr>
-                          <th>Finca</th>
-                          <th class="text-right">Buenos</th>
-                          <th class="text-right">Total</th>
-                          <th style="width: 170px;">Cajas Finca</th>
-                          <th class="text-right">Ratio Com</th>
-                          <th class="text-right">Ratio Op</th>
-                          <th></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="row in resumenFincas" :key="row.finca_id">
-                          <td>{{ row.finca_nombre }}</td>
-                          <td class="text-right">{{ row.racimos_buenos }}</td>
-                          <td class="text-right">{{ row.total_racimos }}</td>
-                          <td>
-                            <v-text-field
-                              v-model.number="cajasPorFinca[row.finca_id]"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              density="compact"
-                              variant="outlined"
-                              hide-details
-                              :disabled="!embarqueStore.esEditable || embarqueStore.submitting"
-                            />
-                          </td>
-                          <td class="text-right">{{ row.ratio_comercial.toFixed(4) }}</td>
-                          <td class="text-right">{{ row.ratio_operativo.toFixed(4) }}</td>
-                          <td class="text-right">
-                            <v-btn
-                              size="small"
-                              color="primary"
-                              variant="tonal"
-                              :disabled="!embarqueStore.esEditable || embarqueStore.submitting"
-                              @click="aplicarCajasFinca(row.finca_id)"
-                            >
-                              Aplicar
-                            </v-btn>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </v-table>
-                  </v-card-text>
-                </v-card>
-              </v-col>
-            </v-row>
-
-            <v-row class="mt-2">
-              <v-col cols="12">
-                <v-alert
-                  v-if="avisoEmpresa"
-                  type="warning"
-                  variant="tonal"
-                  density="comfortable"
-                  class="mb-3"
-                >
-                  {{ avisoEmpresa }}
-                </v-alert>
-                <label class="custom-label">Observaciones</label>
-                <v-textarea
-                  v-model="embarqueStore.observaciones"
-                  rows="2"
-                  density="comfortable"
-                  variant="outlined"
-                  hide-details
-                  :disabled="!embarqueStore.esEditable || embarqueStore.submitting"
-                />
-              </v-col>
-            </v-row>
-          </v-card-text>
-        </v-card>
-
-        <v-alert
-          v-if="embarqueStore.error"
-          type="error"
-          variant="tonal"
-          class="mb-4"
-        >
-          {{ embarqueStore.error }}
-        </v-alert>
-        <v-alert
-          v-else-if="mensajeBusqueda"
-          type="info"
-          variant="tonal"
-          class="mb-4"
-        >
-          {{ mensajeBusqueda }}
-        </v-alert>
-
-        <v-card variant="flat" class="rounded-xl mb-6 table-card border shadow-sm bg-surface premium-panel reveal-block reveal-4">
-          <v-card-text class="pa-0">
-            <div class="panel-head px-4 py-3 border-b-soft">
-              <div class="panel-head__left">
-                <v-avatar size="30" color="secondary" variant="tonal"><v-icon size="17">mdi-table</v-icon></v-avatar>
-                <div class="panel-title">Detalle por Cinta y Finca</div>
-              </div>
-            </div>
-            <v-table density="comfortable" fixed-header :height="lineasTableHeight">
-              <thead>
-                <tr>
-                  <th>Finca</th>
-                  <th>Cinta</th>
-                  <th>Sem</th>
-                  <th class="text-right">Buenos</th>
-                  <th class="text-right">Rechazo</th>
-                  <th class="text-right">Total</th>
-                  <th class="text-right">Cajas</th>
-                  <th class="text-right">Ratio Com</th>
-                  <th class="text-right">Ratio Op</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(linea, idx) in embarqueStore.lineas" :key="`${linea.finca_id}-${linea.calendario_id}-${idx}`">
-                  <td>{{ linea.finca_nombre }}</td>
-                  <td>{{ linea.cinta_color }}</td>
-                  <td>{{ linea.semana_enfunde ?? '--' }}</td>
-                  <td class="text-right">{{ linea.racimos_buenos }}</td>
-                  <td class="text-right">{{ linea.racimos_rechazo }}</td>
-                  <td class="text-right">{{ linea.total_racimos }}</td>
-                  <td class="text-right" style="width: 160px;">
-                    <v-text-field
-                      :model-value="linea.cajas_embarcadas"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      density="compact"
-                      variant="outlined"
-                      hide-details
-                      class="text-right"
-                      :disabled="!embarqueStore.esEditable || embarqueStore.submitting"
-                      @update:model-value="(v) => embarqueStore.setCajaLinea(idx, Number(v))"
-                      @blur="embarqueStore.normalizarLinea(idx)"
-                    />
-                  </td>
-                  <td class="text-right">{{ linea.ratio_comercial_linea.toFixed(4) }}</td>
-                  <td class="text-right">{{ linea.ratio_operativo_linea.toFixed(4) }}</td>
-                </tr>
-
-                <tr v-if="!embarqueStore.lineas.length">
-                  <td colspan="9" class="text-center py-10 text-medium-emphasis">No hay lineas cargadas para esta fecha.</td>
-                </tr>
-              </tbody>
-            </v-table>
-          </v-card-text>
-        </v-card>
-
-        <v-row>
-          <v-col cols="12" md="8">
-            <v-card variant="flat" class="rounded-xl totals-card border shadow-sm bg-surface premium-panel reveal-block reveal-5">
-              <v-card-text class="pa-6 d-flex flex-wrap gap-6">
-                <div class="kpi-box">
-                  <div class="text-caption text-medium-emphasis">Racimos Buenos</div>
-                  <div class="text-h4 font-weight-black">{{ embarqueStore.totales.racimos_buenos }}</div>
-                </div>
-                <div class="kpi-box">
-                  <div class="text-caption text-medium-emphasis">Rechazo</div>
-                  <div class="text-h4 font-weight-black">{{ embarqueStore.totales.racimos_rechazo }}</div>
-                </div>
-                <div class="kpi-box">
-                  <div class="text-caption text-medium-emphasis">Total Racimos</div>
-                  <div class="text-h4 font-weight-black">{{ embarqueStore.totales.total_racimos }}</div>
-                </div>
-                <div class="kpi-box">
-                  <div class="text-caption text-medium-emphasis">Total Cajas</div>
-                  <div class="text-h4 font-weight-black">{{ embarqueStore.totales.total_cajas.toFixed(2) }}</div>
-                </div>
-                <div class="kpi-box kpi-highlight">
-                  <div class="text-caption text-medium-emphasis">Ratio Comercial</div>
-                  <div class="text-h4 font-weight-black text-primary">{{ embarqueStore.totales.ratio_comercial_global.toFixed(4) }}</div>
-                </div>
-                <div class="kpi-box">
-                  <div class="text-caption text-medium-emphasis">Ratio Operativo</div>
-                  <div class="text-h4 font-weight-black">{{ embarqueStore.totales.ratio_operativo_global.toFixed(4) }}</div>
-                </div>
-              </v-card-text>
-            </v-card>
-          </v-col>
-
-          <v-col cols="12" md="4">
-            <v-card variant="flat" class="rounded-xl actions-card border shadow-sm bg-surface premium-panel sticky-actions reveal-block reveal-6">
-              <v-card-text class="pa-5 d-flex flex-column gap-2">
-                <div class="panel-title mb-2">Acciones del Documento</div>
-                <v-btn
-                  block
-                  color="primary"
-                  class="font-weight-black premium-btn btn-save"
-                  :loading="embarqueStore.submitting"
-                  :disabled="embarqueStore.submitting || !embarqueStore.esEditable || !embarqueStore.lineas.length"
-                  @click="guardar"
-                >
-                  Guardar Borrador
-                </v-btn>
-
-                <v-btn
-                  block
-                  color="success"
-                  class="font-weight-black premium-btn btn-confirm"
-                  :loading="embarqueStore.submitting"
-                  :disabled="embarqueStore.submitting || !embarqueStore.puedeConfirmar || !canConfirmVoucher"
-                  @click="confirmar"
-                >
-                  Confirmar Voucher
-                </v-btn>
-                <v-alert
-                  v-if="motivoBloqueoConfirmar"
-                  type="info"
-                  variant="tonal"
-                  density="compact"
-                  class="mt-1"
-                >
-                  {{ motivoBloqueoConfirmar }}
-                </v-alert>
-
-                <v-btn
-                  block
-                  color="error"
-                  variant="tonal"
-                  class="font-weight-bold premium-btn btn-cancel"
-                  :disabled="embarqueStore.submitting || !embarqueStore.voucherActual || !embarqueStore.esEditable || !canCancelVoucher"
-                  @click="abrirDialogoAnular"
-                >
-                  Anular Voucher
-                </v-btn>
-
-                <v-btn
-                  block
-                  color="secondary"
-                  variant="outlined"
-                  class="font-weight-bold mt-2 premium-btn"
-                  :disabled="embarqueStore.submitting || !embarqueStore.lineas.length"
-                  @click="imprimirVoucher"
-                >
-                  Imprimir / PDF
-                </v-btn>
-              </v-card-text>
-            </v-card>
-          </v-col>
-        </v-row>
-
-        <v-card variant="flat" class="rounded-xl mt-6 border shadow-sm bg-surface premium-panel reveal-block reveal-7">
-          <v-card-text class="pa-4">
-            <div class="text-h6 font-weight-black mb-3 section-title">Vouchers del dia</div>
-            <v-table density="compact">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Fecha</th>
-                  <th>Estado</th>
-                  <th class="text-right">Racimos</th>
-                  <th class="text-right">Cajas</th>
-                  <th class="text-right">Ratio</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in embarqueStore.listado" :key="item.id">
-                  <td>{{ item.numero_voucher }}</td>
-                  <td>{{ item.fecha_embarque }}</td>
-                  <td>
-                    <v-chip size="small" :color="colorEstado(item.estado)">{{ item.estado }}</v-chip>
-                  </td>
-                  <td class="text-right">{{ item.total_racimos }}</td>
-                  <td class="text-right">{{ item.total_cajas.toFixed(2) }}</td>
-                  <td class="text-right">{{ item.ratio_comercial_global.toFixed(4) }}</td>
-                  <td class="text-right">
-                    <v-btn size="small" variant="text" color="primary" @click="embarqueStore.cargarVoucher(item.id)">Abrir</v-btn>
-                  </td>
-                </tr>
-                <tr v-if="!embarqueStore.listado.length">
-                  <td colspan="7" class="text-center text-medium-emphasis py-6">Sin vouchers para la fecha seleccionada.</td>
-                </tr>
-              </tbody>
-            </v-table>
-          </v-card-text>
-        </v-card>
+          <VoucherListadoTable
+            :embarque-store="embarqueStore"
+            :color-estado="colorEstado"
+          />
         </div>
       </v-col>
     </v-row>
 
-    <v-dialog v-model="dialogAnular" max-width="520">
-      <v-card>
-        <v-card-title class="text-h6 font-weight-bold">Anular Voucher</v-card-title>
-        <v-card-text>
-          <v-textarea
-            v-model="motivoAnulacion"
-            label="Motivo de anulacion"
-            rows="3"
-            variant="outlined"
-          />
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="dialogAnular = false">Cancelar</v-btn>
-          <v-btn color="error" :loading="embarqueStore.submitting" @click="anular">Confirmar Anulacion</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <VoucherAnularDialog
+      v-model="dialogAnular"
+      v-model:motivo-anulacion="motivoAnulacion"
+      :submitting="embarqueStore.submitting"
+      @confirm="anular"
+    />
   </v-container>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { storeToRefs } from 'pinia';
-import { useDisplay } from 'vuetify';
-import { useFincaStore } from '@/stores/fincaStore';
-import { useEmbarqueStore } from '@/stores/embarque/embarqueStore';
-import { useAuthStore } from '@/stores/auth/authStore';
-import type { EmbarqueEstado } from '@/services/embarque/embarqueTypes';
-import { cosechaService } from '@/services/cosecha/cosechaService';
-import { getCurrentIsoWeekInfo } from '@/utils/dateIso';
+import ViewHelpHint from '@/components/ui/ViewHelpHint.vue';
+import VoucherAnularDialog from '@/components/embarque/VoucherAnularDialog.vue';
+import VoucherHeroSection from '@/components/embarque/VoucherHeroSection.vue';
+import VoucherLineasTable from '@/components/embarque/VoucherLineasTable.vue';
+import VoucherListadoTable from '@/components/embarque/VoucherListadoTable.vue';
+import VoucherPrintSheet from '@/components/embarque/VoucherPrintSheet.vue';
+import VoucherSummaryCard from '@/components/embarque/VoucherSummaryCard.vue';
+import VoucherWorkflowPanel from '@/components/embarque/VoucherWorkflowPanel.vue';
+import { useVoucherEmbarque } from '@/composables/useVoucherEmbarque';
 
-const fincaStore = useFincaStore();
-const embarqueStore = useEmbarqueStore();
-const authStore = useAuthStore();
-const { smAndDown } = useDisplay();
-const { fincas } = storeToRefs(fincaStore);
-
-const dialogAnular = ref(false);
-const motivoAnulacion = ref('');
-const cajasSemanaInput = ref<number>(0);
-const avisoEmpresa = ref('');
-const menuFecha = ref(false);
-const fechaVoucherPicker = ref<Date | null>(new Date());
-const menuFechaBusqueda = ref(false);
-const fechaBusqueda = ref(new Date().toISOString().split('T')[0]);
-const fechaBusquedaPicker = ref<Date | null>(new Date());
-const numeroVoucherBusqueda = ref('');
-const modoBusquedaNumero = ref<'contains' | 'exact'>('contains');
-const mensajeBusqueda = ref('');
-const fechasOcupadas = ref<Record<string, { cosecha: boolean; voucher: boolean }>>({});
-const cajasPorFinca = ref<Record<number, number>>({});
-const animarCambioVoucher = ref(false);
-let timerAnimacionVoucher: ReturnType<typeof setTimeout> | null = null;
-
-const chipEstado = computed(() => {
-  const estado = embarqueStore.voucherActual?.estado;
-  if (estado === 'CONFIRMADO') return { text: 'CONFIRMADO', color: 'success' };
-  if (estado === 'ANULADO') return { text: 'ANULADO', color: 'error' };
-  return { text: 'BORRADOR', color: 'warning' };
-});
-const voucherEstadoClass = computed(() => {
-  const estado = embarqueStore.voucherActual?.estado || 'BORRADOR';
-  if (estado === 'CONFIRMADO') return 'voucher-theme-confirmado';
-  if (estado === 'ANULADO') return 'voucher-theme-anulado';
-  return 'voucher-theme-borrador';
-});
-const canConfirmVoucher = computed(() => authStore.can('action.voucher.confirm'));
-const canCancelVoucher = computed(() => authStore.can('action.voucher.cancel'));
-const motivoBloqueoConfirmar = computed(() => {
-  if (embarqueStore.submitting) return '';
-  if (!canConfirmVoucher.value) return 'Tu rol no tiene permiso para confirmar vouchers.';
-  if (!embarqueStore.voucherActual?.id) return 'Primero guarda el voucher como borrador.';
-  if (embarqueStore.voucherActual?.estado === 'CONFIRMADO') return 'Este voucher ya esta confirmado.';
-  if (embarqueStore.voucherActual?.estado === 'ANULADO') return 'Un voucher anulado no se puede confirmar.';
-  if (!embarqueStore.puedeConfirmar) return 'Ingresa cajas embarcadas para poder confirmar.';
-  return '';
-});
-
-const fincaPorId = computed(() => {
-  const map = new Map<number, { empresa_id: number }>();
-  for (const finca of fincas.value) {
-    map.set(finca.id, { empresa_id: finca.empresa_id });
-  }
-  return map;
-});
-
-const empresaBloqueadaId = computed<number | null>(() => {
-  const primerId = embarqueStore.fincaIds[0];
-  if (!primerId) return null;
-  return fincaPorId.value.get(primerId)?.empresa_id ?? null;
-});
-
-const fincasDisponibles = computed(() => {
-  if (!empresaBloqueadaId.value) return fincas.value;
-  return fincas.value.filter((finca) => finca.empresa_id === empresaBloqueadaId.value);
-});
-const resumenFincas = computed(() => {
-  const map = new Map<number, {
-    finca_id: number;
-    finca_nombre: string;
-    racimos_buenos: number;
-    total_racimos: number;
-    total_cajas: number;
-    ratio_comercial: number;
-    ratio_operativo: number;
-  }>();
-
-  for (const linea of embarqueStore.lineas) {
-    const key = linea.finca_id;
-    const base = map.get(key) || {
-      finca_id: key,
-      finca_nombre: linea.finca_nombre || `Finca ${key}`,
-      racimos_buenos: 0,
-      total_racimos: 0,
-      total_cajas: 0,
-      ratio_comercial: 0,
-      ratio_operativo: 0,
-    };
-    base.racimos_buenos += Number(linea.racimos_buenos || 0);
-    base.total_racimos += Number(linea.total_racimos || 0);
-    base.total_cajas += Number(linea.cajas_embarcadas || 0);
-    map.set(key, base);
-  }
-
-  return Array.from(map.values()).map((row) => ({
-    ...row,
-    total_cajas: Number(row.total_cajas.toFixed(2)),
-    ratio_comercial:
-      row.racimos_buenos > 0 ? Number((row.total_cajas / row.racimos_buenos).toFixed(4)) : 0,
-    ratio_operativo:
-      row.total_racimos > 0 ? Number((row.total_cajas / row.total_racimos).toFixed(4)) : 0,
-  }));
-});
-const fincasSeleccionadasTexto = computed(() => {
-  const ids = new Set(embarqueStore.fincaIds);
-  const nombres = fincas.value
-    .filter((finca) => ids.has(finca.id))
-    .map((finca) => finca.nombre)
-    .filter(Boolean);
-  return nombres.length ? nombres.join(', ') : 'No especificadas';
-});
-
-const fechaMaxima = computed(() => new Date());
-const fechaMinima = computed(() => {
-  const f = new Date();
-  f.setFullYear(f.getFullYear() - 1);
-  return f;
-});
-
-const estadoFechaSeleccionada = computed(() => fechasOcupadas.value[embarqueStore.fechaEmbarque] || null);
-const lineasTableHeight = computed(() => (smAndDown.value ? '320px' : '420px'));
-const fechaImpresionTexto = computed(() =>
-  new Date().toLocaleString('es-EC', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }),
-);
-
-function colorEstado(estado: EmbarqueEstado): string {
-  if (estado === 'CONFIRMADO') return 'success';
-  if (estado === 'ANULADO') return 'error';
-  return 'warning';
-}
-
-function toIsoDate(value: Date): string {
-  return new Date(value.getTime() - value.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 10);
-}
-
-function toIsoDateUnknown(value: unknown): string | null {
-  if (value instanceof Date) return toIsoDate(value);
-  if (typeof value === 'string') return value.slice(0, 10);
-  if (value && typeof value === 'object') {
-    const raw = value as Record<string, unknown>;
-    if (raw.date instanceof Date) return toIsoDate(raw.date);
-    if (typeof raw.date === 'string') return raw.date.slice(0, 10);
-    if (typeof raw.isoDate === 'string') return raw.isoDate.slice(0, 10);
-    if (typeof raw.formatted === 'string') return raw.formatted.slice(0, 10);
-  }
-  return null;
-}
-
-function fechaVoucherPermitida(value: unknown): boolean {
-  const iso = toIsoDateUnknown(value);
-  if (!iso) return false;
-  const estado = fechasOcupadas.value[iso];
-  if (!estado?.voucher) return true;
-  return iso === embarqueStore.fechaEmbarque;
-}
-
-function syncPickerWithStoreDate() {
-  const parsed = new Date(`${embarqueStore.fechaEmbarque}T00:00:00`);
-  fechaVoucherPicker.value = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-}
-
-function syncBusquedaPicker() {
-  const parsed = new Date(`${fechaBusqueda.value}T00:00:00`);
-  fechaBusquedaPicker.value = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-}
-
-function semanaIsoDesdeFecha(fechaISO: string): number {
-  const base = String(fechaISO || '').trim();
-  const fechaValida = /^\d{4}-\d{2}-\d{2}$/.test(base)
-    ? `${base}T00:00:00`
-    : new Date();
-  const { semana } = getCurrentIsoWeekInfo(fechaValida);
-  return Math.max(1, Math.min(53, Number(semana) || 1));
-}
-
-function syncSemanaCorteAuto(force = false) {
-  // No sobreescribir vouchers ya cargados desde backend.
-  if (!force && embarqueStore.voucherActual) return;
-  embarqueStore.semanaCorte = semanaIsoDesdeFecha(embarqueStore.fechaEmbarque);
-}
-
-async function cargarFechasOcupadas() {
-  const ids = embarqueStore.fincaIds.length
-    ? embarqueStore.fincaIds
-    : fincaStore.fincaSeleccionadaId
-      ? [fincaStore.fincaSeleccionadaId]
-      : [];
-  if (!ids.length) {
-    fechasOcupadas.value = {};
-    return;
-  }
-
-  try {
-    const data = await cosechaService.getFechasOcupadas({
-      finca_ids: ids.join(','),
-      fecha_desde: toIsoDate(fechaMinima.value),
-      fecha_hasta: toIsoDate(fechaMaxima.value),
-    });
-    const map: Record<string, { cosecha: boolean; voucher: boolean }> = {};
-    for (const item of data.fechas || []) {
-      if (!item?.fecha) continue;
-      map[item.fecha] = {
-        cosecha: Boolean(item.cosecha),
-        voucher: Boolean(item.voucher),
-      };
-    }
-    fechasOcupadas.value = map;
-  } catch {
-    fechasOcupadas.value = {};
-  }
-}
-
-async function refrescarBase() {
-  mensajeBusqueda.value = '';
-  embarqueStore.resetFormulario();
-  syncSemanaCorteAuto(true);
-  await embarqueStore.cargarPreliquidacion();
-  cajasSemanaInput.value = 0;
-  fechaBusqueda.value = embarqueStore.fechaEmbarque;
-  syncBusquedaPicker();
-  await embarqueStore.cargarListado(fechaBusqueda.value);
-}
-
-function aplicarCajasSemana() {
-  embarqueStore.setCajasTotalesSemana(cajasSemanaInput.value);
-}
-
-function aplicarCajasFinca(fincaId: number) {
-  embarqueStore.setCajasPorFinca(fincaId, Number(cajasPorFinca.value[fincaId] || 0));
-}
-
-async function guardar() {
-  mensajeBusqueda.value = '';
-  await embarqueStore.guardarVoucher();
-  fechaBusqueda.value = embarqueStore.fechaEmbarque;
-  syncBusquedaPicker();
-  await embarqueStore.cargarListado(fechaBusqueda.value);
-}
-
-async function confirmar() {
-  if (!canConfirmVoucher.value) {
-    embarqueStore.error = 'No tiene permisos para confirmar vouchers.';
-    return;
-  }
-  mensajeBusqueda.value = '';
-  await embarqueStore.confirmarVoucher();
-  fechaBusqueda.value = embarqueStore.fechaEmbarque;
-  syncBusquedaPicker();
-  await embarqueStore.cargarListado(fechaBusqueda.value);
-}
-
-function abrirDialogoAnular() {
-  if (!canCancelVoucher.value) {
-    embarqueStore.error = 'No tiene permisos para anular vouchers.';
-    return;
-  }
-  dialogAnular.value = true;
-}
-
-async function anular() {
-  if (!canCancelVoucher.value) {
-    embarqueStore.error = 'No tiene permisos para anular vouchers.';
-    return;
-  }
-  await embarqueStore.anularVoucher(motivoAnulacion.value);
-  if (!embarqueStore.error) {
-    dialogAnular.value = false;
-    motivoAnulacion.value = '';
-    await embarqueStore.cargarListado(fechaBusqueda.value);
-  }
-}
-
-async function buscarVouchers() {
-  await embarqueStore.buscarVouchersAvanzado({
-    fecha: fechaBusqueda.value,
-    numeroVoucher: numeroVoucherBusqueda.value,
-    numeroVoucherExacto: modoBusquedaNumero.value === 'exact',
-    fechaDesde: toIsoDate(fechaMinima.value),
-    fechaHasta: toIsoDate(fechaMaxima.value),
-  });
-  if (!embarqueStore.error && embarqueStore.listado.length === 0) {
-    mensajeBusqueda.value = numeroVoucherBusqueda.value
-      ? `No se encontro voucher con numero "${numeroVoucherBusqueda.value}".`
-      : `No hay vouchers para ${fechaBusqueda.value}.`;
-    return;
-  }
-  mensajeBusqueda.value = '';
-}
-
-watch(
-  () => embarqueStore.fechaEmbarque,
-  () => {
-    syncPickerWithStoreDate();
-    syncSemanaCorteAuto();
-    if (!fechaBusqueda.value) {
-      fechaBusqueda.value = embarqueStore.fechaEmbarque;
-      syncBusquedaPicker();
-    }
-  },
-);
-
-watch(
-  () => embarqueStore.fincaIds.slice(),
-  async (ids) => {
-    const normalizados = Array.from(new Set(ids.filter((id) => Number(id) > 0)));
-    if (!normalizados.length) {
-      avisoEmpresa.value = '';
-      await cargarFechasOcupadas();
-      mensajeBusqueda.value = '';
-      await embarqueStore.cargarListado(fechaBusqueda.value);
-      return;
-    }
-
-    const empresaObjetivo = fincaPorId.value.get(normalizados[0])?.empresa_id;
-    const permitidos = normalizados.filter(
-      (id) => fincaPorId.value.get(id)?.empresa_id === empresaObjetivo,
-    );
-
-    if (permitidos.length !== normalizados.length) {
-      embarqueStore.fincaIds = permitidos;
-      avisoEmpresa.value = 'Solo se permiten fincas de una misma empresa por voucher.';
-      return;
-    }
-
-    avisoEmpresa.value = '';
-    await cargarFechasOcupadas();
-    mensajeBusqueda.value = '';
-    await embarqueStore.cargarListado(fechaBusqueda.value);
-  },
-);
-
-watch(fechaVoucherPicker, (value) => {
-  if (!value) return;
-  embarqueStore.fechaEmbarque = toIsoDate(value);
-});
-
-watch(fechaBusquedaPicker, (value) => {
-  if (!value) return;
-  fechaBusqueda.value = toIsoDate(value);
-});
-
-watch(
+const {
+  embarqueStore,
+  authStore,
+  dialogAnular,
+  motivoAnulacion,
+  cajasSemanaInput,
+  avisoEmpresa,
+  menuFecha,
+  fechaVoucherPicker,
+  menuFechaBusqueda,
+  fechaBusqueda,
+  fechaBusquedaPicker,
+  numeroVoucherBusqueda,
+  modoBusquedaNumero,
+  mensajeBusqueda,
+  cajasPorFinca,
+  animarCambioVoucher,
+  chipEstado,
+  voucherEstadoClass,
+  canConfirmVoucher,
+  canCancelVoucher,
+  motivoBloqueoConfirmar,
+  fincasDisponibles,
   resumenFincas,
-  (rows) => {
-    const next: Record<number, number> = {};
-    for (const row of rows) {
-      const current = cajasPorFinca.value[row.finca_id];
-      next[row.finca_id] =
-        typeof current === 'number' && Number.isFinite(current)
-          ? current
-          : Number(row.total_cajas.toFixed(2));
-    }
-    cajasPorFinca.value = next;
-  },
-  { immediate: true },
-);
-
-onMounted(async () => {
-  await fincaStore.obtenerFincas();
-  syncSemanaCorteAuto(true);
-  syncPickerWithStoreDate();
-  fechaBusqueda.value = embarqueStore.fechaEmbarque;
-  syncBusquedaPicker();
-  await cargarFechasOcupadas();
-  mensajeBusqueda.value = '';
-  await embarqueStore.cargarListado(fechaBusqueda.value);
-});
-
-watch(
-  () => embarqueStore.voucherActual?.id ?? null,
-  (next, prev) => {
-    if (!next || next === prev) return;
-    animarCambioVoucher.value = false;
-    requestAnimationFrame(() => {
-      animarCambioVoucher.value = true;
-      if (timerAnimacionVoucher) clearTimeout(timerAnimacionVoucher);
-      timerAnimacionVoucher = setTimeout(() => {
-        animarCambioVoucher.value = false;
-      }, 520);
-    });
-  },
-);
-
-onBeforeUnmount(() => {
-  if (timerAnimacionVoucher) clearTimeout(timerAnimacionVoucher);
-});
-
-function imprimirVoucher() {
-  window.print();
-}
+  fincasSeleccionadasTexto,
+  fechaMaxima,
+  fechaMinima,
+  estadoFechaSeleccionada,
+  lineasTableHeight,
+  fechaImpresionTexto,
+  colorEstado,
+  fechaVoucherPermitida,
+  refrescarBase,
+  aplicarCajasSemana,
+  aplicarCajasFinca,
+  guardar,
+  confirmar,
+  abrirDialogoAnular,
+  anular,
+  buscarVouchers,
+  imprimirVoucher,
+} = useVoucherEmbarque();
 </script>
 
-<style scoped>
-.transition-colors { transition: background-color 0.3s ease, color 0.3s ease; }
+<style>
+.voucher-transition-colors { transition: background-color 0.25s ease, color 0.25s ease; }
 .voucher-shell { position: relative; z-index: 1; }
+.voucher-min-h-screen { min-height: 100vh; }
+
 .voucher-shell {
   --voucher-accent-rgb: var(--v-theme-primary);
   --voucher-accent-2-rgb: var(--v-theme-secondary);
-  --voucher-accent-soft: rgba(var(--v-theme-primary), 0.2);
 }
 
 .voucher-theme-borrador {
   --voucher-accent-rgb: var(--v-theme-warning);
   --voucher-accent-2-rgb: var(--v-theme-primary);
-  --voucher-accent-soft: rgba(var(--v-theme-warning), 0.22);
 }
 
 .voucher-theme-confirmado {
   --voucher-accent-rgb: var(--v-theme-success);
   --voucher-accent-2-rgb: var(--v-theme-primary);
-  --voucher-accent-soft: rgba(var(--v-theme-success), 0.2);
 }
 
 .voucher-theme-anulado {
   --voucher-accent-rgb: var(--v-theme-error);
   --voucher-accent-2-rgb: var(--v-theme-secondary);
-  --voucher-accent-soft: rgba(var(--v-theme-error), 0.2);
 }
 
 .voucher-bg::before {
@@ -1137,444 +201,369 @@ function imprimirVoucher() {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 9% 7%, rgba(var(--voucher-accent-rgb), 0.2), transparent 36%),
-    radial-gradient(circle at 93% 90%, rgba(var(--voucher-accent-2-rgb), 0.17), transparent 33%),
-    conic-gradient(from 220deg at 65% 40%, rgba(var(--voucher-accent-rgb), 0.08), transparent 32%, rgba(var(--voucher-accent-2-rgb), 0.08), transparent 70%);
   z-index: -1;
-}
-
-.border { border: 1px solid rgba(var(--v-border-color), 0.12) !important; }
-.shadow-sm { box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06) !important; }
-.bg-background-opacity { background-color: rgba(var(--v-theme-on-surface), 0.03) !important; }
-
-.hero-card {
   background:
-    linear-gradient(112deg, rgba(var(--voucher-accent-rgb), 0.3), rgba(var(--voucher-accent-2-rgb), 0.2) 58%, rgba(var(--voucher-accent-rgb), 0.11)),
-    rgb(var(--v-theme-surface));
-  overflow: hidden;
-  border-color: rgba(var(--voucher-accent-rgb), 0.32) !important;
-  box-shadow: 0 24px 46px rgba(15, 23, 42, 0.12) !important;
+    radial-gradient(circle at 5% 6%, rgba(var(--voucher-accent-rgb), 0.14), transparent 35%),
+    radial-gradient(circle at 96% 90%, rgba(var(--voucher-accent-2-rgb), 0.1), transparent 30%);
 }
 
-.voucher-redesign .hero-card :deep(.v-chip) {
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+.voucher-card-border { border: 1px solid rgba(var(--v-border-color), 0.14) !important; }
+.voucher-shadow-sm { box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08) !important; }
+.voucher-sticky-actions { position: sticky; top: 88px; }
+.print-header,
+.print-only { display: none; }
+
+.voucher-hero-alt {
+  background: linear-gradient(
+      120deg,
+      rgba(var(--voucher-accent-rgb), 0.2) 0%,
+      rgba(var(--voucher-accent-2-rgb), 0.14) 42%,
+      rgba(var(--v-theme-surface), 0.96) 100%
+    ) !important;
+  border-color: rgba(var(--voucher-accent-rgb), 0.3) !important;
 }
 
-.hero-card::after {
-  content: '';
-  position: absolute;
-  right: -40px;
-  top: -42px;
-  width: 240px;
-  height: 240px;
-  border-radius: 999px;
-  background: radial-gradient(circle at 35% 40%, rgba(var(--voucher-accent-rgb), 0.33), rgba(var(--voucher-accent-rgb), 0.06) 60%, transparent 80%);
-  filter: blur(1px);
+.hero-alt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
 }
 
-.hero-card::before {
-  content: '';
-  position: absolute;
-  left: -48px;
-  bottom: -66px;
-  width: 220px;
-  height: 220px;
-  border-radius: 999px;
-  background: radial-gradient(circle at 50% 50%, rgba(var(--voucher-accent-2-rgb), 0.22), transparent 70%);
-}
-
-.hero-title {
-  letter-spacing: -0.02em;
-  background: linear-gradient(95deg, rgba(var(--v-theme-on-surface), 1), rgba(var(--voucher-accent-rgb), 0.95));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent !important;
-  text-shadow: 0 10px 28px rgba(var(--voucher-accent-rgb), 0.2);
-}
-
-.section-eyebrow {
+.hero-alt-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
   font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+  color: rgba(var(--v-theme-on-surface), 0.68);
 }
 
-.section-title {
-  letter-spacing: -0.01em;
+.hero-alt-title {
+  margin: 6px 0;
+  font-size: clamp(1.55rem, 3vw, 2.1rem);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: rgb(var(--v-theme-on-surface));
 }
 
-.command-card {
-  border-style: dashed !important;
-  border-width: 1.5px !important;
+.hero-alt-subtitle {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(var(--v-theme-on-surface), 0.72);
 }
 
-.command-grid {
+.hero-alt-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) 1.4fr;
-  gap: 12px;
-  align-items: stretch;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.command-item {
-  border-radius: 14px;
-  padding: 12px 14px;
-  border: 1px solid rgba(var(--v-border-color), 0.2);
-  background: linear-gradient(
-    180deg,
-    rgba(var(--voucher-accent-rgb), 0.09),
-    rgba(var(--voucher-accent-rgb), 0.03)
-  );
+.metric-pill {
+  border: 1px solid rgba(var(--v-border-color), 0.24);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(var(--v-theme-surface), 0.7);
+  display: grid;
+  gap: 2px;
 }
 
-.command-label {
+.metric-pill span {
   font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: rgba(var(--v-theme-on-surface), 0.64);
 }
 
-.command-value {
-  margin-top: 5px;
-  font-size: 1.4rem;
-  line-height: 1;
+.metric-pill strong {
+  font-size: 1.15rem;
+  color: rgb(var(--v-theme-on-surface));
+  font-weight: 900;
+}
+
+.workflow-card,
+.summary-side-card,
+.detail-table-card,
+.vouchers-list-card {
+  background: linear-gradient(
+      175deg,
+      rgba(var(--v-theme-surface), 1),
+      rgba(var(--v-theme-surface), 0.965)
+    ) !important;
+}
+
+.workflow-step {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.workflow-step__index {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: rgb(var(--voucher-accent-rgb));
+  border: 1px solid rgba(var(--voucher-accent-rgb), 0.3);
+  background: rgba(var(--voucher-accent-rgb), 0.1);
+}
+
+.workflow-step__title {
+  font-size: 1rem;
+  font-weight: 900;
+  color: rgba(var(--v-theme-on-surface), 0.92);
+}
+
+.workflow-step__subtitle {
+  font-size: 0.85rem;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  margin-top: 2px;
+}
+
+.summary-side-title {
+  font-size: 1rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(var(--v-theme-on-surface), 0.86);
+}
+
+.summary-side-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.summary-stat {
+  border: 1px solid rgba(var(--v-border-color), 0.24);
+  border-radius: 10px;
+  padding: 9px 10px;
+  background: rgba(var(--v-theme-on-surface), 0.025);
+  display: grid;
+  gap: 3px;
+}
+
+.summary-stat--full {
+  grid-column: 1 / -1;
+}
+
+.summary-stat span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(var(--v-theme-on-surface), 0.62);
+}
+
+.summary-stat strong {
+  font-size: 1.06rem;
   font-weight: 900;
   color: rgb(var(--v-theme-on-surface));
 }
 
-.command-actions {
-  border-radius: 14px;
-  border: 1px solid rgba(var(--v-border-color), 0.2);
-  padding: 10px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  background: rgba(var(--v-theme-on-surface), 0.025);
-}
-
-.panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.panel-head__left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.panel-title {
-  font-size: 0.95rem;
-  line-height: 1.2;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-  font-weight: 900;
-  color: rgba(var(--v-theme-on-surface), 0.9);
-}
-
-.panel-subtitle {
-  font-size: 0.78rem;
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-weight: 600;
-}
-
-.border-b-soft {
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
-}
-
-.premium-panel {
-  backdrop-filter: blur(8px);
+.table-heading {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.22);
   background: linear-gradient(
-      170deg,
-      rgba(var(--v-theme-surface), 0.98),
-      rgba(var(--v-theme-surface), 0.93)
-    )
-    !important;
-  transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    180deg,
+    rgba(var(--voucher-accent-rgb), 0.1),
+    rgba(var(--v-theme-surface), 0.9)
+  );
 }
 
-.premium-panel:hover {
-  border-color: rgba(var(--voucher-accent-rgb), 0.28) !important;
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.1) !important;
-  transform: translateY(-2px);
+.table-heading__title {
+  font-size: 0.98rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
-.controls-card :deep(.v-field),
-.actions-card :deep(.v-btn) {
+.table-heading__subtitle {
+  font-size: 0.8rem;
+  color: rgba(var(--v-theme-on-surface), 0.64);
+}
+
+.voucher-custom-label {
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  color: rgba(var(--v-theme-on-surface), 0.66);
+}
+
+.workflow-card .v-field,
+.detail-table-card .v-field,
+.summary-side-card .v-btn {
   border-radius: 12px;
 }
 
-.controls-card :deep(.v-field__outline),
-.table-card :deep(.v-field__outline) {
-  --v-field-border-opacity: 0.2;
+.workflow-card .v-field__outline,
+.detail-table-card .v-field__outline {
+  --v-field-border-opacity: 0.26;
 }
 
-.controls-card :deep(.v-field--focused .v-field__outline) {
+.workflow-card .v-field--focused .v-field__outline,
+.detail-table-card .v-field--focused .v-field__outline {
   --v-field-border-opacity: 1;
   color: rgb(var(--voucher-accent-rgb));
 }
 
-.premium-btn {
-  letter-spacing: 0.05em;
-  min-height: 46px;
-  font-weight: 800 !important;
-  border-radius: 14px !important;
-  text-transform: none;
-  overflow: hidden;
-  position: relative;
-}
-
-.premium-btn::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, rgba(255, 255, 255, 0.22), transparent 50%);
-  opacity: 0;
-  transition: opacity 0.22s ease;
-}
-
-.premium-btn:hover::after {
-  opacity: 1;
-}
-
-.btn-save {
-  background: linear-gradient(100deg, rgba(var(--voucher-accent-rgb), 1), rgba(var(--voucher-accent-rgb), 0.82)) !important;
-}
-
-.btn-confirm {
-  background: linear-gradient(100deg, rgba(var(--voucher-accent-2-rgb), 1), rgba(var(--voucher-accent-2-rgb), 0.82)) !important;
-}
-
-.btn-cancel {
-  border: 1px solid rgba(var(--voucher-accent-rgb), 0.34);
-}
-
-.table-card :deep(.v-table) {
+.detail-table-card .v-table,
+.vouchers-list-card .v-table {
   background: transparent;
 }
 
-.table-card :deep(.v-table thead th) {
-  font-size: 0.74rem;
-  letter-spacing: 0.08em;
+.detail-table-card .v-table thead th,
+.vouchers-list-card .v-table thead th {
+  font-size: 0.72rem;
   text-transform: uppercase;
-  background: linear-gradient(
-    180deg,
-    rgba(var(--v-theme-on-surface), 0.06),
-    rgba(var(--v-theme-on-surface), 0.03)
-  );
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.25);
+  letter-spacing: 0.08em;
+  color: rgba(var(--v-theme-on-surface), 0.7);
+  border-bottom: 1px solid rgba(var(--v-border-color), 0.26);
+  background: rgba(var(--v-theme-on-surface), 0.03);
 }
 
-.table-card :deep(.v-table tbody tr:hover td) {
-  background: rgba(var(--voucher-accent-rgb), 0.06);
-}
-
-.table-card :deep(.v-table tbody td) {
+.detail-table-card .v-table tbody td,
+.vouchers-list-card .v-table tbody td {
   border-bottom: 1px solid rgba(var(--v-border-color), 0.14);
 }
 
-.table-card :deep(.v-table__wrapper),
-.controls-card :deep(.v-table__wrapper) {
+.detail-table-card .v-table tbody tr:hover td,
+.vouchers-list-card .v-table tbody tr:hover td {
+  background: rgba(var(--voucher-accent-rgb), 0.06);
+}
+
+.detail-table-card .v-table__wrapper,
+.workflow-card .v-table__wrapper,
+.vouchers-list-card .v-table__wrapper {
   overflow-x: auto;
 }
 
-.table-card :deep(table),
-.controls-card :deep(table) {
+.detail-table-card table,
+.workflow-card table,
+.vouchers-list-card table {
   min-width: 760px;
 }
 
-.kpi-box {
-  min-width: 140px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(var(--v-border-color), 0.2);
-  background: linear-gradient(
-    180deg,
-    rgba(var(--v-theme-on-surface), 0.04),
-    rgba(var(--v-theme-on-surface), 0.02)
-  );
-  transition: transform 0.2s ease, border-color 0.2s ease;
+.voucher-premium-btn {
+  min-height: 46px;
+  border-radius: 12px !important;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-weight: 800 !important;
 }
 
-.kpi-box:hover {
-  transform: translateY(-2px);
-  border-color: rgba(var(--voucher-accent-rgb), 0.25);
+.btn-save {
+  background: linear-gradient(110deg, rgba(var(--voucher-accent-rgb), 1), rgba(var(--voucher-accent-rgb), 0.84)) !important;
 }
 
-.kpi-highlight {
-  background: linear-gradient(130deg, rgba(var(--voucher-accent-rgb), 0.24), rgba(var(--voucher-accent-2-rgb), 0.12));
-  border-color: rgba(var(--voucher-accent-rgb), 0.35);
+.btn-confirm {
+  background: linear-gradient(110deg, rgba(var(--voucher-accent-2-rgb), 1), rgba(var(--voucher-accent-2-rgb), 0.84)) !important;
 }
 
-.custom-label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: rgba(var(--v-theme-on-surface), 0.65);
-  margin-bottom: 6px;
-}
-
-.gap-2 {
-  gap: 8px;
-}
-
-.min-h-screen {
-  min-height: 100vh;
-}
-
-.sticky-actions {
-  position: sticky;
-  top: 88px;
+.btn-cancel {
+  border: 1px solid rgba(var(--voucher-accent-rgb), 0.32);
 }
 
 .reveal-block {
   opacity: 0;
-  transform: translateY(16px) scale(0.995);
-  animation: voucher-reveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform: translateY(10px);
+  animation: voucher-reveal 0.45s ease forwards;
 }
 
-.reveal-1 { animation-delay: 0.03s; }
+.reveal-1 { animation-delay: 0.02s; }
 .reveal-2 { animation-delay: 0.08s; }
-.reveal-3 { animation-delay: 0.13s; }
-.reveal-4 { animation-delay: 0.17s; }
-.reveal-5 { animation-delay: 0.21s; }
-.reveal-6 { animation-delay: 0.25s; }
-.reveal-7 { animation-delay: 0.29s; }
+.reveal-3 { animation-delay: 0.12s; }
+.reveal-4 { animation-delay: 0.16s; }
+.reveal-5 { animation-delay: 0.2s; }
 
-.voucher-swap .premium-panel {
-  animation: voucher-swap-pulse 0.48s ease;
+.voucher-swap .voucher-hero-alt,
+.voucher-swap .workflow-card,
+.voucher-swap .summary-side-card,
+.voucher-swap .detail-table-card {
+  animation: voucher-swap-pulse 0.4s ease;
 }
 
 @keyframes voucher-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(16px) scale(0.995);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes voucher-swap-pulse {
-  0% {
-    filter: saturate(0.92);
-    transform: translateY(2px);
-  }
-  55% {
-    filter: saturate(1.08);
-    transform: translateY(0);
-  }
-  100% {
-    filter: saturate(1);
-    transform: translateY(0);
-  }
+  0% { filter: saturate(0.9); }
+  100% { filter: saturate(1); }
 }
 
-.print-header {
-  display: none;
-}
-
-.print-only {
-  display: none;
-}
-
-@media (max-width: 960px) {
-  .hero-title {
-    font-size: 2rem !important;
-  }
-
-  .command-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .command-actions {
-    grid-column: 1 / -1;
-    grid-template-columns: 1fr 1fr 1fr;
-  }
-
-  .premium-panel:hover {
-    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.06) !important;
-    transform: none;
-  }
-
-  .sticky-actions {
+@media (max-width: 1260px) {
+  .voucher-sticky-actions {
     position: static;
     top: auto;
   }
+}
 
-  .reveal-block {
-    animation-duration: 0.45s;
-    animation-delay: 0s !important;
+@media (max-width: 960px) {
+  .hero-alt-grid {
+    grid-template-columns: 1fr;
   }
 
-  .controls-card :deep(.v-field),
-  .controls-card :deep(.v-btn) {
-    min-height: 42px;
+  .hero-alt-metrics {
+    grid-template-columns: 1fr 1fr;
   }
 
-  .actions-card :deep(.v-btn) {
-    min-height: 44px;
+  .workflow-step {
+    grid-template-columns: 1fr;
   }
 
-  .kpi-box {
-    min-width: calc(50% - 8px);
-    flex: 1 1 calc(50% - 8px);
+  .summary-side-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 600px) {
   .voucher-bg::before {
     background:
-      radial-gradient(circle at 20% 4%, rgba(var(--v-theme-primary), 0.16), transparent 34%),
-      radial-gradient(circle at 80% 98%, rgba(var(--v-theme-secondary), 0.12), transparent 30%);
+      radial-gradient(circle at 10% 8%, rgba(var(--voucher-accent-rgb), 0.1), transparent 33%),
+      radial-gradient(circle at 95% 90%, rgba(var(--voucher-accent-2-rgb), 0.08), transparent 28%);
   }
 
-  .command-grid {
+  .hero-alt-title {
+    font-size: 1.5rem;
+  }
+
+  .hero-alt-metrics {
     grid-template-columns: 1fr;
   }
 
-  .command-actions {
+  .summary-side-grid {
     grid-template-columns: 1fr;
   }
 
-  .hero-title {
-    font-size: 1.65rem !important;
+  .workflow-step__index {
+    display: none;
   }
 
-  .section-title {
-    font-size: 1rem !important;
-  }
-
-  .controls-card :deep(.v-card-text) {
+  .workflow-card .v-card-text,
+  .summary-side-card .v-card-text {
     padding: 14px !important;
   }
 
-  .kpi-box {
-    min-width: 100%;
-    flex: 1 1 100%;
-  }
-
-  .section-eyebrow {
-    font-size: 0.66rem;
-  }
-
-  .table-card :deep(table),
-  .controls-card :deep(table) {
+  .detail-table-card table,
+  .workflow-card table,
+  .vouchers-list-card table {
     min-width: 680px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .reveal-block,
-  .voucher-swap .premium-panel {
+  .voucher-swap .voucher-hero-alt,
+  .voucher-swap .workflow-card,
+  .voucher-swap .summary-side-card,
+  .voucher-swap .detail-table-card {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
@@ -1585,20 +574,36 @@ function imprimirVoucher() {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 10mm;
+    margin: 9mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #111827 !important;
+  }
+
+  .v-app-bar,
+  .v-navigation-drawer,
+  .theme-switcher,
+  .header-shell,
+  .sidebar-shell {
+    display: none !important;
   }
 
   .voucher-print-root {
     background: #fff !important;
     padding: 0 !important;
+    margin: 0 !important;
     color: #111827 !important;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: var(--font-sans);
     font-size: 11px;
     line-height: 1.3;
+    min-height: auto !important;
   }
 
   .print-header {
-    display: block;
+    display: none !important;
     margin: 0 0 10px 0;
     border-bottom: 1px solid #d4d4d8;
     padding-bottom: 8px;
@@ -1610,6 +615,7 @@ function imprimirVoucher() {
 
   .print-only {
     display: block !important;
+    margin: 0 !important;
   }
 
   .print-sheet {
@@ -1679,6 +685,7 @@ function imprimirVoucher() {
   .print-sheet__lines table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
   }
 
   .print-sheet__totals {
@@ -1713,6 +720,8 @@ function imprimirVoucher() {
     border: 1px solid #e5e7eb;
     color: #111827;
     padding: 4px 5px;
+    word-break: break-word;
+    white-space: normal;
   }
 
   .print-sheet__obs {
@@ -1789,17 +798,25 @@ function imprimirVoucher() {
     display: none !important;
   }
 
-  :deep(.v-btn),
-  :deep(.v-field),
-  :deep(.v-alert) {
+  .v-btn,
+  .v-field,
+  .v-alert {
     display: none !important;
   }
 
-  :deep(.v-table) {
+  .v-table,
+  .v-snackbar,
+  .v-overlay,
+  .v-menu,
+  .v-tooltip {
+    display: none !important;
+  }
+
+  .v-table {
     border: 1px solid #d4d4d8;
   }
 
-  :deep(.v-table thead th) {
+  .v-table thead th {
     font-size: 9px !important;
     text-transform: uppercase;
     letter-spacing: 0.3px;
@@ -1808,7 +825,7 @@ function imprimirVoucher() {
     border-bottom: 1px solid #d1d5db !important;
   }
 
-  :deep(.v-table tbody td) {
+  .v-table tbody td {
     font-size: 10px !important;
     color: #111827 !important;
     border-bottom: 1px solid #e5e7eb !important;
@@ -1816,16 +833,16 @@ function imprimirVoucher() {
     padding-bottom: 6px !important;
   }
 
-  :deep(.v-card) {
+  .v-card {
     box-shadow: none !important;
     border: 1px solid #e5e7eb !important;
     break-inside: avoid;
     page-break-inside: avoid;
   }
 
-  :deep(.v-container),
-  :deep(.v-row),
-  :deep(.v-col) {
+  .v-container,
+  .v-row,
+  .v-col {
     max-width: 100% !important;
   }
 }

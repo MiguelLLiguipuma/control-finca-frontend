@@ -16,6 +16,23 @@ export type AppPermission =
 	| 'action.voucher.cancel'
 	| 'action.admin.manage';
 
+export const APP_PERMISSIONS: readonly AppPermission[] = [
+	'view.dashboard',
+	'view.balanza',
+	'view.calendario',
+	'view.enfunde',
+	'view.cosecha',
+	'view.voucher',
+	'view.empresas',
+	'view.fincas',
+	'view.usuarios',
+	'view.alertas',
+	'view.auditoria',
+	'action.voucher.confirm',
+	'action.voucher.cancel',
+	'action.admin.manage',
+] as const;
+
 const ROLE_MAP: Record<string, AppRole> = {
 	ADMIN: 'ADMIN',
 	ADMINISTRADOR: 'ADMIN',
@@ -74,6 +91,10 @@ export function normalizeRole(role?: string | null): AppRole {
 
 export function permissionsForRole(role?: string | null): AppPermission[] {
 	return PERMISSIONS_BY_ROLE[normalizeRole(role)];
+}
+
+export function isAppPermission(value: unknown): value is AppPermission {
+	return APP_PERMISSIONS.includes(value as AppPermission);
 }
 
 export function canAccess(permission: AppPermission, role?: string | null): boolean {

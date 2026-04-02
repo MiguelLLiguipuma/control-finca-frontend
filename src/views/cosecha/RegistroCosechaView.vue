@@ -1,6 +1,5 @@
 <template>
   <v-container fluid class="pa-4 pt-6 pb-16 bg-background min-h-screen transition-colors">
-    
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top">
       {{ snackbar.message }}
       <template #actions>
@@ -10,357 +9,72 @@
 
     <v-row justify="center">
       <v-col cols="12" class="cosecha-shell">
+        <CosechaHeaderCard
+          :semana-actual="cosechaStore.semanaActual"
+          :rango-corte-sugerido="cosechaStore.rangoCorteSugerido"
+          :total-digitado="cosechaStore.totalDigitado"
+          :estado-operacion="cosechaStore.estadoOperacion"
+          :estado-color="cosechaStore.estadoColor"
+        />
 
-        <v-card class="mb-6" elevation="3" rounded="xl" color="surface">
-          <v-card-text class="d-flex align-start align-sm-center py-4 flex-wrap gap-3">
-            <v-avatar color="primary" class="me-1 me-sm-4 hero-avatar" variant="tonal" size="56">
-              <v-icon size="32">mdi-tablet-dashboard</v-icon>
-            </v-avatar>
-            
-            <div class="flex-grow-1">
-              <h1 class="text-h4 font-weight-black mb-0 text-high-emphasis control-title">
-                Control de Campo · Sem {{ cosechaStore.semanaActual }}
-              </h1>
-              <div class="d-flex align-center text-primary font-weight-bold mt-2 header-subtitle">
-                <v-icon size="20" class="me-2">mdi-calendar-check</v-icon>
-                <span class="text-body-1">Corte sugerido: {{ cosechaStore.rangoCorteSugerido?.join(', ') }} semanas</span>
-              </div>
-            </div>
-
-            <div class="text-right d-none d-md-block header-kpi">
-              <div class="text-h2 font-weight-black text-primary line-height-1">
-                {{ cosechaStore.totalDigitado }}
-              </div>
-              <div class="text-body-2 font-weight-bold text-medium-emphasis">
-                RACIMOS DIGITADOS
-              </div>
-              <v-chip class="mt-2 font-weight-bold" size="default" label :color="cosechaStore.estadoColor">
-                {{ cosechaStore.estadoOperacion }}
-              </v-chip>
-            </div>
-          </v-card-text>
-        </v-card>
+        <ViewHelpHint
+          class="mb-4"
+          title="¿Qué hace esta pantalla de Liquidación de Cosecha?"
+          summary="Aquí registras racimos buenos y rechazo por cinta para una fecha específica. El sistema valida saldos y calcula totales automáticamente."
+          :steps="[
+            'Selecciona finca y fecha de corte.',
+            'Ingresa racimos buenos y rechazo por cada cinta.',
+            'Revisa el estado operativo y el total digitado.',
+            'Envía el reporte cuando ya esté validado.',
+          ]"
+          :notes="[
+            'No puedes exceder el saldo disponible en campo.',
+            'Las fechas ya registradas se muestran bloqueadas.',
+            'La predicción te ayuda a anticipar el próximo embarque.',
+          ]"
+        />
 
         <v-row>
           <v-col cols="12" lg="4" xl="3">
-            <v-card class="rounded-xl elevation-10 pa-5 sticky-control config-card" color="surface">
-              <div class="text-subtitle-2 font-weight-bold text-medium-emphasis mb-5 ml-1">
-                CONFIGURACIÓN DE REPORTE
-              </div>
-
-              <div class="mb-5">
-                <label class="custom-label mb-2">UBICACIÓN ACTIVA</label>
-                <v-select
-                  v-model="fincaSeleccionada"
-                  :items="fincas"
-                  item-title="nombre"
-                  item-value="id"
-                  variant="outlined"
-                  hide-details
-                  class="super-select"
-                  menu-icon="mdi-chevron-down"
-                  :disabled="cosechaStore.loading"
-                  @update:model-value="cargarSaldos"
-                >
-                  <template v-slot:selection="{ item }">
-                    <div class="d-flex align-center py-2 selection-finca">
-                      <v-avatar color="success" variant="tonal" rounded="lg" size="44" class="mr-3">
-                        <v-icon size="28">mdi-tree</v-icon>
-                      </v-avatar>
-                      <div class="d-flex flex-column selection-finca-text">
-                        <span
-                          class="text-h6 font-weight-black text-high-emphasis finca-title-wrap"
-                          :title="String(item.title || '')"
-                          style="line-height: 1.2;"
-                        >
-                          {{ item.title }}
-                        </span>
-                        <span class="text-body-2 font-weight-bold text-medium-emphasis">
-                          Sector Principal
-                        </span>
-                      </div>
-                    </div>
-                  </template>
-                </v-select>
-              </div>
-
-              <div class="mb-6">
-                <label class="custom-label mb-2">FECHA DE CORTE</label>
-                <v-menu v-model="menuFecha" :close-on-content-click="false" location="bottom center">
-                  <template v-slot:activator="{ props }">
-                    <v-card 
-                      v-bind="props" 
-                      variant="outlined" 
-                      class="d-flex align-center pa-3 rounded-xl cursor-pointer hover-effect border-input"
-                      flat
-                      color="surface"
-                      :disabled="cosechaStore.loading"
-                    >
-                      <v-avatar color="info" variant="tonal" rounded="lg" size="44" class="mr-3">
-                        <v-icon size="28">mdi-calendar-range</v-icon>
-                      </v-avatar>
-                      <div>
-                        <div class="text-h6 font-weight-black text-high-emphasis" style="line-height: 1;">
-                          {{ fechaFormateada }}
-                        </div>
-                        <div class="text-body-2 font-weight-bold text-medium-emphasis mt-1">
-                          {{ infoDiaSemana }}
-                        </div>
-                      </div>
-                      <v-spacer></v-spacer>
-                      <v-icon color="medium-emphasis" size="24">mdi-pencil</v-icon>
-                    </v-card>
-                  </template>
-                  
-                  <v-date-picker
-                    v-model="fechaObjetoPicker"
-                    color="primary"
-                    :min="fechaMinima"
-                    :max="fechaMaxima"
-                    :allowed-dates="fechaCosechaPermitida"
-                    @update:model-value="menuFecha = false"
-                  />
-                </v-menu>
-                <div class="text-caption text-medium-emphasis mt-2">
-                  Fechas con cosecha registrada se muestran bloqueadas en el calendario.
-                </div>
-                <v-alert
-                  v-if="estadoFechaSeleccionada"
-                  class="mt-3"
-                  variant="tonal"
-                  density="compact"
-                  :type="estadoFechaSeleccionada.cosecha && estadoFechaSeleccionada.voucher ? 'warning' : 'info'"
-                >
-                  <span v-if="estadoFechaSeleccionada.cosecha && estadoFechaSeleccionada.voucher">
-                    Esta fecha ya tiene registro de cosecha y voucher.
-                  </span>
-                  <span v-else-if="estadoFechaSeleccionada.cosecha">
-                    Esta fecha ya tiene registro de cosecha.
-                  </span>
-                  <span v-else>
-                    Esta fecha ya tiene voucher registrado.
-                  </span>
-                </v-alert>
-              </div>
-
-              <v-divider class="mb-6 border-dashed" />
-
-              <v-btn
-                block
-                size="x-large"
-                color="primary"
-                class="rounded-xl py-7 font-weight-black elevation-6 button-glow mb-4 text-h6"
-                height="72"
-                :loading="cosechaStore.loading || cosechaStore.submitting"
-                :disabled="cosechaStore.loading || cosechaStore.submitting || cosechaStore.totalDigitado === 0 || !fincaSeleccionada"
-                @click="guardarCosecha"
-              >
-                <v-icon start size="32">mdi-cloud-upload</v-icon>
-                ENVIAR REPORTE
-              </v-btn>
-
-              <div class="text-center">
-                <v-chip size="default" variant="text" class="font-weight-bold text-medium-emphasis remaining-chip">
-                  <v-icon start size="small" color="success">mdi-circle-medium</v-icon>
-                  RESTAN EN CAMPO: <strong class="ml-1 text-high-emphasis text-h5">{{ cosechaStore.totalRestante }}</strong>
-                </v-chip>
-              </div>
-
-            </v-card>
+            <CosechaConfigPanel
+              v-model:selected-finca-id="fincaSeleccionada"
+              v-model:menu-fecha="menuFecha"
+              v-model:fecha-picker="fechaObjetoPicker"
+              :fincas="fincas"
+              :fecha-formateada="fechaFormateada"
+              :info-dia-semana="infoDiaSemana"
+              :fecha-minima="fechaMinima"
+              :fecha-maxima="fechaMaxima"
+              :loading="cosechaStore.loading"
+              :submitting="cosechaStore.submitting"
+              :total-digitado="cosechaStore.totalDigitado"
+              :total-restante="cosechaStore.totalRestante"
+              :estado-fecha-seleccionada="estadoFechaSeleccionada"
+              :fecha-permitida="fechaCosechaPermitida"
+              @guardar="guardarCosecha"
+            />
           </v-col>
 
           <v-col cols="12" lg="8" xl="9">
             <PanelPrediccionCosecha v-if="fincaSeleccionada" :finca-id="fincaSeleccionada" />
-            
+
             <div v-if="cosechaStore.loading" class="text-center pa-12">
               <v-progress-circular indeterminate size="80" width="8" color="primary" />
-              <div class="mt-4 text-h6 font-weight-bold text-medium-emphasis">Sincronizando datos de campo...</div>
+              <div class="mt-4 text-h6 font-weight-bold text-medium-emphasis">
+                Sincronizando datos de campo...
+              </div>
             </div>
 
-            <v-row v-else dense>
-              
-              <template v-for="anio in sortedYears" :key="anio">
-                
-                <v-col cols="12" class="mt-6 mb-2">
-                  <div class="d-flex align-center">
-                    <v-chip 
-                        :color="Number(anio) < cosechaStore.anioActual ? 'warning' : 'secondary'" 
-                        size="x-large" 
-                        variant="flat" 
-                        class="font-weight-black mr-4 elevation-2 rounded-lg"
-                    >
-                      <v-icon start size="large">{{ Number(anio) < cosechaStore.anioActual ? 'mdi-history' : 'mdi-calendar-today' }}</v-icon> 
-                      AÑO {{ anio }}
-                    </v-chip>
-                    <v-divider class="border-opacity-50"></v-divider>
-                  </div>
-                </v-col>
-
-                <v-col v-for="item in cosechaStore.saldosPorAnio[anio]" :key="item.calendario_id" cols="12">
-                  <v-card
-                    rounded="xl"
-                    class="mb-3 border-s-xl elevation-2"
-                    :style="{ borderLeftColor: item.color_hex + ' !important', borderLeftWidth: '8px !important' }"
-                    :color="obtenerColorTarjeta(item)"
-                    :variant="obtenerVarianteTarjeta(item)"
-                  >
-                    <v-card-text class="pa-4">
-                      
-                      <div class="mb-3" v-if="cosechaStore.esCintaDeCorteActual(item.semana_enfunde, item.anio) || cosechaStore.esFrutaDeCorte(item.semana_enfunde, item.anio)">
-                          <v-chip
-                          v-if="cosechaStore.esCintaDeCorteActual(item.semana_enfunde, item.anio)"
-                          color="error"
-                          size="small"
-                          class="font-weight-black mr-2"
-                          >
-                          <v-icon start size="small">mdi-alert-circle</v-icon> CORTE DE ESTA SEMANA
-                          </v-chip>
-                          
-                          <v-chip
-                          v-else-if="cosechaStore.esFrutaDeCorte(item.semana_enfunde, item.anio)"
-                          color="warning"
-                          size="small"
-                          class="font-weight-black"
-                          >
-                          <v-icon start size="small">mdi-basket</v-icon> LISTA PARA CORTE
-                          </v-chip>
-                      </div>
-
-                      <v-row align="center">
-                        <v-col cols="12" sm="4">
-                          <div class="d-flex align-center">
-                            <v-avatar :color="item.color_hex" size="64" class="me-4 elevation-3">
-                              <span class="text-white text-h4 font-weight-black shadow-text">
-                                {{ item.semana_enfunde }}
-                              </span>
-                            </v-avatar>
-                            <div>
-                              <div class="text-h5 font-weight-black text-truncate text-high-emphasis">
-                                {{ item.color_cinta }}
-                              </div>
-                              <div class="d-flex align-center gap-2 mt-1">
-                                <v-chip size="small" variant="outlined" class="font-weight-bold">
-                                    <span class="text-body-2 font-weight-bold">EDAD: {{ cosechaStore.calcularEdadExacta(item.semana_enfunde, item.anio) }} sem</span>
-                                </v-chip>
-                                <span class="text-caption text-disabled">({{ item.anio }})</span>
-                              </div>
-                            </div>
-                          </div>
-                        </v-col>
-
-                        <v-col cols="12" sm="3" class="text-center">
-                          <div class="text-body-2 font-weight-bold text-medium-emphasis mb-2">
-                            DISPONIBLE: <span class="text-high-emphasis text-h6">{{ item.saldo_en_campo }}</span>
-                          </div>
-                          <v-progress-linear
-                            v-if="item.cantidad_a_cosechar || item.rechazo"
-                            height="16"
-                            rounded
-                            striped
-                            :model-value="cosechaStore.calcularPorcentaje(item)"
-                            :color="cosechaStore.esExcedido(item) ? 'error' : 'success'"
-                          >
-                          </v-progress-linear>
-                        </v-col>
-
-                        <v-col cols="12" sm="5">
-                          <div class="d-flex justify-end flex-wrap gap-4 digitacion-group">
-                            
-                            <div class="text-center">
-                              <div class="d-flex justify-space-between align-center px-1 mb-1">
-                                <div class="text-caption font-weight-black text-primary tracking-wider">BUENOS</div>
-                                <v-btn 
-                                  size="x-small" variant="text" color="primary" class="px-0 py-0" 
-                                  style="height: 14px; min-width: 0;"
-                                  @click="cosechaStore.maximizarBuenos(item)"
-                                >MAX</v-btn>
-                              </div>
-                              <v-sheet 
-                                  class="d-flex align-center rounded-lg px-1 input-container" 
-                                  border
-                                  color="surface"
-                              >
-                                <v-btn
-                                  icon="mdi-minus"
-                                  size="small"
-                                  variant="text"
-                                  :disabled="cosechaStore.loading || item.cantidad_a_cosechar <= 0"
-                                  @click="cosechaStore.ajustarDigitacion(item, 'cantidad_a_cosechar', -1)"
-                                />
-                                
-                                <input
-                                  v-select-all
-                                  type="number"
-                                  class="touch-input text-h5 text-high-emphasis"
-                                  v-model.number="item.cantidad_a_cosechar"
-                                  :disabled="cosechaStore.loading"
-                                  @blur="cosechaStore.normalizarItemDigitacion(item)"
-                                />
-                                
-                                <v-btn
-                                  icon="mdi-plus"
-                                  size="small"
-                                  variant="text"
-                                  color="primary"
-                                  :disabled="cosechaStore.loading || cosechaStore.esExcedido(item)"
-                                  @click="cosechaStore.ajustarDigitacion(item, 'cantidad_a_cosechar', 1)"
-                                />
-                              </v-sheet>
-                            </div>
-
-                            <div class="text-center">
-                              <div class="text-caption font-weight-black text-error mb-1 tracking-wider">RECHAZO</div>
-                              <v-sheet 
-                                  class="d-flex align-center rounded-lg px-1 input-container" 
-                                  color="surface" 
-                                  style="border: 1px solid rgb(var(--v-theme-error)) !important;"
-                              >
-                                <v-btn
-                                  icon="mdi-minus"
-                                  size="small"
-                                  variant="text"
-                                  color="error"
-                                  :disabled="cosechaStore.loading || item.rechazo <= 0"
-                                  @click="cosechaStore.ajustarDigitacion(item, 'rechazo', -1)"
-                                />
-                                
-                                <input
-                                  v-select-all
-                                  type="number"
-                                  class="touch-input text-h5 text-error"
-                                  v-model.number="item.rechazo"
-                                  :disabled="cosechaStore.loading"
-                                  @blur="cosechaStore.normalizarItemDigitacion(item)"
-                                />
-                                
-                                <v-btn
-                                  icon="mdi-plus"
-                                  size="small"
-                                  variant="text"
-                                  color="error"
-                                  :disabled="cosechaStore.loading || cosechaStore.esExcedido(item)"
-                                  @click="cosechaStore.ajustarDigitacion(item, 'rechazo', 1)"
-                                />
-                              </v-sheet>
-                            </div>
-
-                          </div>
-                        </v-col>
-                      </v-row>
-                    </v-card-text>
-                  </v-card>
-                </v-col>
-              </template> 
-
-              <v-col v-if="cosechaStore.saldosPendientes.length === 0" cols="12">
-                <v-sheet rounded="xl" class="pa-12 text-center bg-transparent border-dashed">
-                  <v-icon size="96" color="medium-emphasis" class="mb-4">mdi-basket-off-outline</v-icon>
-                  <div class="text-h4 font-weight-bold text-medium-emphasis">No hay saldos disponibles</div>
-                  <div class="text-body-1 text-disabled mt-2">Seleccione una finca o cambie la fecha</div>
-                </v-sheet>
-              </v-col>
-
-            </v-row>
+            <CosechaSaldosPorAnio
+              v-else
+              :sorted-years="sortedYears"
+              :obtener-color-tarjeta="obtenerColorTarjeta"
+              :obtener-variante-tarjeta="obtenerVarianteTarjeta"
+              @adjust="handleAjuste"
+              @set-field="setCampoDigitacion"
+              @maximize="handleMaximizarBuenos"
+              @normalize="normalizarDigitacion"
+            />
           </v-col>
         </v-row>
       </v-col>
@@ -369,333 +83,52 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
-import { useCosechaStore, type CintaCosecha } from '../../stores/cosecha/cosechaStore';
-import { useFincaStore } from '../../stores/fincaStore';
-import { useEmpresaStore } from '../../stores/empresaStore';
-import { storeToRefs } from 'pinia';
-import PanelPrediccionCosecha from '../../components/cosecha/PanelPrediccionCosecha.vue';
-import { cosechaService } from '../../services/cosecha/cosechaService';
+import CosechaConfigPanel from '@/components/cosecha/CosechaConfigPanel.vue';
+import CosechaHeaderCard from '@/components/cosecha/CosechaHeaderCard.vue';
+import CosechaSaldosPorAnio from '@/components/cosecha/CosechaSaldosPorAnio.vue';
+import PanelPrediccionCosecha from '@/components/cosecha/PanelPrediccionCosecha.vue';
+import ViewHelpHint from '@/components/ui/ViewHelpHint.vue';
+import { useRegistroCosecha } from '@/composables/useRegistroCosecha';
+import type { CintaCosecha } from '@/stores/cosecha/cosechaStore';
 
-const cosechaStore = useCosechaStore();
-const fincaStore = useFincaStore();
-const empresaStore = useEmpresaStore();
-const { fincas } = storeToRefs(fincaStore);
-
-const fincaSeleccionada = ref<number | null>(fincaStore.fincaSeleccionadaId);
-const fechaCosecha = ref(new Date().toISOString().split('T')[0]);
-const fechaObjetoPicker = ref(new Date());
-const menuFecha = ref(false);
-const snackbar = ref({ show: false, message: '', color: 'info' });
-const fechasOcupadas = ref<Record<string, { cosecha: boolean; voucher: boolean }>>({});
-
-const notify = (msg: string, color = 'info') => (snackbar.value = { show: true, message: msg, color });
-
-// === DIRECTIVA PERSONALIZADA: v-select-all ===
-// Esto elimina la necesidad de funciones engorrosas.
-// Automáticamente selecciona el texto cuando el input recibe foco.
-const vSelectAll = {
-  mounted: (el: HTMLElement) => {
-    el.addEventListener('focus', (e) => {
-      // TypeScript sabe que e.target es un elemento del DOM, casteamos seguro aquí adentro
-      (e.target as HTMLInputElement).select();
-    });
-  }
-};
-
-const sortedYears = computed(() => {
-    if(!cosechaStore.saldosPorAnio) return [];
-    return Object.keys(cosechaStore.saldosPorAnio).sort((a, b) => Number(a) - Number(b));
-});
-
-watch(fechaObjetoPicker, (newDate) => {
-  if (newDate) {
-    const offset = newDate.getTimezoneOffset();
-    const dateLocal = new Date(newDate.getTime() - (offset*60*1000));
-    fechaCosecha.value = dateLocal.toISOString().split('T')[0];
-  }
-});
-
-const fechaFormateada = computed(() => {
-  if (!fechaObjetoPicker.value) return 'Seleccionar Fecha';
-  return fechaObjetoPicker.value.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-});
-
-const infoDiaSemana = computed(() => {
-    if (!fechaObjetoPicker.value) return '';
-    const dia = fechaObjetoPicker.value.toLocaleDateString('es-ES', { weekday: 'long' });
-    return `${dia.charAt(0).toUpperCase() + dia.slice(1)} · Semana ${cosechaStore.semanaActual}`;
-});
-
-const fechaMaxima = computed(() => new Date());
-const fechaMinima = computed(() => {
-  const f = new Date();
-  f.setFullYear(f.getFullYear() - 1);
-  return f;
-});
-
-const estadoFechaSeleccionada = computed(() => fechasOcupadas.value[fechaCosecha.value] || null);
-
-const obtenerColorTarjeta = (item: CintaCosecha) => {
-    if (cosechaStore.esCintaDeCorteActual(item.semana_enfunde, item.anio)) return 'error'; 
-    if (cosechaStore.esFrutaDeCorte(item.semana_enfunde, item.anio)) return 'warning';
-    return 'surface';
-};
-
-const obtenerVarianteTarjeta = (item: CintaCosecha) => {
-    if (cosechaStore.esCintaDeCorteActual(item.semana_enfunde, item.anio)) return 'tonal';
-    if (cosechaStore.esFrutaDeCorte(item.semana_enfunde, item.anio)) return 'tonal';
-    return 'elevated';
-};
-
-const cargarSaldos = async (id: number) => {
-  if (!id || cosechaStore.loading) return;
-  fincaStore.seleccionarFinca(id);
-  await cargarFechasOcupadas(id);
-  await cosechaStore.cargarSaldos(id);
-};
-
-function toIsoDate(value: Date): string {
-  return new Date(value.getTime() - value.getTimezoneOffset() * 60000)
-    .toISOString()
-    .slice(0, 10);
+interface AjustePayload {
+  item: CintaCosecha;
+  campo: 'cantidad_a_cosechar' | 'rechazo';
+  delta: number;
 }
 
-function toIsoDateUnknown(value: unknown): string | null {
-  if (value instanceof Date) return toIsoDate(value);
-  if (typeof value === 'string') return value.slice(0, 10);
-  if (value && typeof value === 'object') {
-    const raw = value as Record<string, unknown>;
-    if (raw.date instanceof Date) return toIsoDate(raw.date);
-    if (typeof raw.date === 'string') return raw.date.slice(0, 10);
-    if (typeof raw.isoDate === 'string') return raw.isoDate.slice(0, 10);
-    if (typeof raw.formatted === 'string') return raw.formatted.slice(0, 10);
-  }
-  return null;
+const {
+  cosechaStore,
+  fincas,
+  fincaSeleccionada,
+  fechaObjetoPicker,
+  menuFecha,
+  snackbar,
+  sortedYears,
+  fechaFormateada,
+  infoDiaSemana,
+  fechaMaxima,
+  fechaMinima,
+  estadoFechaSeleccionada,
+  obtenerColorTarjeta,
+  obtenerVarianteTarjeta,
+  fechaCosechaPermitida,
+  setCampoDigitacion,
+  normalizarDigitacion,
+  guardarCosecha,
+} = useRegistroCosecha();
+
+function handleAjuste({ item, campo, delta }: AjustePayload) {
+  cosechaStore.ajustarDigitacion(item, campo, delta);
 }
 
-function fechaCosechaPermitida(value: unknown): boolean {
-  const iso = toIsoDateUnknown(value);
-  if (!iso) return false;
-  const estado = fechasOcupadas.value[iso];
-  if (!estado?.cosecha) return true;
-  return iso === fechaCosecha.value;
+function handleMaximizarBuenos(item: CintaCosecha) {
+  cosechaStore.maximizarBuenos(item);
 }
-
-async function cargarFechasOcupadas(fincaId?: number | null) {
-  const id = Number(fincaId || fincaSeleccionada.value);
-  if (!id) {
-    fechasOcupadas.value = {};
-    return;
-  }
-
-  try {
-    const data = await cosechaService.getFechasOcupadas({
-      finca_id: id,
-      fecha_desde: toIsoDate(fechaMinima.value),
-      fecha_hasta: toIsoDate(fechaMaxima.value),
-    });
-    const map: Record<string, { cosecha: boolean; voucher: boolean }> = {};
-    for (const item of data.fechas || []) {
-      if (!item?.fecha) continue;
-      map[item.fecha] = {
-        cosecha: Boolean(item.cosecha),
-        voucher: Boolean(item.voucher),
-      };
-    }
-    fechasOcupadas.value = map;
-  } catch {
-    // No bloqueamos la operación de cosecha por falla en marcado de calendario
-    fechasOcupadas.value = {};
-  } finally {
-  }
-}
-
-const guardarCosecha = async () => {
-  if (cosechaStore.loading) return;
-  if (!fincaSeleccionada.value) return notify('Seleccione una finca', 'error');
-  if (cosechaStore.totalDigitado === 0) return notify('Ingrese al menos un racimo', 'info');
-  if (!localStorage.getItem('token')) {
-    return notify('Sesión no válida. Ingrese nuevamente.', 'error');
-  }
-
-  const result = await cosechaStore.enviarCosecha(fincaSeleccionada.value, fechaCosecha.value);
-  if (!result.ok) return notify(result.message, 'error');
-  notify(result.message, result.queued ? 'warning' : 'success');
-};
-
-onMounted(async () => {
-  const [empresasResult, fincasResult] = await Promise.allSettled([
-    empresaStore.empresas.length ? Promise.resolve() : empresaStore.fetchEmpresas(),
-    fincaStore.obtenerFincas(),
-  ]);
-
-  if (empresasResult.status === 'rejected') {
-    notify('No se pudieron cargar empresas, continuando con fincas.', 'warning');
-  }
-
-  if (fincasResult.status === 'rejected') {
-    notify('Error al obtener fincas. Verifique conexión o sesión.', 'error');
-    return;
-  }
-
-  fincaSeleccionada.value = fincaStore.fincaSeleccionadaId;
-  if (!fincaSeleccionada.value && fincas.value.length > 0) {
-    fincaSeleccionada.value = fincas.value[0].id;
-    fincaStore.seleccionarFinca(fincaSeleccionada.value);
-  }
-
-  if (fincaSeleccionada.value) {
-    try {
-      await cargarSaldos(fincaSeleccionada.value);
-    } catch {
-      notify('No se pudieron cargar saldos de cosecha.', 'error');
-    }
-  } else {
-    notify('No hay fincas disponibles para esta sesión.', 'warning');
-  }
-});
-
-watch(fincaSeleccionada, async (id) => {
-  if (!id) {
-    fechasOcupadas.value = {};
-    return;
-  }
-  await cargarFechasOcupadas(id);
-});
 </script>
 
 <style scoped>
-/* AUMENTADO: Ancho de inputs para acomodar fuente más grande */
-.touch-input {
-  width: 60px; /* Antes 50px */
-  text-align: center;
-  border: none;
-  font-weight: 900;
-  background: transparent;
-  outline: none;
-}
-.touch-input::-webkit-outer-spin-button,
-.touch-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-/* AUMENTADO: Tamaño de letra de etiquetas */
-.custom-label {
-  display: block;
-  font-size: 0.8rem; /* Antes 0.7rem */
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  text-transform: uppercase;
-  margin-left: 4px;
-}
-
-/* Selectores y Contenedores */
-.super-select :deep(.v-field__outline) { --v-field-border-opacity: 0.15; }
-.super-select :deep(.v-field--focused .v-field__outline) { --v-field-border-opacity: 1; color: rgb(var(--v-theme-primary)); }
-.super-select :deep(.v-field) { border-radius: 12px !important; padding-top: 8px; padding-bottom: 8px; }
-.super-select :deep(.v-select__selection-text) {
-  white-space: normal;
-  line-height: 1.15;
-}
-
-.hover-effect:hover { border-color: rgb(var(--v-theme-primary)); background-color: rgba(var(--v-theme-on-surface), 0.05); }
-.button-glow { box-shadow: 0 10px 25px -5px rgba(var(--v-theme-primary), 0.5) !important; }
-.shadow-text { text-shadow: 0 2px 4px rgba(0,0,0,0.4); }
-.line-height-1 { line-height: 1; }
-.sticky-control { position: sticky; top: 20px; z-index: 5; }
-.gap-2 { gap: 8px; }
-.gap-4 { gap: 16px; }
-.digitacion-group { width: 100%; }
-.selection-finca { min-width: 0; }
-.selection-finca-text { min-width: 0; }
-.finca-title-wrap {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
-}
-.remaining-chip {
-  max-width: 100%;
-  white-space: normal;
-}
-
-/* AUMENTADO: Altura de inputs para mayor comodidad táctil */
-.input-container {
-    height: 48px; /* Antes 40px */
-    border-color: rgba(var(--v-border-color), var(--v-border-opacity));
-}
-.border-dashed { border-style: dashed !important; opacity: 0.4; }
-
 .cosecha-shell {
   max-width: 1880px;
-}
-
-@media (max-width: 960px) {
-  .sticky-control {
-    position: static;
-    top: auto;
-  }
-
-  .control-title {
-    font-size: 1.55rem !important;
-    line-height: 1.1;
-  }
-
-  .digitacion-group {
-    justify-content: center !important;
-  }
-
-  .header-kpi {
-    width: 100%;
-    text-align: left !important;
-  }
-}
-
-@media (max-width: 600px) {
-  .config-card {
-    padding: 16px !important;
-  }
-
-  .hero-avatar {
-    display: none;
-  }
-
-  .custom-label {
-    font-size: 0.72rem;
-  }
-
-  .control-title {
-    font-size: 1.25rem !important;
-  }
-
-  .finca-title-wrap {
-    font-size: 1rem !important;
-  }
-
-  .header-subtitle {
-    align-items: flex-start !important;
-  }
-
-  .header-subtitle .text-body-1 {
-    font-size: 0.98rem !important;
-    line-height: 1.25;
-  }
-
-  .touch-input {
-    width: 52px;
-    font-size: 1.15rem !important;
-  }
-
-  .input-container {
-    height: 44px;
-  }
-
-  .gap-4 {
-    gap: 10px;
-  }
 }
 </style>

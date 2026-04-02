@@ -1,6 +1,9 @@
 import type {
 	PrediccionCosechaItem,
 	PrediccionCosechaResponse,
+	PrediccionProximoEmbarque,
+	PrediccionModeloInfo,
+	PrediccionCacheInfo,
 } from '@/services/cosecha/cosechaService';
 import type { EmbarqueListItem } from '@/services/embarque/embarqueTypes';
 import dayjs from 'dayjs';
@@ -22,6 +25,9 @@ export interface PrediccionCosechaVM {
 	filas: PrediccionFilaVM[];
 	semanaInicio?: number;
 	semanaFin?: number;
+	proximoEmbarque: PrediccionProximoEmbarque | null;
+	modelo: PrediccionModeloInfo | null;
+	cache: PrediccionCacheInfo | null;
 }
 
 export interface BacktestingSemanaVM {
@@ -55,6 +61,9 @@ export function crearPrediccionVacia(): PrediccionCosechaVM {
 		filas: [],
 		semanaInicio: undefined,
 		semanaFin: undefined,
+		proximoEmbarque: null,
+		modelo: null,
+		cache: null,
 	};
 }
 
@@ -74,6 +83,9 @@ export function construirPrediccionVM(
 		filas: ordenarFilasPorUrgencia(data.proyecciones || []),
 		semanaInicio: data.semana_inicio,
 		semanaFin: data.semana_fin,
+		proximoEmbarque: data.prediccion_proximo_embarque || null,
+		modelo: data.modelo || null,
+		cache: data.cache || null,
 	};
 }
 

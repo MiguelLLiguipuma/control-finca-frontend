@@ -1,29 +1,45 @@
 import { defineStore } from 'pinia';
-// @ts-ignore
+import type { AxiosError } from 'axios';
 import api from '@/services/api';
-// @ts-ignore
-import { useEmpresaStore } from './empresaStore';
-
-// --- 1. INTERFACES ACTUALIZADAS ---
+import {
+	useEmpresaStore,
+	type Empresa,
+} from '@/stores/empresaStore';
 
 export interface Finca {
 	id: number;
 	nombre: string;
 	empresa_id: number;
 	ubicacion?: string;
-	// Campos críticos para el sistema de clima
 	latitud: number | null;
 	longitud: number | null;
 	empresa_nombre?: string;
 }
 
-// Datos necesarios para crear una finca (Payload de Producción)
 export interface FincaPayload {
 	nombre: string;
 	empresa_id: number;
 	ubicacion: string;
 	latitud: number | null;
 	longitud: number | null;
+}
+
+interface FincaApiRow {
+	id: number | string;
+	nombre: string;
+	empresa_id: number | string;
+	ubicacion?: string;
+	latitud?: number | string | null;
+	longitud?: number | string | null;
+}
+
+interface FincaResponseEnvelope {
+	data?: FincaApiRow[];
+}
+
+interface ApiErrorData {
+	error?: string;
+	message?: string;
 }
 
 interface FincaState {
@@ -33,148 +49,160 @@ interface FincaState {
 	fincaSeleccionadaId: number | null;
 }
 
-// --- 2. STORE ---
+const LAST_FINCA_KEY = 'lastFincaId';
+
+const parseStoredFincaId = (): number | null => {
+	const stored = localStorage.getItem(LAST_FINCA_KEY);
+	if (!stored) return null;
+	const parsed = Number(stored);
+	return Number.isFinite(parsed) ? parsed : null;
+};
+
+const toNullableNumber = (value: number | string | null | undefined): number | null => {
+	if (value === null || value === undefined || value === '') return null;
+	const parsed = Number(value);
+	return Number.isFinite(parsed) ? parsed : null;
+};
+
+const createEmpresaMap = (empresas: Empresa[]): Map<number, string> => {
+	const map = new Map<number, string>();
+	for (const empresa of empresas) {
+		map.set(Number(empresa.id), String(empresa.nombre || ''));
+	}
+	return map;
+};
+
+const normalizeFinca = (
+	finca: FincaApiRow,
+	empresasMap: Map<number, string>,
+): Finca => {
+	const empresaId = Number(finca.empresa_id);
+	return {
+		id: Number(finca.id),
+		nombre: String(finca.nombre || ''),
+		empresa_id: empresaId,
+		ubicacion: finca.ubicacion,
+		latitud: toNullableNumber(finca.latitud),
+		longitud: toNullableNumber(finca.longitud),
+		empresa_nombre: empresasMap.get(empresaId) || 'No asignada',
+	};
+};
+
+const resolveFincasPayload = (payload: FincaApiRow[] | FincaResponseEnvelope): FincaApiRow[] => {
+	if (Array.isArray(payload)) return payload;
+	if (Array.isArray(payload?.data)) return payload.data;
+	return [];
+};
+
+const getErrorMessage = (
+	error: unknown,
+	fallback: string,
+): string => {
+	const err = error as AxiosError<ApiErrorData> | undefined;
+	return (
+		err?.response?.data?.error ||
+		err?.response?.data?.message ||
+		err?.message ||
+		fallback
+	);
+};
 
 export const useFincaStore = defineStore('finca', {
 	state: (): FincaState => ({
 		fincas: [],
 		loading: false,
 		error: null,
-		fincaSeleccionadaId: localStorage.getItem('lastFincaId')
-			? Number(localStorage.getItem('lastFincaId'))
-			: null,
+		fincaSeleccionadaId: parseStoredFincaId(),
 	}),
 
 	getters: {
 		fincasConEmpresa(state): Finca[] {
 			const empresaStore = useEmpresaStore();
-			const empresasMap = new Map<number, string>();
-			for (const e of empresaStore.empresas || []) {
-				empresasMap.set(Number((e as any).id), String((e as any).nombre || ''));
-			}
+			const empresasMap = createEmpresaMap(empresaStore.empresas || []);
 
-			return (state.fincas || []).map((f) => ({
-				...f,
+			return (state.fincas || []).map((finca) => ({
+				...finca,
 				empresa_nombre:
-					empresasMap.get(Number(f.empresa_id)) || f.empresa_nombre || 'No asignada',
+					empresasMap.get(Number(finca.empresa_id)) ||
+					finca.empresa_nombre ||
+					'No asignada',
 			}));
 		},
 
 		fincaSeleccionada(state): Finca | null {
 			return (
-				this.fincasConEmpresa.find((f) => f.id === state.fincaSeleccionadaId) ||
+				this.fincasConEmpresa.find((finca) => finca.id === state.fincaSeleccionadaId) ||
 				null
 			);
 		},
 	},
 
 	actions: {
-		mapearFincasConEmpresa(fincasApi: any[], empresas: any[]): Finca[] {
-			const empresasMap = new Map<number, string>();
-			for (const e of empresas || []) {
-				empresasMap.set(Number(e.id), String(e.nombre || ''));
-			}
-
-			return fincasApi.map((finca: any): Finca => {
-				const empresaId = Number(finca.empresa_id);
-				const nombreEmpresa = empresasMap.get(empresaId);
-
-				return {
-					id: finca.id,
-					nombre: finca.nombre,
-					empresa_id: empresaId,
-					ubicacion: finca.ubicacion,
-					latitud: finca.latitud ? Number(finca.latitud) : null,
-					longitud: finca.longitud ? Number(finca.longitud) : null,
-					empresa_nombre: nombreEmpresa || 'No asignada',
-				};
-			});
+		mapearFincasConEmpresa(fincasApi: FincaApiRow[], empresas: Empresa[]): Finca[] {
+			const empresasMap = createEmpresaMap(empresas);
+			return fincasApi.map((finca) => normalizeFinca(finca, empresasMap));
 		},
 
-		/**
-		 * Obtiene fincas e incluye la data geográfica para el mapa/clima
-		 */
 		async obtenerFincas() {
 			this.loading = true;
 			this.error = null;
 			const empresaStore = useEmpresaStore();
 
 			try {
-				// Evita condición de carrera: primero aseguramos catálogo de empresas.
 				if (!empresaStore.empresas?.length) {
 					try {
 						await empresaStore.fetchEmpresas();
 					} catch {
-						// Si falla empresas, seguimos cargando fincas y mostramos fallback.
+						// Si falla empresas, seguimos cargando fincas y usamos fallback local.
 					}
 				}
 
-				const response = await api.get('/fincas');
-				const rawData = response?.data;
-				const fincasApi = Array.isArray(rawData)
-					? rawData
-					: Array.isArray(rawData?.data)
-						? rawData.data
-						: [];
+				const response = await api.get<FincaApiRow[] | FincaResponseEnvelope>('/fincas');
+				const fincasApi = resolveFincasPayload(response.data);
 
 				this.fincas = this.mapearFincasConEmpresa(
 					fincasApi,
 					empresaStore.empresas || [],
 				);
 
-				// Lógica de persistencia de selección
 				const existeFinca = this.fincas.some(
-					(f) => f.id === this.fincaSeleccionadaId,
+					(finca) => finca.id === this.fincaSeleccionadaId,
 				);
 
-				if (
-					this.fincas.length > 0 &&
-					(!this.fincaSeleccionadaId || !existeFinca)
-				) {
+				if (this.fincas.length > 0 && (!this.fincaSeleccionadaId || !existeFinca)) {
 					this.seleccionarFinca(this.fincas[0].id);
 				} else if (this.fincas.length === 0) {
-					// Evita reutilizar finca de una sesión anterior de otro usuario.
 					this.fincaSeleccionadaId = null;
-					localStorage.removeItem('lastFincaId');
+					localStorage.removeItem(LAST_FINCA_KEY);
 				}
 
 				return this.fincas;
-			} catch (e: any) {
-				console.error('Error en obtenerFincas:', e);
-				this.error =
-					e?.response?.data?.error ||
-					e?.message ||
-					'Error al cargar fincas';
+			} catch (error: unknown) {
+				console.error('Error en obtenerFincas:', error);
+				this.error = getErrorMessage(error, 'Error al cargar fincas');
 				this.fincas = [];
-				throw e;
+				throw error;
 			} finally {
 				this.loading = false;
 			}
 		},
 
-		/**
-		 * Crear nueva finca enviando coordenadas al backend
-		 */
 		async crearFinca(datosFinca: FincaPayload) {
 			this.loading = true;
 			this.error = null;
 			try {
-				// Enviamos el payload completo incluyendo lat/long
 				const { data } = await api.post('/fincas', datosFinca);
 				await this.obtenerFincas();
 				return data;
-			} catch (e: any) {
-				console.error('Error en crearFinca:', e);
-				this.error = e.response?.data?.error || 'No se pudo crear la finca';
-				throw e;
+			} catch (error: unknown) {
+				console.error('Error en crearFinca:', error);
+				this.error = getErrorMessage(error, 'No se pudo crear la finca');
+				throw error;
 			} finally {
 				this.loading = false;
 			}
 		},
 
-		/**
-		 * Actualiza una finca existente
-		 */
 		async actualizarFinca(id: number, datosFinca: FincaPayload) {
 			this.loading = true;
 			this.error = null;
@@ -183,46 +211,36 @@ export const useFincaStore = defineStore('finca', {
 				try {
 					const response = await api.put(`/fincas/${id}`, datosFinca);
 					data = response.data;
-				} catch (putError: any) {
-					const status = putError?.response?.status;
+				} catch (error: unknown) {
+					const status = (error as AxiosError)?.response?.status;
 					if (status === 404 || status === 405) {
 						const response = await api.patch(`/fincas/${id}`, datosFinca);
 						data = response.data;
 					} else {
-						throw putError;
+						throw error;
 					}
 				}
 
 				await this.obtenerFincas();
 				return data;
-			} catch (e: any) {
-				console.error('Error en actualizarFinca:', e);
-				this.error =
-					e?.response?.data?.error || 'No se pudo actualizar la finca';
-				throw e;
+			} catch (error: unknown) {
+				console.error('Error en actualizarFinca:', error);
+				this.error = getErrorMessage(error, 'No se pudo actualizar la finca');
+				throw error;
 			} finally {
 				this.loading = false;
 			}
 		},
 
-		/**
-		 * Selección y persistencia
-		 */
 		seleccionarFinca(id: number | string) {
 			if (!id) return;
 			const numericId = Number(id);
+			if (!Number.isFinite(numericId)) return;
 
 			if (this.fincaSeleccionadaId !== numericId) {
 				this.fincaSeleccionadaId = numericId;
-				localStorage.setItem('lastFincaId', String(numericId));
+				localStorage.setItem(LAST_FINCA_KEY, String(numericId));
 			}
-		},
-
-		resetStore() {
-			this.fincas = [];
-			this.fincaSeleccionadaId = null;
-			this.error = null;
-			localStorage.removeItem('lastFincaId');
 		},
 	},
 });

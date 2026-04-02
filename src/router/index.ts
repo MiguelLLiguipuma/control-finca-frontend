@@ -1,28 +1,18 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '@/stores/auth/authStore';
+import { isAppPermission } from '@/utils/rbac';
 
-/* 1. CARGA INMEDIATA (EAGER)
-  Importamos aquí solo lo vital para que el usuario vea algo rápido.
-*/
-import LoginView from '@/views/Login.vue';
-import DashboardReportes from '../views/reportes/dashboardReportes.vue';
-
-/* NOTA: Ya NO importamos aquí arriba Fincas, Cosecha, etc.
-  Eso ahorra memoria y datos al inicio.
-*/
-
-const routes = [
-	// --- RUTAS VITALES (Se cargan al inicio) ---
+const routes: RouteRecordRaw[] = [
 	{
 		path: '/login',
 		name: 'Login',
-		component: LoginView, // Carga inmediata
+		component: () => import('@/views/Login.vue'),
 		meta: { public: true, breadcrumb: 'Login' },
 	},
 	{
 		path: '/reportes',
 		name: 'Reportes',
-		component: DashboardReportes, // Carga inmediata (porque es el Home)
+		component: () => import('@/views/reportes/dashboardReportes.vue'),
 		meta: {
 			requiresAuth: true,
 			permission: 'view.dashboard',
@@ -43,10 +33,6 @@ const routes = [
 		path: '/',
 		redirect: '/login',
 	},
-
-	// --- RUTAS SECUNDARIAS (LAZY LOADING) ---
-	// El navegador descargará estos archivos SOLO al hacer clic en el menú.
-
 	{
 		path: '/empresas',
 		name: 'Empresas',
@@ -60,7 +46,7 @@ const routes = [
 	{
 		path: '/fincas',
 		name: 'Fincas',
-		component: () => import('../views/administracion/FincaView.vue'),
+		component: () => import('@/views/administracion/FincaView.vue'),
 		meta: {
 			requiresAuth: true,
 			permission: 'view.fincas',
@@ -95,6 +81,16 @@ const routes = [
 			requiresAuth: true,
 			permission: 'view.cosecha',
 			breadcrumb: 'Liquidación Cosecha',
+		},
+	},
+	{
+		path: '/prediccion-cosecha',
+		name: 'PrediccionCosecha',
+		component: () => import('@/views/cosecha/PrediccionCosechaView.vue'),
+		meta: {
+			requiresAuth: true,
+			permission: 'view.cosecha',
+			breadcrumb: 'Predicción Cosecha',
 		},
 	},
 	{
@@ -137,8 +133,15 @@ const routes = [
 			breadcrumb: 'Auditoría',
 		},
 	},
-
-	// --- 404 ---
+	{
+		path: '/ayuda',
+		name: 'Ayuda',
+		component: () => import('@/views/AyudaView.vue'),
+		meta: {
+			requiresAuth: true,
+			breadcrumb: 'Guía de Uso',
+		},
+	},
 	{
 		path: '/:pathMatch(.*)*',
 		redirect: '/reportes',
@@ -146,27 +149,31 @@ const routes = [
 ];
 
 const router = createRouter({
-	history: createWebHistory(),
+	history: createWebHistory(import.meta.env.BASE_URL),
 	routes,
 });
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
 	const authStore = useAuthStore();
 
-	if (to.matched.length === 0) return next('/reportes');
+	if (!to.matched.length) {
+		return '/reportes';
+	}
 
-	const isPublic = to.matched.some((record) => record.meta.public);
 	const requiresAuth = to.matched.some((record) => record.meta.requiresAuth);
 	const requiredPermission = to.matched
 		.map((record) => record.meta.permission)
 		.find(Boolean);
 
 	if (requiresAuth && !authStore.isAuthenticated) {
-		return next('/login');
-	} else if (requiredPermission && !authStore.can(requiredPermission)) {
-		return next('/reportes');
-	} else {
-		next();
+		return '/login';
+	}
+
+	if (
+		isAppPermission(requiredPermission) &&
+		!authStore.can(requiredPermission)
+	) {
+		return '/reportes';
 	}
 });
 
