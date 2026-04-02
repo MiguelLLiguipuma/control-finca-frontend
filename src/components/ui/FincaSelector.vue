@@ -60,15 +60,19 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
-import { useFincaStore } from '@/stores/fincaStore'
+import { useFincaStore, type Finca } from '@/stores/fincaStore'
 import { storeToRefs } from 'pinia'
+
+interface FincaOption extends Finca {
+  empresa_nombre: string
+}
 
 const fincaStore = useFincaStore()
 const { fincasConEmpresa, fincaSeleccionadaId, loading } = storeToRefs(fincaStore)
 
-const fincaItems = computed(() =>
+const fincaItems = computed<FincaOption[]>(() =>
   (fincasConEmpresa.value || []).map((f) => ({
     ...f,
     nombre: f.nombre,
@@ -76,16 +80,18 @@ const fincaItems = computed(() =>
   })),
 )
 
-const selectedId = computed({
+const selectedId = computed<number | null>({
   get: () => fincaSeleccionadaId.value,
-  set: (val) => fincaStore.seleccionarFinca(val),
+  set: (val) => {
+    if (val != null) fincaStore.seleccionarFinca(val)
+  },
 })
 
 const filtroFinca = (
-  _itemTitle,
-  queryText,
-  item,
-) => {
+  _itemTitle: string,
+  queryText: string,
+  item: { raw?: Partial<FincaOption> } | undefined,
+): boolean => {
   const q = String(queryText || '').trim().toLowerCase()
   if (!q) return true
 

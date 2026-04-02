@@ -12,6 +12,23 @@
           </v-chip>
         </div>
 
+        <ViewHelpHint
+          class="mb-6"
+          title="¿Qué registras en Enfunde?"
+          summary="En esta pantalla registras cuántas fundas se colocaron, quién lo hizo y en qué semana/cinta. Es la base para proyección y control de cosecha."
+          :steps="[
+            'Selecciona finca y operario responsable.',
+            'Elige semana de calendario (cinta).',
+            'Ingresa cantidad de fundas y observaciones.',
+            'Guarda el registro y verifica en la tabla de recientes.',
+          ]"
+          :notes="[
+            'El usuario que registra se toma de la sesión activa.',
+            'El año del formulario debe coincidir con el año del panel.',
+            'Un registro bien hecho mejora la calidad de predicción.',
+          ]"
+        />
+
         <v-row class="mb-8">
           <v-col cols="12" sm="6" md="4">
             <v-card border variant="flat" class="pa-4 rounded-xl bg-surface">
@@ -44,20 +61,21 @@
           </v-col>
         </v-row>
 
-        <v-card border variant="flat" class="rounded-xl bg-surface shadow-sm mb-12">
+        <v-card border variant="flat" class="rounded-xl bg-surface shadow-sm mb-12" aria-labelledby="registro-enfunde-form-heading">
           <v-form ref="formRef" v-model="registroStore.isValid" @submit.prevent="onSubmit">
             <v-row no-gutters>
               <v-col cols="12" class="pa-8 pa-md-12">
                 
                 <div class="d-flex align-center mb-8">
                   <div class="section-badge mr-4">1</div>
-                  <h3 class="text-h5 font-weight-black text-high-emphasis">Asignación de Personal</h3>
+                  <h3 id="registro-enfunde-form-heading" class="text-h5 font-weight-black text-high-emphasis">Asignación de Personal</h3>
                 </div>
 
                 <v-row class="mb-10">
                   <v-col cols="12" md="4">
-                    <label class="custom-label">Finca Destino</label>
+                    <label class="custom-label" for="enfunde-finca">Finca Destino</label>
                     <v-select
+                      id="enfunde-finca"
                       v-model="registroStore.formData.finca_id"
                       :items="fincasFiltradas"
                       item-title="nombre_completo"
@@ -73,8 +91,9 @@
                     />
                   </v-col>
                   <v-col cols="12" md="4">
-                    <label class="custom-label">Operario Responsable</label>
+                    <label class="custom-label" for="enfunde-operario">Operario Responsable</label>
                     <v-select
+                      id="enfunde-operario"
                       v-model="registroStore.formData.operario_id"
                       :items="usuariosActivos"
                       item-title="nombre"
@@ -90,8 +109,9 @@
                     />
                   </v-col>
                   <v-col cols="12" md="4">
-                    <label class="custom-label">Usuario que Registra</label>
+                    <label class="custom-label" for="enfunde-usuario">Usuario que Registra</label>
                     <v-select
+                      id="enfunde-usuario"
                       v-model="registroStore.formData.usuario_id"
                       :items="usuarioActualItem"
                       item-title="nombre"
@@ -116,8 +136,9 @@
 
                 <v-row>
                   <v-col cols="12" md="6">
-                    <label class="custom-label">Semana de Calendario</label>
+                    <label class="custom-label" for="enfunde-calendario">Semana de Calendario</label>
                     <v-autocomplete
+                      id="enfunde-calendario"
                       v-model="registroStore.formData.calendario_id"
                       :items="calendariosAnioActual"
                       item-title="descripcion_semana"
@@ -136,8 +157,9 @@
                   </v-col>
 
                   <v-col cols="12" md="6">
-                    <label class="custom-label">Cantidad de Fundas</label>
+                    <label class="custom-label" for="enfunde-cantidad">Cantidad de Fundas</label>
                     <v-text-field
+                      id="enfunde-cantidad"
                       v-model.number="registroStore.formData.cantidad_fundas"
                       type="number"
                       placeholder="Ingresar total"
@@ -148,12 +170,15 @@
                       class="custom-input"
                       :rules="[rules.required, rules.minCantidad]"
                       prepend-inner-icon="mdi-numeric-box-outline"
+                      inputmode="numeric"
+                      min="1"
                     />
                   </v-col>
 
                   <v-col cols="12">
-                    <label class="custom-label">Observaciones de Campo</label>
+                    <label class="custom-label" for="enfunde-observaciones">Observaciones de Campo</label>
                     <v-textarea
+                      id="enfunde-observaciones"
                       v-model="registroStore.formData.observaciones"
                       placeholder="Notas opcionales..."
                       variant="solo-filled"
@@ -177,6 +202,8 @@
                     rounded="xl"
                     class="mb-6"
                     density="comfortable"
+                    role="status"
+                    aria-live="polite"
                   >
                     <div class="d-flex flex-column flex-sm-row align-center justify-space-between gap-3">
                       <div class="text-caption font-weight-bold">
@@ -185,11 +212,12 @@
                       </div>
                       <v-btn
                         size="x-small"
-                        color="warning"
-                        variant="flat"
-                        class="font-weight-black rounded-lg"
-                        @click="sincronizarYRefrescar"
-                      >
+                      color="warning"
+                      variant="flat"
+                      class="font-weight-black rounded-lg"
+                      aria-label="Sincronizar panel al año del formulario"
+                      @click="sincronizarYRefrescar"
+                    >
                         Sincronizar Panel
                       </v-btn>
                     </div>
@@ -207,6 +235,8 @@
                     class="rounded-xl px-12 font-weight-black shadow-primary"
                     :loading="registroStore.loadingGuardar"
                     :disabled="!esAnioValido"
+                    :aria-busy="registroStore.loadingGuardar"
+                    aria-label="Guardar registro de enfunde"
                     @click="onSubmit"
                     elevation="0"
                   >
@@ -226,7 +256,7 @@
             </v-avatar>
             <h2 class="text-h5 font-weight-black text-high-emphasis">Registros Recientes ({{ reportesStore.anioSeleccionado }})</h2>
             <v-spacer />
-            <v-btn variant="tonal" color="medium-emphasis" icon="mdi-refresh" size="small" @click="registroStore.tablaKey++"></v-btn>
+            <v-btn variant="tonal" color="medium-emphasis" icon="mdi-refresh" size="small" aria-label="Actualizar tabla de registros recientes" @click="registroStore.tablaKey++"></v-btn>
           </div>
           <TablaEnfunde :key="registroStore.tablaKey" />
         </div>
@@ -237,22 +267,23 @@
     <v-snackbar v-model="registroStore.snackbar.show" :color="registroStore.snackbar.color" rounded="lg" elevation="12">
       <div class="d-flex align-center">
         <v-icon class="mr-2">{{ registroStore.snackbar.icon }}</v-icon>
-        <span class="font-weight-bold">{{ registroStore.snackbar.message }}</span>
+        <span class="font-weight-bold" role="status" aria-live="polite">{{ registroStore.snackbar.message }}</span>
       </div>
     </v-snackbar>
   </v-container>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useTheme } from 'vuetify'
 import { useRegistroEnfundeStore } from '@/stores/registroEnfundeStore'
-import { useFincaStore } from '@/stores/fincaStore'
-import { useUsuarioStore } from '@/stores/usuarioStore'
+import { useFincaStore, type Finca } from '@/stores/fincaStore'
+import { useUsuarioStore, type Usuario } from '@/stores/usuarioStore'
 import { useCalendarioStore } from '@/stores/calendarioStore'
 import { useReportesStore } from '@/stores/reportesStore'
 import { useAuthStore } from '@/stores/auth/authStore'
 import TablaEnfunde from '@/components/registros/tablaEnfunde.vue'
+import ViewHelpHint from '@/components/ui/ViewHelpHint.vue'
 
 const theme = useTheme()
 const isDark = computed(() => theme.global.current.value.dark)
@@ -264,13 +295,50 @@ const usuarioStore = useUsuarioStore()
 const calendarioStore = useCalendarioStore()
 const authStore = useAuthStore()
 
-const formRef = ref(null)
-const rawData = ref({ fincas: [], usuarios: [], calendarios: [] })
+interface FormValidationResult {
+  valid: boolean
+}
+
+interface ValidatableForm {
+  validate: () => Promise<FormValidationResult>
+}
+
+interface CalendarioItem {
+  id: number
+  semana: number
+  anio: number
+  color?: string | null
+}
+
+interface FincaSelectItem extends Finca {
+  nombre_completo: string
+}
+
+interface UsuarioSelectItem {
+  id: number
+  nombre: string
+  activo?: boolean
+}
+
+interface CalendarioSelectItem extends CalendarioItem {
+  descripcion_semana: string
+}
+
+const formRef = ref<ValidatableForm | null>(null)
+const rawData = ref<{
+  fincas: Finca[]
+  usuarios: Usuario[]
+  calendarios: CalendarioItem[]
+}>({
+  fincas: [],
+  usuarios: [],
+  calendarios: [],
+})
 
 const rules = {
-  required: v => !!v || 'Requerido',
-  minCantidad: v => (v && v > 0) || 'Mínimo 1',
-  usuarioAutenticado: v => Number(v) > 0 || 'Sesion invalida: vuelva a iniciar sesion'
+  required: (v: unknown) => !!v || 'Requerido',
+  minCantidad: (v: unknown) => (Number(v) > 0) || 'Mínimo 1',
+  usuarioAutenticado: (v: unknown) => Number(v) > 0 || 'Sesion invalida: vuelva a iniciar sesion'
 }
 
 // LÓGICA DE AÑO Y VALIDACIÓN
@@ -285,6 +353,7 @@ const esAnioValido = computed(() => {
 });
 
 const sincronizarYRefrescar = async () => {
+  if (!anioFormulario.value) return;
   const fincaId = Number(registroStore.formData.finca_id || fincaStore.fincaSeleccionadaId || 0);
   await reportesStore.actualizarPeriodo(anioFormulario.value, fincaId || null);
   registroStore.tablaKey++;
@@ -292,25 +361,25 @@ const sincronizarYRefrescar = async () => {
 };
 
 // FILTRADO DE DATOS (CORREGIDO PARA VARIABLE 'anio')
-const fincasFiltradas = computed(() =>
+const fincasFiltradas = computed<FincaSelectItem[]>(() =>
   rawData.value.fincas.map(f => ({
     ...f,
     nombre_completo: `${f.nombre} - ${f.empresa_nombre || 'Sin empresa'}`
   }))
 )
-const usuarioActualItem = computed(() => {
+const usuarioActualItem = computed<UsuarioSelectItem[]>(() => {
   const id = Number(authStore.user?.id_usuario ?? authStore.user?.id ?? 0);
   return [{ id, nombre: authStore.user?.nombre || 'Usuario actual' }];
 });
 const canConsultarUsuarios = computed(() => authStore.can('view.usuarios'));
-const usuariosActivos = computed(() => {
+const usuariosActivos = computed<UsuarioSelectItem[]>(() => {
   if (Array.isArray(rawData.value.usuarios) && rawData.value.usuarios.length) {
     return rawData.value.usuarios.filter((u) => u.activo !== false);
   }
   return usuarioActualItem.value;
 });
 
-const calendariosAnioActual = computed(() => {
+const calendariosAnioActual = computed<CalendarioSelectItem[]>(() => {
   const anioAFiltrar = reportesStore.anioSeleccionado || new Date().getFullYear();
   
   return rawData.value.calendarios
@@ -329,14 +398,23 @@ const semanaActual = computed(() => {
 })
 
 // FUNCIONES DE SOPORTE
-function onSemanaChange(id) {
+function onSemanaChange(id: number | null) {
   const sel = rawData.value.calendarios.find(c => c.id === id)
-  if (sel) registroStore.formData.color = sel.color
+  if (sel) registroStore.formData.color = sel.color || null
 }
 
-function getColorHex(c) {
-  const map = { Blanca: '#94a3b8', Negra: isDark.value ? '#64748b' : '#1e293b', Lila: '#a855f7', Roja: '#ef4444', Cafe: '#78350f', Amarilla: '#eab308', Verde: '#22c55e', Azul: '#3b82f6' }
-  return map[c] || '#94a3b8'
+function getColorHex(c: string | null) {
+  const map: Record<string, string> = {
+    Blanca: '#94a3b8',
+    Negra: isDark.value ? '#64748b' : '#1e293b',
+    Lila: '#a855f7',
+    Roja: '#ef4444',
+    Cafe: '#78350f',
+    Amarilla: '#eab308',
+    Verde: '#22c55e',
+    Azul: '#3b82f6',
+  }
+  return c ? map[c] || '#94a3b8' : '#94a3b8'
 }
 
 // WATCH PARA SINCRONIZACIÓN REACTIVA
@@ -352,15 +430,19 @@ onMounted(async () => {
   registroStore.globalLoading = true
   registroStore.initForm()
   try {
-    const tasks = [
+    const tasks: [
+      Promise<Finca[]>,
+      Promise<CalendarioItem[]>,
+      Promise<Usuario[]>,
+    ] = [
       fincaStore.obtenerFincas(),
       calendarioStore.obtenerCalendarios(),
-      canConsultarUsuarios.value ? usuarioStore.obtenerUsuarios() : Promise.resolve([]),
+      canConsultarUsuarios.value ? usuarioStore.obtenerUsuarios() : Promise.resolve([] as Usuario[]),
     ];
     const [fRes, cRes, uRes] = await Promise.allSettled(tasks);
-    const f = fRes.status === 'fulfilled' ? fRes.value : [];
-    const c = cRes.status === 'fulfilled' ? cRes.value : [];
-    const u = uRes.status === 'fulfilled' ? uRes.value : [];
+    const f: Finca[] = fRes.status === 'fulfilled' ? fRes.value : [];
+    const c: CalendarioItem[] = cRes.status === 'fulfilled' ? cRes.value : [];
+    const u: Usuario[] = uRes.status === 'fulfilled' ? uRes.value : [];
 
     rawData.value = { fincas: f || [], usuarios: u || [], calendarios: c || [] }
 
@@ -393,8 +475,8 @@ const onSubmit = async () => {
     registroStore.mostrarMensaje('Sesion invalida: vuelva a iniciar sesion', 'error');
     return;
   }
-  const val = await formRef.value.validate()
-  if (val.valid) await registroStore.guardarRegistro()
+  const val = await formRef.value?.validate()
+  if (val?.valid) await registroStore.guardarRegistro()
 }
 </script>
 
@@ -449,5 +531,17 @@ const onSubmit = async () => {
 .border-dashed { border-style: dashed !important; opacity: 0.3; }
 
 .gap-3 { gap: 12px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .gap-4 { gap: 16px; }
 </style>

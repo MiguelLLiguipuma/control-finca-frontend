@@ -21,6 +21,7 @@
                 color="secondary"
                 prepend-icon="mdi-refresh"
                 :loading="fincaStore.loading"
+                aria-label="Actualizar datos de fincas"
                 @click="recargarDatos"
               >
                 Actualizar
@@ -31,6 +32,7 @@
                 prepend-icon="mdi-plus"
                 class="font-weight-bold"
                 :disabled="!canManage"
+                aria-label="Crear nueva finca"
                 @click="abrirDialogo"
               >
                 Nueva Finca
@@ -85,6 +87,7 @@
               <v-col cols="12" md="5">
                 <v-text-field
                   v-model.trim="search"
+                  aria-label="Buscar fincas"
                   prepend-inner-icon="mdi-magnify"
                   variant="outlined"
                   density="comfortable"
@@ -104,6 +107,7 @@
                   density="comfortable"
                   hide-details
                   label="Empresa"
+                  aria-label="Filtrar por empresa"
                 />
               </v-col>
 
@@ -117,6 +121,7 @@
                   density="comfortable"
                   hide-details
                   label="Cobertura clima"
+                  aria-label="Filtrar por cobertura de clima"
                 />
               </v-col>
             </v-row>
@@ -211,15 +216,16 @@
         <v-divider />
 
         <v-card-text class="pt-5">
-          <v-alert v-if="fincaStore.error" type="error" variant="tonal" class="mb-4">
+          <v-alert v-if="fincaStore.error" type="error" variant="tonal" class="mb-4" role="alert" aria-live="assertive">
             {{ fincaStore.error }}
           </v-alert>
 
           <v-form ref="formRef" v-model="isFormValid">
             <v-row dense>
               <v-col cols="12">
-                <label class="custom-label">Nombre de Finca</label>
+                <label class="custom-label" for="finca-nombre">Nombre de Finca</label>
                 <v-text-field
+                  id="finca-nombre"
                   v-model.trim="formData.nombre"
                   variant="outlined"
                   density="comfortable"
@@ -230,8 +236,9 @@
               </v-col>
 
               <v-col cols="12">
-                <label class="custom-label">Empresa Responsable</label>
+                <label class="custom-label" for="finca-empresa">Empresa Responsable</label>
                 <v-select
+                  id="finca-empresa"
                   v-model="formData.empresa_id"
                   :items="empresaStore.empresas"
                   item-title="nombre"
@@ -245,8 +252,9 @@
               </v-col>
 
               <v-col cols="12">
-                <label class="custom-label">Ubicacion</label>
+                <label class="custom-label" for="finca-ubicacion">Ubicacion</label>
                 <v-text-field
+                  id="finca-ubicacion"
                   v-model.trim="formData.ubicacion"
                   variant="outlined"
                   density="comfortable"
@@ -265,26 +273,30 @@
               </v-col>
 
               <v-col cols="12" md="6">
-                <label class="custom-label">Latitud</label>
+                <label class="custom-label" for="finca-latitud">Latitud</label>
                 <v-text-field
+                  id="finca-latitud"
                   v-model.number="formData.latitud"
                   type="number"
                   variant="outlined"
                   density="comfortable"
                   :rules="latRules"
                   placeholder="-3.324500"
+                  inputmode="decimal"
                 />
               </v-col>
 
               <v-col cols="12" md="6">
-                <label class="custom-label">Longitud</label>
+                <label class="custom-label" for="finca-longitud">Longitud</label>
                 <v-text-field
+                  id="finca-longitud"
                   v-model.number="formData.longitud"
                   type="number"
                   variant="outlined"
                   density="comfortable"
                   :rules="lngRules"
                   placeholder="-79.808300"
+                  inputmode="decimal"
                 />
               </v-col>
 
@@ -295,6 +307,8 @@
                   color="secondary"
                   prepend-icon="mdi-map-marker-radius"
                   :loading="loadingGPS"
+                  :aria-busy="loadingGPS"
+                  aria-label="Usar ubicación actual para capturar coordenadas"
                   @click="obtenerCoordenadas"
                 >
                   Usar mi ubicacion actual
@@ -306,13 +320,15 @@
 
         <v-card-actions class="px-6 pb-5">
           <v-spacer />
-          <v-btn variant="text" @click="cerrarDialogo">Cancelar</v-btn>
+          <v-btn variant="text" aria-label="Cancelar formulario de finca" @click="cerrarDialogo">Cancelar</v-btn>
           <v-btn
             color="primary"
             variant="flat"
             class="px-7"
             :loading="fincaStore.loading"
             :disabled="!isFormValid || fincaStore.loading"
+            :aria-busy="fincaStore.loading"
+            aria-label="Guardar finca"
             @click="guardarFinca"
           >
             {{ isEditing ? 'Guardar Cambios' : 'Guardar' }}

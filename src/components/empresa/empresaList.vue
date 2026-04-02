@@ -1,5 +1,16 @@
 <template>
   <div class="list-container">
+    <v-alert
+      v-if="props.error"
+      type="error"
+      variant="tonal"
+      class="mb-4"
+      role="alert"
+      aria-live="assertive"
+    >
+      {{ props.error }}
+    </v-alert>
+
     <v-data-table
       :headers="headers"
       :items="props.empresas"
@@ -43,6 +54,7 @@
             size="small"
             class="rounded-lg action-btn"
             :disabled="!props.canManage"
+            :aria-label="`Editar empresa ${item.nombre}`"
             @click="$emit('edit', item)"
           />
           <v-btn
@@ -52,6 +64,7 @@
             size="small"
             class="rounded-lg action-btn"
             :disabled="!props.canManage"
+            :aria-label="`Eliminar empresa ${item.nombre}`"
             @click="confirmarEliminacion(item)"
           />
         </div>
@@ -70,6 +83,7 @@
             color="primary" 
             class="mt-2 text-none rounded-xl" 
             prepend-icon="mdi-plus"
+            aria-label="Registrar la primera empresa"
             @click="$emit('create')"
           >
             Registrar la primera
@@ -98,6 +112,7 @@
               size="large"
               elevation="0" 
               class="rounded-xl font-weight-bold" 
+              :aria-label="`Confirmar eliminación de ${empresaAEliminar?.nombre || 'empresa'}`"
               @click="ejecutarEliminacion"
             >
               Sí, eliminar registro
@@ -108,6 +123,7 @@
               color="medium-emphasis" 
               size="large"
               class="rounded-xl font-weight-bold" 
+              aria-label="Cancelar eliminación"
               @click="dialogoEliminar = false"
             >
               Mantener empresa
@@ -181,7 +197,7 @@ function ejecutarEliminacion() {
   box-shadow: none !important;
   border-bottom: 1px solid rgba(var(--v-border-color), 0.1) !important;
   font-weight: 800 !important;
-  color: rgba(var(--v-theme-on-surface), 0.5) !important;
+  color: rgba(var(--v-theme-on-surface), 0.72) !important;
   text-transform: uppercase;
   font-size: 0.7rem !important;
   letter-spacing: 0.05em;
@@ -193,7 +209,7 @@ function ejecutarEliminacion() {
 }
 
 .custom-table :deep(tr:hover) {
-  background-color: rgba(var(--v-theme-primary), 0.02) !important;
+  background-color: rgba(var(--v-theme-primary), 0.05) !important;
 }
 
 /* BADGE PARA RUC CON JETBRAINS MONO */
@@ -202,7 +218,7 @@ function ejecutarEliminacion() {
   color: rgb(var(--v-theme-primary));
   padding: 4px 10px;
   border-radius: 6px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.8rem;
   font-weight: 700;
   border: 1px solid rgba(var(--v-border-color), 0.1);
@@ -223,4 +239,14 @@ function ejecutarEliminacion() {
 .gap-1 { gap: 4px; }
 .gap-3 { gap: 12px; }
 .leading-tight { line-height: 1.25; }
+
+.action-btn {
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.action-btn:hover:not(.v-btn--disabled),
+.action-btn:focus-visible:not(.v-btn--disabled) {
+  background: rgba(var(--v-theme-primary), 0.08);
+  transform: translateY(-1px);
+}
 </style>

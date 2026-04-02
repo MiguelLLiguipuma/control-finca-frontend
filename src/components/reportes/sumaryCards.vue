@@ -34,17 +34,24 @@
   </v-card>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  card: {
-    type: Object,
-    required: true,
-  },
-})
+interface SummaryCardData {
+  title: string
+  value: number | string | null | undefined
+  icon?: string
+  gradient?: string
+  helperText?: string
+}
 
-const emit = defineEmits(['view-details'])
+const props = defineProps<{
+  card: SummaryCardData
+}>()
+
+const emit = defineEmits<{
+  (event: 'view-details', title: string): void
+}>()
 
 const formattedValue = computed(() => {
   if (typeof props.card.value === 'number') {

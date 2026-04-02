@@ -17,6 +17,23 @@
     </div>
 
     <v-card-text class="pa-6">
+      <v-sheet class="chart-guide rounded-lg pa-3 mb-4" color="surface">
+        <div class="text-caption text-medium-emphasis">
+          Este bloque compara el aporte de cada color de cinta en la producción total.
+        </div>
+        <div class="d-flex flex-wrap align-center gap-2 mt-2">
+          <v-chip size="x-small" color="primary" variant="flat" class="font-weight-bold">
+            Gauge: participación por cinta
+          </v-chip>
+          <v-chip size="x-small" color="info" variant="tonal" class="font-weight-bold">
+            Ranking: mayor a menor producción
+          </v-chip>
+          <v-chip size="x-small" color="success" variant="tonal" class="font-weight-bold">
+            Eficiencia: avance vs meta diaria
+          </v-chip>
+        </div>
+      </v-sheet>
+
       <v-skeleton-loader
         v-if="loading"
         type="image, list-item-three-line, list-item-three-line"
@@ -135,22 +152,38 @@
   </v-card>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useTheme } from 'vuetify'
 
-const props = defineProps({
-  cintas: { type: Array, required: true },
-  metaDiaria: { type: Number, default: 10000 },
-  loading: { type: Boolean, default: false },
+interface CintaRendimiento {
+  nombre: string
+  total: number
+}
+
+interface GaugeSegment {
+  color: string
+  porcentaje: number
+  inicio: number
+}
+
+const props = withDefaults(defineProps<{
+  cintas: CintaRendimiento[]
+  metaDiaria?: number
+  loading?: boolean
+}>(), {
+  metaDiaria: 10000,
+  loading: false,
 })
 
 const theme = useTheme()
 const isDark = computed(() => theme.global.current.value.dark)
 const now = ref(new Date())
-let clockInterval = null
+let clockInterval: ReturnType<typeof window.setInterval> | null = null
 
-const cintasSafe = computed(() => Array.isArray(props.cintas) ? props.cintas : [])
+const cintasSafe = computed<CintaRendimiento[]>(() =>
+  Array.isArray(props.cintas) ? props.cintas : [],
+)
 
 onMounted(() => {
   clockInterval = setInterval(() => {
@@ -170,12 +203,14 @@ const totalFundasFormateado = computed(() => new Intl.NumberFormat('es-EC').form
 const metaDiariaFormateada = computed(() => new Intl.NumberFormat('es-EC').format(props.metaDiaria))
 const eficienciaTotal = computed(() => Math.min(100, Math.round((totalFundas.value / props.metaDiaria) * 100)))
 
-const cintasOrdenadas = computed(() => [...cintasSafe.value].sort((a, b) => b.total - a.total).slice(0, 8))
-const cintaTop = computed(() => cintasOrdenadas.value[0] || { nombre: 'N/A', total: 0 })
+const cintasOrdenadas = computed<CintaRendimiento[]>(() =>
+  [...cintasSafe.value].sort((a, b) => b.total - a.total).slice(0, 8),
+)
+const cintaTop = computed<CintaRendimiento>(() => cintasOrdenadas.value[0] || { nombre: 'N/A', total: 0 })
 
-const gaugeSegments = computed(() => {
+const gaugeSegments = computed<GaugeSegment[]>(() => {
   let acumulado = 0
-  return cintasOrdenadas.value.map(c => {
+  return cintasOrdenadas.value.map((c) => {
     const porc = (c.total / (totalFundas.value || 1)) * 100
     const seg = { color: colorReal(c.nombre), porcentaje: porc, inicio: acumulado - 90 }
     acumulado += (porc * 360) / 100
@@ -183,11 +218,11 @@ const gaugeSegments = computed(() => {
   })
 })
 
-const calcularX = (angulo) => 100 + 85 * Math.cos(angulo * Math.PI / 180)
-const calcularY = (angulo) => 100 + 85 * Math.sin(angulo * Math.PI / 180)
+const calcularX = (angulo: number) => 100 + 85 * Math.cos(angulo * Math.PI / 180)
+const calcularY = (angulo: number) => 100 + 85 * Math.sin(angulo * Math.PI / 180)
 
-const calcularPorcentaje = (v) => Math.round((v / (totalFundas.value || 1)) * 100)
-const calcularPromedioHora = (v) => Math.round(v / 8)
+const calcularPorcentaje = (v: number) => Math.round((v / (totalFundas.value || 1)) * 100)
+const calcularPromedioHora = (v: number) => Math.round(v / 8)
 
 const tiempoRestante = computed(() => {
   const fin = new Date(now.value)
@@ -198,7 +233,7 @@ const tiempoRestante = computed(() => {
 })
 
 // Ajustamos ligeramente los colores para que se vean mejor en ambos temas
-const colores = { 
+const colores: Record<string, string> = { 
   Blanca: '#cbd5e1', 
   Negra: '#1e293b', 
   Lila: '#a855f7', 
@@ -208,7 +243,7 @@ const colores = {
   Verde: '#22c55e', 
   Azul: '#3b82f6' 
 }
-const colorReal = (n) => {
+const colorReal = (n: string) => {
   if (n === 'Blanca' && isDark.value) return '#f8fafc' // Blanca más brillante en dark
   if (n === 'Negra' && isDark.value) return '#64748b'  // Negra más clara en dark
   return colores[n] || `hsl(${n.length * 40}, 70%, 50%)`
@@ -231,6 +266,11 @@ const colorReal = (n) => {
 
 .bg-footer-subtle {
   background-color: rgba(var(--v-theme-on-surface), 0.02) !important;
+}
+
+.chart-guide {
+  border: 1px dashed rgba(var(--v-border-color), 0.22);
+  background: rgba(var(--v-theme-on-surface), 0.02);
 }
 
 /* GAUGE */
@@ -259,7 +299,7 @@ const colorReal = (n) => {
   background-color: rgba(var(--v-theme-primary), 0.05) !important;
 }
 
-.rank-badge { font-family: 'monospace'; font-weight: 900; font-size: 0.75rem; width: 24px; }
+.rank-badge { font-family: var(--font-mono); font-weight: 900; font-size: 0.75rem; width: 24px; }
 
 @media (min-width: 960px) {
   .border-right-md { border-right: 1px solid rgba(var(--v-border-color), 0.1); }

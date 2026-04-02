@@ -33,19 +33,22 @@
   </div>
 </template>
 
-<script setup>
-const props = defineProps({
-  stats: {
-    type: Array,
-    default: () => [],
-  },
-  loading: {
-    type: Boolean,
-    default: false,
-  },
+<script setup lang="ts">
+interface SideStatItem {
+  label: string
+  value: number | string | null | undefined
+  change?: number
+}
+
+const props = withDefaults(defineProps<{
+  stats?: SideStatItem[]
+  loading?: boolean
+}>(), {
+  stats: () => [],
+  loading: false,
 })
 
-const formatValue = (value) => {
+const formatValue = (value: SideStatItem['value']) => {
   if (typeof value === 'number') {
     return value.toLocaleString('es-EC')
   }

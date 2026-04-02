@@ -41,6 +41,7 @@
             <div v-if="isRegisterMode" class="mb-4">
               <label class="field-label">Nombre</label>
               <v-text-field
+                id="register-name"
                 v-model="nombre"
                 placeholder="Tu nombre completo"
                 prepend-inner-icon="mdi-account-outline"
@@ -48,6 +49,7 @@
                 color="primary"
                 rounded="lg"
                 density="comfortable"
+                autocomplete="name"
                 :rules="[v => !!v || 'El nombre es obligatorio']"
                 hide-details="auto"
               />
@@ -56,6 +58,7 @@
             <div class="mb-4">
               <label class="field-label">Correo Electronico</label>
               <v-text-field
+                id="auth-email"
                 v-model="email"
                 placeholder="ejemplo@correo.com"
                 prepend-inner-icon="mdi-email-outline"
@@ -63,6 +66,8 @@
                 color="primary"
                 rounded="lg"
                 density="comfortable"
+                type="email"
+                autocomplete="email"
                 :rules="[v => !!v || 'El correo es obligatorio']"
                 hide-details="auto"
               />
@@ -71,6 +76,7 @@
             <div class="mb-4">
               <label class="field-label">Contrasena</label>
               <v-text-field
+                id="auth-password"
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
                 placeholder="••••••••"
@@ -80,6 +86,8 @@
                 color="primary"
                 rounded="lg"
                 density="comfortable"
+                :aria-label="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                autocomplete="current-password"
                 @click:append-inner="showPassword = !showPassword"
                 :rules="[v => !!v || 'La contrasena es obligatoria']"
                 hide-details="auto"
@@ -89,6 +97,7 @@
             <div v-if="isRegisterMode" class="mb-6">
               <label class="field-label">Confirmar Contrasena</label>
               <v-text-field
+                id="register-confirm-password"
                 v-model="confirmPassword"
                 :type="showPassword ? 'text' : 'password'"
                 placeholder="••••••••"
@@ -97,6 +106,7 @@
                 color="primary"
                 rounded="lg"
                 density="comfortable"
+                autocomplete="new-password"
                 :rules="[v => !!v || 'Confirma la contrasena']"
                 hide-details="auto"
               />
@@ -110,6 +120,8 @@
               class="mb-4"
               rounded="lg"
               closable
+              role="alert"
+              aria-live="assertive"
             >
               {{ errorMessage }}
             </v-alert>
@@ -121,6 +133,8 @@
               class="mb-4"
               rounded="lg"
               closable
+              role="status"
+              aria-live="polite"
             >
               {{ successMessage }}
             </v-alert>
@@ -133,6 +147,7 @@
               class="auth-submit text-none font-weight-bold"
               size="x-large"
               :loading="loading"
+              :aria-busy="loading"
             >
               {{ isRegisterMode ? 'Crear Usuario' : 'Entrar al Sistema' }}
             </v-btn>
@@ -144,7 +159,7 @@
                 <v-divider />
               </div>
               <div v-if="googleClientIdValido" ref="googleButtonRef" class="google-btn-wrap"></div>
-              <div v-else class="text-caption text-center text-medium-emphasis">
+              <div v-else class="text-caption text-center text-medium-emphasis" role="status" aria-live="polite">
                 Login con Google no configurado.
               </div>
             </template>
@@ -166,11 +181,44 @@
   </v-container>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth/authStore';
 import api from '@/services/api';
+
+interface GoogleCredentialResponse {
+  credential?: string;
+}
+
+interface GoogleIdentityApi {
+  initialize(config: {
+    client_id: string;
+    callback: (response: GoogleCredentialResponse) => void | Promise<void>;
+    auto_select?: boolean;
+    cancel_on_tap_outside?: boolean;
+  }): void;
+  renderButton(
+    element: HTMLElement,
+    options: {
+      theme?: string;
+      size?: string;
+      text?: string;
+      shape?: string;
+      width?: number;
+    },
+  ): void;
+}
+
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        id?: GoogleIdentityApi;
+      };
+    };
+  }
+}
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -184,7 +232,7 @@ const showPassword = ref(false);
 const loading = ref(false);
 const errorMessage = ref('');
 const successMessage = ref('');
-const googleButtonRef = ref(null);
+const googleButtonRef = ref<HTMLElement | null>(null);
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const googleClientIdValido = computed(() => {
   const raw = String(googleClientId || '').trim();
@@ -194,7 +242,7 @@ const googleClientIdValido = computed(() => {
 });
 
 const loadGoogleScript = () =>
-  new Promise((resolve, reject) => {
+  new Promise<boolean>((resolve, reject) => {
     if (window.google?.accounts?.id) return resolve(true);
     const existing = document.querySelector('script[data-google-identity="true"]');
     if (existing) {
@@ -213,13 +261,13 @@ const loadGoogleScript = () =>
     document.head.appendChild(script);
   });
 
-const toggleMode = (registerMode) => {
+const toggleMode = (registerMode: boolean) => {
   isRegisterMode.value = registerMode;
   errorMessage.value = '';
   successMessage.value = '';
 };
 
-const handleGoogleCredential = async (response) => {
+const handleGoogleCredential = async (response: GoogleCredentialResponse) => {
   const idToken = String(response?.credential || '').trim();
   if (!idToken) {
     errorMessage.value = 'No se recibió credencial de Google';
@@ -313,10 +361,11 @@ const handleRegister = async () => {
     isRegisterMode.value = false;
     password.value = '';
     confirmPassword.value = '';
-  } catch (error) {
+  } catch (error: unknown) {
+    const e = error as { response?: { data?: { message?: string; error?: string } } };
     errorMessage.value =
-      error?.response?.data?.message ||
-      error?.response?.data?.error ||
+      e?.response?.data?.message ||
+      e?.response?.data?.error ||
       'No se pudo registrar la cuenta';
   } finally {
     loading.value = false;

@@ -21,6 +21,7 @@
             prepend-icon="mdi-plus"
             elevation="0"
             :disabled="!canManage"
+            aria-label="Crear nueva empresa"
             @click="openCreateDialog"
           >
             Nueva Empresa
@@ -74,11 +75,14 @@
         <v-card border variant="flat" class="rounded-xl overflow-hidden bg-surface shadow-sm">
           <div class="d-flex align-center px-6 py-4 bg-header-subtle border-b">
             <v-icon color="medium-emphasis" class="mr-3">mdi-magnify</v-icon>
+            <label for="empresa-search" class="sr-only">Buscar empresas</label>
             <input
+              id="empresa-search"
               v-model.trim="search"
               type="text" 
               placeholder="Buscar por nombre, RUC o representante..." 
               class="search-input text-body-1 text-high-emphasis"
+              autocomplete="off"
             />
             <v-spacer />
             <v-btn 
@@ -86,6 +90,7 @@
               color="medium-emphasis" 
               icon="mdi-refresh" 
               size="small"
+              aria-label="Actualizar listado de empresas"
               @click="empresaStore.fetchEmpresas()"
               :loading="empresaStore.loading"
             />
@@ -116,7 +121,7 @@
             </v-avatar>
             <h2 class="text-h6 font-weight-black text-high-emphasis">Registrar Empresa</h2>
           </div>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="dialogCreate = false" />
+          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Cerrar diálogo de crear empresa" @click="dialogCreate = false" />
         </div>
         
           <v-card-text class="pa-6 bg-background-alt">
@@ -134,7 +139,7 @@
             </v-avatar>
             <h2 class="text-h6 font-weight-black text-high-emphasis">Editar Empresa</h2>
           </div>
-          <v-btn icon="mdi-close" variant="text" size="small" @click="dialogEdit = false" />
+          <v-btn icon="mdi-close" variant="text" size="small" aria-label="Cerrar diálogo de editar empresa" @click="dialogEdit = false" />
         </div>
 
         <v-card-text class="pa-6 bg-background-alt">
@@ -256,6 +261,18 @@ async function handleDeleteEmpresa(empresa: any) {
   width: 100%;
   padding: 8px 0;
   background: transparent;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .search-input::placeholder {

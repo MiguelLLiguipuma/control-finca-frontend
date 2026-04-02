@@ -14,6 +14,8 @@
             <v-btn 
               icon 
               variant="text"
+              aria-label="Abrir o contraer menú lateral"
+              title="Abrir o contraer menú lateral"
               @click="toggleSidebar()" 
               class="nav-btn mr-2"
             >
@@ -36,7 +38,13 @@
           <v-col cols="auto" class="d-flex align-center justify-end">
             <div class="user-actions d-flex align-center gap-2">
               
-              <v-btn icon variant="text" @click="toggleDarkMode">
+              <v-btn
+                icon
+                variant="text"
+                :aria-label="theme.global.current.value.dark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
+                :title="theme.global.current.value.dark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'"
+                @click="toggleDarkMode"
+              >
                 <v-icon :color="theme.global.current.value.dark ? 'yellow' : 'slate-600'">
                   {{ theme.global.current.value.dark ? 'mdi-weather-sunny' : 'mdi-weather-night' }}
                 </v-icon>
@@ -60,7 +68,14 @@
 
               <v-menu location="bottom end">
                 <template v-slot:activator="{ props }">
-                  <v-btn icon v-bind="props" variant="tonal" size="small">
+                  <v-btn
+                    icon
+                    v-bind="props"
+                    variant="tonal"
+                    size="small"
+                    aria-label="Abrir menú de usuario"
+                    title="Abrir menú de usuario"
+                  >
                     <v-icon>mdi-chevron-down</v-icon>
                   </v-btn>
                 </template>
@@ -84,12 +99,18 @@
   </v-app-bar>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { useTheme } from 'vuetify'; // 1. Importamos el hook de tema
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useAuthStore } from '../stores/auth/authStore';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+
+interface BreadcrumbItem {
+  title: string;
+  to?: string;
+  disabled?: boolean;
+}
 
 const theme = useTheme(); // 2. Instanciamos el tema
 const sidebarStore = useSidebarStore();
@@ -103,7 +124,7 @@ const toggleDarkMode = () => {
   theme.global.name.value = theme.global.current.value.dark ? 'light' : 'dark';
 };
 
-const breadcrumbItems = computed(() => {
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
   if (route.name === 'Login') return [];
 
   const currentLabel =

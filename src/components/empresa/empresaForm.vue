@@ -1,6 +1,6 @@
 <template>
   <div class="form-container">
-    <v-alert v-if="empresaStore.error" type="error" variant="tonal" class="mb-4">
+    <v-alert v-if="empresaStore.error" type="error" variant="tonal" class="mb-4" role="alert" aria-live="assertive">
       {{ empresaStore.error }}
     </v-alert>
 
@@ -8,8 +8,9 @@
       <v-row dense>
         <v-col cols="12">
           <div class="field-wrapper">
-            <label class="input-label">Nombre Legal de la Empresa <span class="required">*</span></label>
+            <label class="input-label" for="empresa-nombre">Nombre Legal de la Empresa <span class="required">*</span></label>
             <v-text-field
+              id="empresa-nombre"
               v-model.trim="form.nombre"
               :rules="[rules.required, rules.min]"
               placeholder="Ej: AgroExport S.A."
@@ -20,14 +21,16 @@
               class="modern-input"
               color="primary"
               maxlength="120"
+              autocomplete="organization"
             />
           </div>
         </v-col>
 
         <v-col cols="12" md="6">
           <div class="field-wrapper">
-            <label class="input-label">RUC / Identificacion</label>
+            <label class="input-label" for="empresa-ruc">RUC / Identificacion</label>
             <v-text-field
+              id="empresa-ruc"
               v-model="form.ruc"
               :rules="[rules.ruc]"
               placeholder="0999999999001"
@@ -38,14 +41,16 @@
               density="comfortable"
               class="modern-input"
               @update:model-value="onRucInput"
+              inputmode="numeric"
             />
           </div>
         </v-col>
 
         <v-col cols="12" md="6">
           <div class="field-wrapper">
-            <label class="input-label">Telefono</label>
+            <label class="input-label" for="empresa-telefono">Telefono</label>
             <v-text-field
+              id="empresa-telefono"
               v-model="form.telefono"
               :rules="[rules.telefono]"
               placeholder="+593 9..."
@@ -56,14 +61,16 @@
               density="comfortable"
               class="modern-input"
               @update:model-value="onTelefonoInput"
+              autocomplete="tel"
             />
           </div>
         </v-col>
 
         <v-col cols="12">
           <div class="field-wrapper">
-            <label class="input-label">Direccion Matriz</label>
+            <label class="input-label" for="empresa-direccion">Direccion Matriz</label>
             <v-textarea
+              id="empresa-direccion"
               v-model.trim="form.direccion"
               :rules="[rules.direccion]"
               placeholder="Indique calle principal, secundaria y referencia..."
@@ -75,6 +82,7 @@
               no-resize
               class="modern-input"
               maxlength="220"
+              autocomplete="street-address"
             />
           </div>
         </v-col>
@@ -85,6 +93,7 @@
           variant="text"
           color="medium-emphasis"
           class="rounded-xl px-6 mr-2 font-weight-bold text-none"
+          aria-label="Cancelar formulario de empresa"
           @click="$emit('cancel')"
         >
           Cancelar
@@ -98,6 +107,7 @@
           :loading="empresaStore.loading"
           :disabled="empresaStore.loading"
           type="submit"
+          :aria-busy="empresaStore.loading"
           elevation="0"
         >
           {{ mode === 'create' ? 'Guardar Empresa' : 'Actualizar Cambios' }}

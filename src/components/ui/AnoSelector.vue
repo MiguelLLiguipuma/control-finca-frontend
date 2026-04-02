@@ -38,7 +38,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useReportesStore } from '@/stores/reportesStore'
 
@@ -46,7 +46,7 @@ const reportesStore = useReportesStore()
 const anioMaximo = new Date().getFullYear()
 const anioMinimo = anioMaximo - 7
 
-const aniosDisponibles = computed(() => {
+const aniosDisponibles = computed<{ value: number; label: string }[]>(() => {
   return Array.from({ length: 8 }, (_, i) => anioMaximo - i).map((value) => ({
     value,
     label: String(value),

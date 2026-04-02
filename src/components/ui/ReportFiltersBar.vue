@@ -29,6 +29,7 @@
           divided
           density="comfortable"
           class="modo-analisis-toggle w-100"
+          aria-label="Modo de comparación del dashboard"
         >
           <v-btn :value="'actual'" size="small" color="primary" variant="text" class="flex-grow-1">
             Solo año
@@ -56,6 +57,7 @@
           divided
           density="comfortable"
           class="modo-analisis-toggle w-100"
+          aria-label="Alcance de datos del dashboard"
         >
           <v-btn :value="'finca'" size="small" color="primary" variant="text" class="flex-grow-1">
             Mi finca
@@ -118,6 +120,16 @@ const scopeDatos = computed({
 .modo-analisis-toggle {
   border: 1px solid rgba(var(--v-border-color), 0.15);
   border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.02);
+}
+
+.modo-analisis-toggle :deep(.v-btn) {
+  font-weight: 700;
+}
+
+.modo-analisis-toggle :deep(.v-btn--active) {
+  background: rgba(var(--v-theme-primary), 0.12) !important;
+  color: rgb(var(--v-theme-primary)) !important;
 }
 
 @media (max-width: 600px) {
