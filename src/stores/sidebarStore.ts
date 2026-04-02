@@ -1,26 +1,36 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 
-export const useSidebarStore = defineStore('sidebar', () => {
-	// 🎯 ESTADO PRINCIPAL
-	const isSidebarOpen = ref(true);
-	const isMiniSidebar = ref(false); // ✅ Inicia expandido en desktop
-	const isMobileView = ref(false);
+interface SidebarState {
+	isOpen: boolean;
+	isMini: boolean;
+	isHoverExpanded: boolean;
+	width: number;
+}
 
-	// 🔍 COMPUTED PROPERTIES - ESTADOS DERIVADOS
-	const sidebarState = computed(() => {
+export const useSidebarStore = defineStore('sidebar', () => {
+	const isSidebarOpen = ref(true);
+	const isMiniSidebar = ref(false);
+	const isMobileView = ref(false);
+	const isHoverExpanded = ref(false);
+
+	const sidebarState = computed<SidebarState>(() => {
 		if (isMobileView.value) {
 			return {
 				isOpen: isSidebarOpen.value,
-				isMini: false, // ✅ En mobile nunca es mini
+				isMini: false,
+				isHoverExpanded: false,
 				width: isSidebarOpen.value ? 260 : 0,
 			};
 		}
 
+		const expanded = !isMiniSidebar.value || isHoverExpanded.value;
+
 		return {
-			isOpen: true, // ✅ En desktop siempre está "abierto" conceptualmente
+			isOpen: true,
 			isMini: isMiniSidebar.value,
-			width: isMiniSidebar.value ? 80 : 260,
+			isHoverExpanded: isHoverExpanded.value,
+			width: expanded ? 260 : 80,
 		};
 	});
 
@@ -29,32 +39,39 @@ export const useSidebarStore = defineStore('sidebar', () => {
 	// 🛠️ ACTIONS - LÓGICA DE NEGOCIO
 	function toggleSidebar() {
 		if (isMobileView.value) {
-			// ✅ En mobile: toggle completo
 			isSidebarOpen.value = !isSidebarOpen.value;
 		} else {
-			// ✅ En desktop: toggle entre mini/expandido
 			isMiniSidebar.value = !isMiniSidebar.value;
+			isHoverExpanded.value = false;
 		}
 	}
 
-	function setMiniSidebar(value) {
+	function setMiniSidebar(value: boolean) {
 		if (!isMobileView.value) {
 			isMiniSidebar.value = value;
+			if (!value) {
+				isHoverExpanded.value = false;
+			}
 		}
-		// ✅ En mobile ignora este comando
 	}
 
-	function setMobileView(isMobile) {
+	function setHoverExpanded(value: boolean) {
+		if (!isMobileView.value && isMiniSidebar.value) {
+			isHoverExpanded.value = value;
+		}
+	}
+
+	function setMobileView(isMobile: boolean) {
 		isMobileView.value = isMobile;
 
 		if (isMobile) {
-			// ✅ En mobile: cierra sidebar y desactiva mini mode
 			isSidebarOpen.value = false;
 			isMiniSidebar.value = false;
+			isHoverExpanded.value = false;
 		} else {
-			// ✅ En desktop: abre sidebar y activa mini mode por defecto
 			isSidebarOpen.value = true;
-			isMiniSidebar.value = true; // ✅ Desktop inicia colapsado
+			isMiniSidebar.value = true;
+			isHoverExpanded.value = false;
 		}
 	}
 
@@ -69,7 +86,6 @@ export const useSidebarStore = defineStore('sidebar', () => {
 		if (isMobileView.value) {
 			isSidebarOpen.value = false;
 		}
-		// ✅ En desktop no se cierra, solo se minimiza
 	}
 
 	function toggleMobileSidebar() {
@@ -78,11 +94,11 @@ export const useSidebarStore = defineStore('sidebar', () => {
 		}
 	}
 
-	// 🔄 RESET TO DEFAULT
 	function resetToDefault() {
 		isSidebarOpen.value = true;
-		isMiniSidebar.value = true; // ✅ Default: mini en desktop
+		isMiniSidebar.value = true;
 		isMobileView.value = false;
+		isHoverExpanded.value = false;
 	}
 
 	return {
@@ -90,6 +106,7 @@ export const useSidebarStore = defineStore('sidebar', () => {
 		isSidebarOpen,
 		isMiniSidebar,
 		isMobileView,
+		isHoverExpanded,
 
 		// 🔍 COMPUTED
 		sidebarState,
@@ -98,6 +115,7 @@ export const useSidebarStore = defineStore('sidebar', () => {
 		// 🛠️ ACTIONS
 		toggleSidebar,
 		setMiniSidebar,
+		setHoverExpanded,
 		setMobileView,
 		openSidebar,
 		closeSidebar,

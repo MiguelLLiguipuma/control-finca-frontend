@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
-import { reporteService } from '../services/reporteService.js';
-import { useUIStore } from './uiStore.js';
+import { reporteService } from '../services/reporteService';
+import { useUIStore } from './uiStore';
 import { reportesSeguridadService } from '@/services/reportes/reportesSeguridadService';
 
 interface TarjetaReporte {
@@ -94,7 +94,7 @@ const MESES_MAESTROS = [
 	'December',
 ];
 
-const toNumber = (value, fallback = 0) => {
+const toNumber = (value: unknown, fallback = 0): number => {
 	const n = Number(value);
 	return Number.isFinite(n) ? n : fallback;
 };
@@ -155,7 +155,12 @@ const construirTarjetaSigatoka = (alerta: AlertaSanitaria | null): TarjetaReport
 const CACHE_TTL_MS = 60 * 1000;
 const dashboardCache = new Map<string, DashboardCacheEntry>();
 
-const getCacheKey = (fincaId, anio, modoComparativo, scopeDatos) =>
+const getCacheKey = (
+	fincaId: number | null,
+	anio: number,
+	modoComparativo: ReportesState['modoComparativo'],
+	scopeDatos: ReportesState['scopeDatos'],
+) =>
 	`${Number(fincaId)}:${Number(anio)}:${String(modoComparativo || 'actual')}:${String(scopeDatos || 'finca')}`;
 
 const isCacheFresh = (
@@ -252,12 +257,12 @@ export const useReportesStore = defineStore('reportes', {
 			});
 		},
 
-		async actualizarPeriodo(nuevoAnio, fincaId = null) {
+		async actualizarPeriodo(nuevoAnio: number, fincaId: number | null = null) {
 			this.anioSeleccionado = nuevoAnio;
 			await this.cargarReportes(fincaId);
 		},
 
-		async cargarReportes(fincaId) {
+		async cargarReportes(fincaId: number | null) {
 			if (!fincaId) {
 				this.resetDashboardData();
 				return;
@@ -383,10 +388,6 @@ export const useReportesStore = defineStore('reportes', {
 					{ label: 'Promedio Mensual', value: promedioMensual, change: 0 },
 					{ label: 'Promedio Semanal', value: promedioSemanal, change: 0 },
 				];
-
-				if (totalAnualNum === 0) {
-					uiStore.showWarning(`No hay datos para el año ${anio}`);
-				}
 
 				this.loadingKpis = false;
 				this.actualizarLoadingGlobal();

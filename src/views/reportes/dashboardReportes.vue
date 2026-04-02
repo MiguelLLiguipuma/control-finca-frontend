@@ -5,10 +5,10 @@
         
         <header class="d-flex flex-column flex-lg-row align-start align-lg-center justify-space-between mb-8 gap-6">
           <div class="header-text-container">
-            <h1 class="text-h4 text-md-h3 font-weight-black text-high-emphasis tracking-tight">
+            <h1 class="text-h3 font-weight-black text-high-emphasis">
               Panel de Reportes
             </h1>
-            <p class="text-subtitle-1 text-medium-emphasis mt-1">
+            <p class="text-body-2 text-medium-emphasis mt-1">
               Monitoreo de producción en tiempo real
             </p>
           </div>
@@ -16,10 +16,32 @@
           <ReportFiltersBar class="w-100 w-lg-auto" />
         </header>
 
-        <section ref="kpisSectionRef" class="mb-10">
+        <ViewHelpHint
+          class="mb-6"
+          title="¿Cómo leer este Dashboard?"
+          summary="Este panel resume la situación de la finca seleccionada: producción, tendencia mensual/semanal y rendimiento por color de cinta."
+          :steps="[
+            'Selecciona finca y año en los filtros.',
+            'Revisa las tarjetas KPI para ver el estado general.',
+            'Analiza la tendencia mensual y semanal para detectar cambios.',
+            'Valida el rendimiento por color de cinta para tomar acciones.',
+          ]"
+          :notes="[
+            'Si no hay datos, verifica finca, año y registros operativos.',
+            'Los gráficos no reemplazan el registro diario; lo complementan.',
+            'Usa este tablero para decisiones rápidas de supervisión.',
+          ]"
+        />
+
+        <section
+          ref="kpisSectionRef"
+          class="mb-10"
+          aria-labelledby="dashboard-kpis-heading"
+        >
+          <h2 id="dashboard-kpis-heading" class="sr-only">Indicadores principales del dashboard</h2>
           <v-row v-if="reportesStore.loadingKpis" dense>
             <v-col v-for="n in 5" :key="n" cols="12" sm="6" lg="3">
-              <v-skeleton-loader type="card-avatar" class="rounded-xl border bg-surface" />
+              <v-skeleton-loader type="card-avatar" class="rounded-xl border bg-surface" aria-label="Cargando indicadores" />
             </v-col>
           </v-row>
           <v-row v-else-if="reportesStore.tarjetas && reportesStore.tarjetas.length" dense>
@@ -40,15 +62,28 @@
 
         <v-row>
           <v-col cols="12" lg="8">
-            <v-card ref="mensualSectionRef" variant="flat" class="rounded-xl mb-6 bg-surface shadow-sm border overflow-visible">
+            <v-card
+              ref="mensualSectionRef"
+              v-intersect.once="onMensualIntersect"
+              variant="flat"
+              class="rounded-xl mb-6 bg-surface shadow-sm border overflow-visible"
+              role="region"
+              aria-labelledby="dashboard-mensual-heading"
+            >
               <div class="pa-4 d-flex align-center border-b bg-background-opacity">
                 <v-avatar size="32" color="primary" variant="tonal" class="mr-3">
                   <v-icon size="18">mdi-chart-bar</v-icon>
                 </v-avatar>
-                <span class="text-overline font-weight-black text-high-emphasis">Tendencia Mensual de Cosecha</span>
+                <span id="dashboard-mensual-heading" class="text-overline font-weight-black text-high-emphasis">Tendencia Mensual de Cosecha</span>
               </div>
               <div class="pa-2 pa-md-4">
                 <v-skeleton-loader v-if="reportesStore.loadingMensual" type="image" height="350" class="rounded-lg bg-surface" />
+                <v-skeleton-loader
+                  v-else-if="!showMensualChart"
+                  type="image"
+                  height="350"
+                  class="rounded-lg bg-surface"
+                />
                 <EarningsChart
                   v-else-if="reportesStore.chartSeries && reportesStore.chartSeries.length"
                   :series="reportesStore.chartSeries"
@@ -57,15 +92,28 @@
               </div>
             </v-card>
 
-            <v-card ref="semanalSectionRef" variant="flat" class="rounded-xl mb-6 bg-surface shadow-sm border overflow-visible">
+            <v-card
+              ref="semanalSectionRef"
+              v-intersect.once="onSemanalIntersect"
+              variant="flat"
+              class="rounded-xl mb-6 bg-surface shadow-sm border overflow-visible"
+              role="region"
+              aria-labelledby="dashboard-semanal-heading"
+            >
               <div class="pa-4 d-flex align-center border-b bg-background-opacity">
                 <v-avatar size="32" color="info" variant="tonal" class="mr-3">
                   <v-icon size="18">mdi-calendar-week</v-icon>
                 </v-avatar>
-                  <span class="text-overline font-weight-black text-high-emphasis">Tendencia Semanal (Año completo)</span>
+                  <span id="dashboard-semanal-heading" class="text-overline font-weight-black text-high-emphasis">Tendencia Semanal (Año completo)</span>
               </div>
               <div class="pa-2 pa-md-4">
                 <v-skeleton-loader v-if="reportesStore.loadingSemanal" type="image" height="300" class="rounded-lg bg-surface" />
+                <v-skeleton-loader
+                  v-else-if="!showSemanalChart"
+                  type="image"
+                  height="300"
+                  class="rounded-lg bg-surface"
+                />
                 <TendenciaSemanal
                   v-else
                   :series="reportesStore.chartSeriesSemanal"
@@ -80,14 +128,26 @@
               <v-skeleton-loader v-if="reportesStore.loadingKpis" type="article" class="rounded-xl border bg-surface" />
               <SideStats v-else :stats="reportesStore.sideStats" :loading="reportesStore.loadingKpis" />
 
-              <v-card ref="cintasSectionRef" variant="flat" class="rounded-xl bg-surface shadow-sm border overflow-hidden">
+              <v-card
+                ref="cintasSectionRef"
+                v-intersect.once="onCintasIntersect"
+                variant="flat"
+                class="rounded-xl bg-surface shadow-sm border overflow-hidden"
+                role="region"
+                aria-labelledby="dashboard-cintas-heading"
+              >
                 <div class="pa-4 d-flex align-center border-b bg-background-opacity">
                   <v-avatar size="32" color="success" variant="tonal" class="mr-3">
                     <v-icon size="18">mdi-label-percent</v-icon>
                   </v-avatar>
-                  <span class="text-overline font-weight-black text-high-emphasis">Rendimiento por Color de Cinta</span>
+                  <span id="dashboard-cintas-heading" class="text-overline font-weight-black text-high-emphasis">Rendimiento por Color de Cinta</span>
                 </div>
                 <v-skeleton-loader v-if="reportesStore.loadingCintas" type="list-item-avatar-three-line" class="bg-surface" />
+                <v-skeleton-loader
+                  v-else-if="!showCintasChart"
+                  type="list-item-avatar-three-line"
+                  class="bg-surface"
+                />
                 <RendimientoCintas v-else :cintas="reportesStore.cintasStats" :loading="reportesStore.loadingCintas" />
               </v-card>
             </div>
@@ -100,36 +160,62 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { defineAsyncComponent, onMounted, ref, watch, type ComponentPublicInstance } from 'vue'
 import { storeToRefs } from 'pinia'
 
 // Stores
 import { useReportesStore } from '../../stores/reportesStore'
-import { useFincaStore } from '../../stores/fincaStore.js'
-import { useEnfundeStore } from '../../stores/enfundeStore.js'
+import { useFincaStore } from '../../stores/fincaStore'
+import { useEnfundeStore } from '../../stores/enfundeStore'
 
 // Componentes
 import SummaryCards from '../../components/reportes/sumaryCards.vue'
-import EarningsChart from '../../components/reportes/earningsChart.vue'
-import TendenciaSemanal from '../../components/reportes/tendenciaSemanal.vue' // ✅ Importado
 import SideStats from '../../components/reportes/sideStats.vue'
-import RendimientoCintas from '../../components/reportes/rendimientoCintas.vue'
 import ReportFiltersBar from '../../components/ui/ReportFiltersBar.vue'
+import ViewHelpHint from '../../components/ui/ViewHelpHint.vue'
+
+const EarningsChart = defineAsyncComponent(() => import('../../components/reportes/earningsChart.vue'))
+const TendenciaSemanal = defineAsyncComponent(() => import('../../components/reportes/tendenciaSemanal.vue'))
+const RendimientoCintas = defineAsyncComponent(() => import('../../components/reportes/rendimientoCintas.vue'))
 
 const reportesStore = useReportesStore()
 const fincaStore = useFincaStore()
 const enfundeStore = useEnfundeStore()
 
 const { fincaSeleccionadaId } = storeToRefs(fincaStore)
-const kpisSectionRef = ref<any>(null)
-const mensualSectionRef = ref<any>(null)
-const semanalSectionRef = ref<any>(null)
-const cintasSectionRef = ref<any>(null)
+type ScrollTarget = HTMLElement | ComponentPublicInstance<{ $el?: HTMLElement }>
+type SectionRef = ScrollTarget | null
 
-const scrollToSection = (elRef: { value?: any } | null) => {
-  if (!elRef?.value?.$el && !elRef?.value) return
-  const target = elRef.value.$el ?? elRef.value
+const kpisSectionRef = ref<SectionRef>(null)
+const mensualSectionRef = ref<SectionRef>(null)
+const semanalSectionRef = ref<SectionRef>(null)
+const cintasSectionRef = ref<SectionRef>(null)
+const showMensualChart = ref(false)
+const showSemanalChart = ref(false)
+const showCintasChart = ref(false)
+
+const resolveScrollElement = (target: SectionRef): HTMLElement | null => {
+  if (!target) return null
+  if (target instanceof HTMLElement) return target
+  return ('$el' in target && target.$el instanceof HTMLElement) ? target.$el : null
+}
+
+const scrollToSection = (elRef: { value: SectionRef }) => {
+  const target = resolveScrollElement(elRef.value)
+  if (!target) return
   target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const onMensualIntersect = (isIntersecting: boolean) => {
+  if (isIntersecting) showMensualChart.value = true
+}
+
+const onSemanalIntersect = (isIntersecting: boolean) => {
+  if (isIntersecting) showSemanalChart.value = true
+}
+
+const onCintasIntersect = (isIntersecting: boolean) => {
+  if (isIntersecting) showCintasChart.value = true
 }
 
 const handleViewDetails = (title: string) => {
@@ -202,9 +288,21 @@ watch(
 .shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05) !important; }
 .sticky-sidebar { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 24px; }
 .gap-6 { gap: 24px; }
-.tracking-tight { letter-spacing: -0.03em; }
 
 @media (max-width: 960px) {
   .header-text-container { text-align: left; width: 100%; }
+}
+</style>
+<style scoped>
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 </style>
