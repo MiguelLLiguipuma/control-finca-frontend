@@ -46,7 +46,7 @@ const COLA_KEY = 'cola_cosecha_pendiente';
 const COLA_FALLIDA_KEY = 'cola_cosecha_fallida';
 const MAX_INTENTOS_NO_ENCOLABLE = 3;
 const VENTANA_CORTE_DEFAULT_INICIO = 11;
-const VENTANA_CORTE_DEFAULT_FIN = 13;
+const VENTANA_CORTE_DEFAULT_FIN = 12;
 const VENTANA_CORTE_MAX_AMPLITUD = 8;
 
 type PayloadPendienteCosecha = PayloadCosecha & {
@@ -114,8 +114,8 @@ export const useCosechaStore = defineStore('cosecha', {
 		submitting: false,
 		saldosPendientes: [],
 		fincaActivaId: null,
-		semanaInicioCorte: 11,
-		semanaFinCorte: 13,
+		semanaInicioCorte: VENTANA_CORTE_DEFAULT_INICIO,
+		semanaFinCorte: VENTANA_CORTE_DEFAULT_FIN,
 		isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
 		mostrarSoloAnioActual: false,
 		colaSincronizacion: parsearColaDesdeStorage(COLA_KEY),
@@ -137,8 +137,14 @@ export const useCosechaStore = defineStore('cosecha', {
 		},
 
 		rangoCorteSugerido(): number[] {
-			const inicio = Math.max(1, Math.min(52, toNonNegativeInt(this.semanaInicioCorte) || 11));
-			const fin = Math.max(inicio, Math.min(52, toNonNegativeInt(this.semanaFinCorte) || 13));
+			const inicio = Math.max(
+				0,
+				Math.min(52, toNonNegativeInt(this.semanaInicioCorte) || VENTANA_CORTE_DEFAULT_INICIO),
+			);
+			const fin = Math.max(
+				inicio,
+				Math.min(52, toNonNegativeInt(this.semanaFinCorte) || VENTANA_CORTE_DEFAULT_FIN),
+			);
 			return Array.from({ length: fin - inicio + 1 }, (_, i) => inicio + i);
 		},
 
@@ -224,11 +230,11 @@ export const useCosechaStore = defineStore('cosecha', {
 			const inicioBase = toNonNegativeInt(semanaInicio);
 			const finBase = toNonNegativeInt(semanaFin);
 			const inicioNormalizado =
-				inicioBase >= 1 && inicioBase <= 52
+				inicioBase >= 0 && inicioBase <= 52
 					? inicioBase
 					: VENTANA_CORTE_DEFAULT_INICIO;
 			const finNormalizado =
-				finBase >= 1 && finBase <= 52
+				finBase >= 0 && finBase <= 52
 					? finBase
 					: VENTANA_CORTE_DEFAULT_FIN;
 

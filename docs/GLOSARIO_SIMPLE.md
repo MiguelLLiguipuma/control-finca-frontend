@@ -6,7 +6,7 @@
 - **Semana de enfunde**: semana en la que se registro el enfunde.
 - **Semana de corte**: semana estimada/real de cosecha.
 - **Edad de cinta**: semanas transcurridas entre enfunde y semana actual.
-- **Corte ideal**: rango recomendado de corte (ejemplo 12-13 semanas).
+- **Corte ideal**: rango recomendado de corte según la edad configurada del lote (ejemplo 11-12 semanas cuando el conteo inicia en semana 0).
 - **Fruta lista**: fruta que ya entro en rango operativo de corte.
 - **Saldo en campo**: cantidad disponible aun no cosechada.
 - **Racimos buenos**: racimos aptos para proceso comercial.
