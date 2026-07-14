@@ -99,6 +99,6 @@ html { overflow-y: auto !important; }
 }
 
 #main-content {
-  scroll-margin-top: 110px;
+  scroll-margin-top: 88px;
 }
 </style>

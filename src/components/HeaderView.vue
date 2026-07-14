@@ -2,11 +2,11 @@
   <v-app-bar
     app
     flat
-    height="100"
+    height="76"
     color="surface"
-    class="px-4 header-shell"
+    class="px-3 header-shell"
   >
-    <v-card class="floating-header mx-auto w-100 bg-surface" elevation="2">
+    <v-card class="floating-header w-100 bg-surface" elevation="1">
       <v-container fluid class="py-1">
         <v-row align="center" justify="space-between" no-gutters>
           
@@ -145,10 +145,10 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
 
 <style scoped>
 .floating-header {
-  border-radius: 16px !important;
+  border-radius: 12px !important;
   background: rgb(var(--v-theme-surface)) !important;
   border: 1px solid rgba(var(--v-border-color), 0.1) !important;
-  max-width: 1400px;
+  max-width: none;
 }
 
 .header-shell {
