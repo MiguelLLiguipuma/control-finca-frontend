@@ -158,6 +158,20 @@
                 <span class="mx-3 text-caption text-medium-emphasis">o</span>
                 <v-divider />
               </div>
+              <v-btn
+                v-if="passkeySupported"
+                color="secondary"
+                block
+                rounded="lg"
+                variant="tonal"
+                class="biometric-btn text-none font-weight-bold mb-3"
+                size="large"
+                prepend-icon="mdi-fingerprint"
+                :loading="biometricLoading"
+                @click="handleBiometricLogin"
+              >
+                Entrar con huella o Face ID
+              </v-btn>
               <div v-if="googleClientIdValido" ref="googleButtonRef" class="google-btn-wrap"></div>
               <div v-else class="text-caption text-center text-medium-emphasis" role="status" aria-live="polite">
                 Login con Google no configurado.
@@ -186,6 +200,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth/authStore';
 import api from '@/services/api';
+import { isPasskeySupported } from '@/services/auth/passkeyService';
 
 interface GoogleCredentialResponse {
   credential?: string;
@@ -230,9 +245,11 @@ const confirmPassword = ref('');
 const isRegisterMode = ref(false);
 const showPassword = ref(false);
 const loading = ref(false);
+const biometricLoading = ref(false);
 const errorMessage = ref('');
 const successMessage = ref('');
 const googleButtonRef = ref<HTMLElement | null>(null);
+const passkeySupported = isPasskeySupported();
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 const googleClientIdValido = computed(() => {
   const raw = String(googleClientId || '').trim();
@@ -331,6 +348,21 @@ const handleLogin = async () => {
     errorMessage.value = result.message || 'Error al iniciar sesión';
   }
   loading.value = false;
+};
+
+const handleBiometricLogin = async () => {
+  biometricLoading.value = true;
+  errorMessage.value = '';
+  successMessage.value = '';
+
+  const result = await authStore.loginWithBiometric(email.value.trim());
+  if (result.success) {
+    router.push('/reportes');
+  } else {
+    errorMessage.value = result.message || 'No se pudo iniciar sesión con huella';
+  }
+
+  biometricLoading.value = false;
 };
 
 const handleRegister = async () => {
@@ -492,6 +524,10 @@ watch(isRegisterMode, async (mode) => {
   min-height: 52px;
   letter-spacing: 0.2px;
   box-shadow: 0 12px 25px rgba(var(--v-theme-primary), 0.25) !important;
+}
+
+.biometric-btn {
+  min-height: 48px;
 }
 
 .google-btn-wrap {
