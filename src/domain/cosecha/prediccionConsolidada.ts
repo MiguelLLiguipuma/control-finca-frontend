@@ -1,10 +1,16 @@
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type {
+	PrediccionMultiConsolidado,
 	PrediccionCosechaResponse,
 	PrediccionProximoEmbarque,
 } from '@/services/cosecha/cosechaService';
-import { construirPrediccionVM, type PrediccionFilaVM } from '@/domain/cosecha/prediccionCosecha';
+import {
+	construirPrediccionVM,
+	evaluarCalidadDatosPrediccion,
+	type CalidadDatosNivel,
+	type PrediccionFilaVM,
+} from '@/domain/cosecha/prediccionCosecha';
 
 dayjs.extend(isoWeek);
 
@@ -25,6 +31,9 @@ export interface PrediccionFincaDetalle {
 	metaUc: number;
 	promedioUcDiario: number;
 	ratioAplicado: number | null;
+	calidadDatosScore: number;
+	calidadDatosNivel: CalidadDatosNivel;
+	fuentePrediccion: 'backend' | 'fallback_ui';
 	topCintas: PrediccionFilaVM[];
 }
 
@@ -37,6 +46,8 @@ export interface PrediccionConsolidadaTotal {
 	totalRiesgo: number;
 	rechazoPonderadoPct: number;
 	confianzaGlobal: 'ALTA' | 'MEDIA' | 'BAJA';
+	calidadDatosPromedio: number;
+	calidadDatosNivel: CalidadDatosNivel;
 }
 
 function normalizarNumero(value: unknown): number {
@@ -50,6 +61,12 @@ function confianzaGlobalDesde(detalles: PrediccionFincaDetalle[]): 'ALTA' | 'MED
 	if (niveles.some((n) => n === 'BAJA')) return 'BAJA';
 	if (niveles.some((n) => n === 'MEDIA')) return 'MEDIA';
 	return 'ALTA';
+}
+
+function calidadNivelDesdeScore(score: number): CalidadDatosNivel {
+	if (score >= 80) return 'ALTA';
+	if (score >= 55) return 'MEDIA';
+	return 'BAJA';
 }
 
 function construirFallbackEmbarque(
@@ -86,6 +103,8 @@ export function construirDetalleFinca(
 ): PrediccionFincaDetalle {
 	const vm = construirPrediccionVM(input.data);
 	const embarque = vm.proximoEmbarque || construirFallbackEmbarque(input.data);
+	const calidadDatos = evaluarCalidadDatosPrediccion(vm);
+	const fuentePrediccion = vm.proximoEmbarque ? 'backend' : 'fallback_ui';
 
 	return {
 		fincaId: input.fincaId,
@@ -104,6 +123,9 @@ export function construirDetalleFinca(
 		metaUc: normalizarNumero(vm.metaAplicada),
 		promedioUcDiario: normalizarNumero(vm.promedioUC),
 		ratioAplicado: vm.ratioAplicado,
+		calidadDatosScore: calidadDatos.score,
+		calidadDatosNivel: calidadDatos.nivel,
+		fuentePrediccion,
 		topCintas: vm.filas.slice(0, 8),
 	};
 }
@@ -124,6 +146,10 @@ export function construirConsolidado(
 				0,
 		  ) / totalRacimosEstimados
 		: 0;
+	const calidadDatosPromedio = detalles.length
+		? detalles.reduce((acc, item) => acc + normalizarNumero(item.calidadDatosScore), 0) /
+			detalles.length
+		: 0;
 
 	return {
 		totalFincas: detalles.length,
@@ -134,5 +160,32 @@ export function construirConsolidado(
 		totalRiesgo: detalles.reduce((acc, item) => acc + normalizarNumero(item.racimosRiesgo), 0),
 		rechazoPonderadoPct: Number(rechazoPonderadoPct.toFixed(2)),
 		confianzaGlobal: confianzaGlobalDesde(detalles),
+		calidadDatosPromedio: Number(calidadDatosPromedio.toFixed(0)),
+		calidadDatosNivel: calidadNivelDesdeScore(calidadDatosPromedio),
+	};
+}
+
+export function construirConsolidadoDesdeBackend(
+	consolidado: PrediccionMultiConsolidado | null | undefined,
+	detalles: PrediccionFincaDetalle[],
+): PrediccionConsolidadaTotal | null {
+	if (!consolidado) return null;
+
+	const calidadDatosPromedio = detalles.length
+		? detalles.reduce((acc, item) => acc + normalizarNumero(item.calidadDatosScore), 0) /
+			detalles.length
+		: 0;
+
+	return {
+		totalFincas: detalles.length,
+		totalRacimosEstimados: normalizarNumero(consolidado.racimos_estimados_total),
+		totalRangoMinimo: normalizarNumero(consolidado.rango_minimo_total),
+		totalRangoMaximo: normalizarNumero(consolidado.rango_maximo_total),
+		totalIdeal: normalizarNumero(consolidado.racimos_ideal_total),
+		totalRiesgo: normalizarNumero(consolidado.racimos_riesgo_total),
+		rechazoPonderadoPct: Number(normalizarNumero(consolidado.rechazo_ponderado_pct).toFixed(2)),
+		confianzaGlobal: String(consolidado.confianza_global || 'BAJA').toUpperCase() as 'ALTA' | 'MEDIA' | 'BAJA',
+		calidadDatosPromedio: Number(calidadDatosPromedio.toFixed(0)),
+		calidadDatosNivel: calidadNivelDesdeScore(calidadDatosPromedio),
 	};
 }

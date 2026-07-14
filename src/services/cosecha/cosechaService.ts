@@ -77,6 +77,17 @@ export interface PrediccionModeloInfo {
 	considera_rechazo?: boolean;
 	considera_edad_corte?: boolean;
 	mensaje?: string;
+	clima?: PrediccionClimaInfo | null;
+}
+
+export interface PrediccionClimaInfo {
+	ultima_fecha_clima: string | null;
+	dias_atraso: number | null;
+	registros_total: number;
+	registros_ultimos_7_dias: number;
+	promedio_uc_7_dias: number | null;
+	estado: 'ACTUALIZADO' | 'ATRASADO' | 'SIN_DATOS';
+	confiable: boolean;
 }
 
 export interface PrediccionCacheInfo {
@@ -93,6 +104,7 @@ export interface PrediccionCosechaResponse {
 	ratio_aplicado?: number;
 	semana_inicio?: number;
 	semana_fin?: number;
+	clima?: PrediccionClimaInfo | null;
 	proyecciones: PrediccionCosechaItem[];
 	prediccion_proximo_embarque?: PrediccionProximoEmbarque;
 	modelo?: PrediccionModeloInfo;

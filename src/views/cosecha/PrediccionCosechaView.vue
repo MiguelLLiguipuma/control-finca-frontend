@@ -101,6 +101,24 @@
 				>
 					{{ aviso }}
 				</v-alert>
+				<v-alert
+					v-if="totalFallbackLocal > 0"
+					type="warning"
+					variant="tonal"
+					class="mb-4"
+					density="comfortable"
+				>
+					{{ totalFallbackLocal }} finca(s) no tienen bloque avanzado del backend. Sus valores se muestran como estimación preliminar local y pueden diferir del modelo calibrado.
+				</v-alert>
+				<v-alert
+					v-if="detalles.length"
+					:type="consolidadoOficialBackend ? 'success' : 'info'"
+					variant="tonal"
+					class="mb-4"
+					density="comfortable"
+				>
+					Consolidado mostrado desde {{ consolidadoOficialBackend ? 'resumen oficial del backend' : 'suma local de detalles' }}.
+				</v-alert>
 
 				<v-row dense class="mb-6">
 					<v-col cols="12" sm="6" lg="3">
@@ -138,6 +156,19 @@
 							</div>
 						</v-sheet>
 					</v-col>
+					<v-col cols="12" sm="6" lg="3">
+						<v-sheet class="pa-4 metric-card rounded-xl" color="surface">
+							<div class="text-caption text-medium-emphasis">Calidad de datos</div>
+							<div class="d-flex align-center mt-1">
+								<div class="text-h6 font-weight-black mr-2">
+									{{ consolidado.calidadDatosPromedio }}/100
+								</div>
+								<v-chip size="small" :color="colorConfianza(consolidado.calidadDatosNivel)">
+									{{ consolidado.calidadDatosNivel }}
+								</v-chip>
+							</div>
+						</v-sheet>
+					</v-col>
 				</v-row>
 
 				<v-card rounded="xl" elevation="2" color="surface" class="mb-6">
@@ -161,6 +192,8 @@
 										<th>Ideal</th>
 										<th>Riesgo</th>
 										<th>Confianza</th>
+										<th>Calidad datos</th>
+										<th>Fuente</th>
 										<th>Tendencia</th>
 									</tr>
 								</thead>
@@ -176,6 +209,20 @@
 										<td>
 											<v-chip size="x-small" :color="colorConfianza(item.confianza)">
 												{{ item.confianza }}
+											</v-chip>
+										</td>
+										<td>
+											<v-chip size="x-small" :color="colorConfianza(item.calidadDatosNivel)">
+												{{ item.calidadDatosScore }}/100
+											</v-chip>
+										</td>
+										<td>
+											<v-chip
+												size="x-small"
+												:color="item.fuentePrediccion === 'backend' ? 'success' : 'warning'"
+												variant="tonal"
+											>
+												{{ item.fuentePrediccion === 'backend' ? 'Backend' : 'Fallback' }}
 											</v-chip>
 										</td>
 										<td>{{ item.tendencia }}</td>
@@ -200,8 +247,16 @@
 								<div class="text-right">
 									<div class="text-body-2 font-weight-bold">{{ item.racimosEstimados }} racimos</div>
 									<div class="text-caption text-medium-emphasis">
-										Meta UC: {{ item.metaUc }} · Prom UC: {{ item.promedioUcDiario.toFixed(2) }}
+										Meta UC: {{ item.metaUc }} · Calidad: {{ item.calidadDatosScore }}/100
 									</div>
+									<v-chip
+										size="x-small"
+										class="mt-1"
+										:color="item.fuentePrediccion === 'backend' ? 'success' : 'warning'"
+										variant="tonal"
+									>
+										{{ item.fuentePrediccion === 'backend' ? 'Modelo backend' : 'Estimación local' }}
+									</v-chip>
 								</div>
 							</div>
 						</v-expansion-panel-title>
@@ -247,10 +302,12 @@ import { cosechaService } from '@/services/cosecha/cosechaService';
 import ViewHelpHint from '@/components/ui/ViewHelpHint.vue';
 import {
 	construirConsolidado,
+	construirConsolidadoDesdeBackend,
 	construirDetalleFinca,
 	type PrediccionConsolidadaTotal,
 	type PrediccionFincaDetalle,
 } from '@/domain/cosecha/prediccionConsolidada';
+import type { PrediccionMultiConsolidado } from '@/services/cosecha/cosechaService';
 
 const fincaStore = useFincaStore();
 const empresaStore = useEmpresaStore();
@@ -261,6 +318,7 @@ const error = ref('');
 const aviso = ref('');
 const fincasSeleccionadas = ref<number[]>([]);
 const detalles = ref<PrediccionFincaDetalle[]>([]);
+const consolidadoBackend = ref<PrediccionConsolidadaTotal | null>(null);
 
 const consolidadoVacio: PrediccionConsolidadaTotal = {
 	totalFincas: 0,
@@ -271,10 +329,19 @@ const consolidadoVacio: PrediccionConsolidadaTotal = {
 	totalRiesgo: 0,
 	rechazoPonderadoPct: 0,
 	confianzaGlobal: 'BAJA',
+	calidadDatosPromedio: 0,
+	calidadDatosNivel: 'BAJA',
 };
 
 const consolidado = computed(() =>
-	detalles.value.length ? construirConsolidado(detalles.value) : consolidadoVacio,
+	consolidadoBackend.value ||
+	(detalles.value.length ? construirConsolidado(detalles.value) : consolidadoVacio),
+);
+
+const consolidadoOficialBackend = computed(() => !!consolidadoBackend.value);
+
+const totalFallbackLocal = computed(() =>
+	detalles.value.filter((item) => item.fuentePrediccion !== 'backend').length,
 );
 
 const itemsFincas = computed(() =>
@@ -300,6 +367,7 @@ async function cargarPredicciones() {
 	error.value = '';
 	aviso.value = '';
 	detalles.value = [];
+	consolidadoBackend.value = null;
 
 	const ids = Array.from(new Set((fincasSeleccionadas.value || []).map(Number))).filter(
 		(n) => Number.isInteger(n) && n > 0,
@@ -310,10 +378,12 @@ async function cargarPredicciones() {
 	try {
 		let respuestas: PrediccionFincaDetalle[] = [];
 		let alertaParcial = '';
+		let resumenBackend: PrediccionMultiConsolidado | null = null;
 
 		try {
 			const multi = await cosechaService.getPrediccionMulti(ids);
 			const exitosas = (multi.items || []).filter((x) => x.ok && x.data);
+			resumenBackend = multi.consolidado || null;
 
 				if (exitosas.length) {
 					respuestas = exitosas.map((item) => {
@@ -351,6 +421,10 @@ async function cargarPredicciones() {
 
 		detalles.value = respuestas.sort((a, b) =>
 			a.fincaNombre.localeCompare(b.fincaNombre),
+		);
+		consolidadoBackend.value = construirConsolidadoDesdeBackend(
+			resumenBackend,
+			detalles.value,
 		);
 		aviso.value = alertaParcial;
 	} catch (e: any) {

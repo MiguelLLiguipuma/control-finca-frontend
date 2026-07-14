@@ -67,17 +67,59 @@
 				</v-col>
 			</v-row>
 
+			<v-alert
+				v-if="proximoEmbarqueVista && !tienePrediccionBackend"
+				type="warning"
+				variant="tonal"
+				density="comfortable"
+				class="mb-4"
+			>
+				<div class="font-weight-bold">Estimación preliminar local</div>
+				<div class="text-body-2">
+					El backend no envió el bloque avanzado de próximo embarque. Estos valores se calculan desde saldos disponibles y no deben leerse como predicción calibrada.
+				</div>
+			</v-alert>
+
+			<v-alert
+				v-if="climaPrediccion && !climaPrediccion.confiable"
+				type="warning"
+				variant="tonal"
+				density="comfortable"
+				class="mb-4"
+			>
+				<div class="font-weight-bold">Historial climático no confiable</div>
+				<div class="text-body-2">
+					<span v-if="climaPrediccion.estado === 'ATRASADO'">
+						Último registro: <strong>{{ climaPrediccion.ultima_fecha_clima || '--' }}</strong>
+						· atraso: <strong>{{ climaPrediccion.dias_atraso ?? '--' }}</strong> día(s).
+					</span>
+					<span v-else>
+						No hay registros climáticos útiles para esta finca.
+					</span>
+					La predicción está usando respaldo por edad operativa hasta sincronizar unidades de calor recientes.
+				</div>
+			</v-alert>
+
 			<v-row v-if="proximoEmbarqueVista" dense class="mb-4">
 				<v-col cols="12" md="8">
 					<v-sheet class="pa-3 rounded-lg metric-card" color="surface">
 						<div class="d-flex flex-wrap align-center justify-space-between gap-2">
 							<div>
-								<div class="text-caption text-medium-emphasis">Próximo embarque estimado</div>
+								<div class="text-caption text-medium-emphasis">
+									{{ tienePrediccionBackend ? 'Próximo embarque estimado' : 'Saldo preliminar proyectado' }}
+								</div>
 								<div class="text-h6 font-weight-black text-high-emphasis">
 									Sem {{ proximoEmbarqueVista.semana_objetivo }}/{{ proximoEmbarqueVista.anio_objetivo }} · {{ proximoEmbarqueVista.racimos_estimados }} racimos
 								</div>
 							</div>
 							<div class="d-flex flex-wrap align-center gap-2">
+								<v-chip
+									size="small"
+									variant="flat"
+									:color="tienePrediccionBackend ? 'success' : 'warning'"
+								>
+									{{ tienePrediccionBackend ? 'Modelo backend' : 'Fallback local' }}
+								</v-chip>
 								<v-chip size="small" variant="tonal" color="info">
 									Rango: {{ proximoEmbarqueVista.rango_minimo }} - {{ proximoEmbarqueVista.rango_maximo }}
 								</v-chip>
@@ -93,9 +135,14 @@
 				</v-col>
 				<v-col cols="12" md="4">
 					<v-sheet class="pa-3 rounded-lg metric-card h-100" color="surface">
-						<div class="text-caption text-medium-emphasis mb-2">Calidad de predicción</div>
+						<div class="text-caption text-medium-emphasis mb-2">
+							{{ tienePrediccionBackend ? 'Calidad de predicción' : 'Origen de estimación' }}
+						</div>
 						<div class="d-flex flex-wrap align-center gap-2 mb-2">
-							<v-chip size="small" :color="colorConfianzaAvanzada(proximoEmbarqueVista.confianza)">
+							<v-chip
+								size="small"
+								:color="tienePrediccionBackend ? colorConfianzaAvanzada(proximoEmbarqueVista.confianza) : 'warning'"
+							>
 								{{ proximoEmbarqueVista.confianza }}
 							</v-chip>
 							<v-chip size="small" variant="tonal" color="primary">
@@ -109,7 +156,7 @@
 						<div v-if="cachePrediccion" class="text-caption text-disabled mt-2">
 							{{ cachePrediccion.hit ? 'Desde cache' : 'Recalculado' }} · {{ cachePrediccion.algoritmo_version }}
 						</div>
-						<div v-else class="text-caption text-disabled mt-2">
+						<div v-else class="text-caption text-warning mt-2">
 							Datos derivados localmente (sin bloque avanzado del backend)
 						</div>
 					</v-sheet>
@@ -117,22 +164,103 @@
 			</v-row>
 
 			<v-sheet class="pa-3 rounded-lg metric-card mb-4" color="surface">
+				<div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+					<div>
+						<div class="text-caption text-medium-emphasis">Calidad de datos</div>
+						<div class="text-h6 font-weight-black text-high-emphasis">
+							{{ calidadDatos.score }} / 100
+						</div>
+					</div>
+					<v-chip :color="calidadDatos.color" variant="tonal" class="font-weight-black">
+						{{ calidadDatos.nivel }}
+					</v-chip>
+				</div>
+				<v-progress-linear
+					:model-value="calidadDatos.score"
+					:color="calidadDatos.color"
+					height="10"
+					rounded
+					class="mb-3"
+				/>
+				<div class="text-body-2 text-medium-emphasis mb-3">
+					{{ calidadDatos.mensaje }}
+				</div>
+				<div class="quality-grid">
+					<div
+						v-for="check in calidadDatos.checks"
+						:key="check.key"
+						class="quality-check"
+					>
+						<v-icon
+							size="18"
+							:color="check.estado === 'ok' ? 'success' : check.estado === 'warning' ? 'warning' : 'error'"
+						>
+							{{ check.estado === 'ok' ? 'mdi-check-circle' : check.estado === 'warning' ? 'mdi-alert-circle' : 'mdi-close-circle' }}
+						</v-icon>
+						<div>
+							<div class="text-caption font-weight-black text-high-emphasis">
+								{{ check.label }} · {{ check.puntos }}/{{ check.maxPuntos }}
+							</div>
+							<div class="text-caption text-medium-emphasis">
+								{{ check.mensaje }}
+							</div>
+						</div>
+					</div>
+				</div>
+			</v-sheet>
+
+			<v-sheet class="pa-3 rounded-lg metric-card mb-4" color="surface">
+				<div class="d-flex align-center justify-space-between flex-wrap gap-2 mb-3">
+					<div>
+						<div class="text-caption text-medium-emphasis">Recomendaciones operativas</div>
+						<div class="text-subtitle-1 font-weight-black text-high-emphasis">
+							Siguiente acción sugerida
+						</div>
+					</div>
+					<v-chip size="small" variant="tonal" color="primary">
+						{{ recomendacionesOperativas.length }} señales
+					</v-chip>
+				</div>
+				<div v-if="recomendacionesOperativas.length" class="recommendation-grid">
+					<v-alert
+						v-for="item in recomendacionesOperativas"
+						:key="item.key"
+						:type="item.color === 'error' ? 'error' : item.color === 'warning' ? 'warning' : item.color === 'success' ? 'success' : 'info'"
+						variant="tonal"
+						density="comfortable"
+						class="recommendation-alert"
+					>
+						<div class="d-flex align-start">
+							<v-icon class="mr-2 mt-1" size="20">{{ item.icon }}</v-icon>
+							<div>
+								<div class="font-weight-black">{{ item.titulo }}</div>
+								<div class="text-body-2">{{ item.detalle }}</div>
+							</div>
+						</div>
+					</v-alert>
+				</div>
+				<div v-else class="text-body-2 text-medium-emphasis">
+					Actualiza la predicción para generar recomendaciones.
+				</div>
+			</v-sheet>
+
+			<v-sheet class="pa-3 rounded-lg metric-card mb-4" color="surface">
 				<div class="d-flex align-center justify-space-between mb-3 flex-wrap gap-2">
 					<div class="text-subtitle-2 font-weight-black text-high-emphasis">
-						Modelo Embarque (Demo)
+						Laboratorio de modelo
 					</div>
 					<v-switch
 						v-model="usarModeloDemo"
 						hide-details
 						density="compact"
 						color="primary"
-						label="Usar datos de prueba"
+						label="Mostrar demo"
 					/>
 				</div>
 
 				<div v-if="usarModeloDemo">
 					<div class="text-body-2 text-medium-emphasis mb-3">
-						Compara aproximado actual del sistema vs modelo ponderado (base + estacional + tendencia).
+						Este bloque usa datos de prueba para comparar el sistema actual contra un modelo ponderado.
 					</div>
 					<v-row dense>
 						<v-col cols="12" sm="6" md="3">
@@ -251,7 +379,7 @@
 
 				<div class="d-flex align-center mb-3">
 					<div class="text-subtitle-2 font-weight-black text-high-emphasis">
-						Backtesting Operativo (ultimas 8 semanas)
+						Validación de ratio operativo (últimas 8 semanas)
 					</div>
 					<v-spacer />
 					<v-chip
@@ -326,7 +454,7 @@
 					</v-alert>
 				</div>
 				<div v-else class="text-medium-emphasis text-body-2">
-					No hay suficientes vouchers confirmados para backtesting en este periodo.
+					No hay suficientes vouchers confirmados para validar el ratio en este periodo.
 				</div>
 			</div>
 		</v-card-text>
@@ -350,13 +478,18 @@ import {
 	type BacktestingResumenVM,
 	type BacktestingSemanaVM,
 	type PrediccionFilaVM,
+	type CalidadDatosPrediccionVM,
+	type RecomendacionOperativaPrediccion,
 	construirBacktestingSemanal,
 	diagnosticarBacktesting,
+	evaluarCalidadDatosPrediccion,
+	generarRecomendacionesOperativas,
 	resumirBacktestingSemanal,
 	colorEstadoPrediccion,
 	colorConfianzaPrediccion,
 	colorMadurezPrediccion,
 	construirPrediccionVM,
+	crearCalidadDatosVacia,
 	crearPrediccionVacia,
 } from '@/domain/cosecha/prediccionCosecha';
 import {
@@ -379,7 +512,10 @@ const promedioUC = ref<string>(String(crearPrediccionVacia().promedioUC));
 const proyecciones = ref<PrediccionFilaVM[]>(crearPrediccionVacia().filas);
 const proximoEmbarque = ref<PrediccionCosechaVM['proximoEmbarque']>(null);
 const cachePrediccion = ref<PrediccionCosechaVM['cache']>(null);
-const usarModeloDemo = ref(true);
+const climaPrediccion = ref<PrediccionCosechaVM['clima']>(null);
+const usarModeloDemo = ref(false);
+const calidadDatos = ref<CalidadDatosPrediccionVM>(crearCalidadDatosVacia());
+const recomendacionesOperativas = ref<RecomendacionOperativaPrediccion[]>([]);
 const backtestingSemanal = ref<BacktestingSemanaVM[]>([]);
 const resumenBacktesting = ref<BacktestingResumenVM>({
 	mae: 0,
@@ -396,10 +532,11 @@ const diagnosticoBacktesting = ref<DiagnosticoBacktestingVM>({
 const cosechaStore = useCosechaStore();
 
 const filas = computed(() => proyecciones.value);
+const tienePrediccionBackend = computed(() => !!proximoEmbarque.value);
 const proximoEmbarqueVista = computed(() => {
 	if (proximoEmbarque.value) return proximoEmbarque.value;
 	if (!filas.value.length) return null;
-	const anio = new Date().getFullYear();
+	const anio = cosechaStore.infoSistema.anio;
 	const estimado = filas.value.reduce((acc, item) => acc + Number(item.saldo_en_campo || 0), 0);
 	const ideal = Math.round(estimado * 0.65);
 	const riesgo = Math.max(0, estimado - ideal);
@@ -413,8 +550,8 @@ const proximoEmbarqueVista = computed(() => {
 		racimos_en_riesgo: riesgo,
 		rechazo_estimado_pct: 0,
 		edad_promedio_corte: 0,
-		tendencia: 'ESTABLE',
-		confianza: 'MEDIA',
+		tendencia: 'SIN MODELO BACKEND',
+		confianza: 'PRELIMINAR',
 		sigma: 0,
 		factor_estacional: 1,
 		metodo: 'fallback_ui',
@@ -459,11 +596,14 @@ async function cargarPrediccion() {
 	if (!props.fincaId) {
 		const emptyVM = crearPrediccionVacia();
 		proyecciones.value = emptyVM.filas;
+		climaPrediccion.value = null;
 		metaAplicada.value = emptyVM.metaAplicada;
 		promedioUC.value = String(emptyVM.promedioUC);
 		backtestingSemanal.value = [];
 		resumenBacktesting.value = { mae: 0, mape: 0, sesgoPct: 0, totalSemanas: 0 };
 		diagnosticoBacktesting.value = diagnosticarBacktesting(resumenBacktesting.value);
+		calidadDatos.value = crearCalidadDatosVacia();
+		recomendacionesOperativas.value = [];
 		error.value = '';
 		return;
 	}
@@ -479,28 +619,46 @@ async function cargarPrediccion() {
 		proyecciones.value = vm.filas;
 		proximoEmbarque.value = vm.proximoEmbarque;
 		cachePrediccion.value = vm.cache;
+		climaPrediccion.value = vm.clima;
 		cosechaStore.configurarVentanaCorte(vm.semanaInicio, vm.semanaFin);
 
-		const fechaHasta = dayjs().format('YYYY-MM-DD');
-		const fechaDesde = dayjs().subtract(8, 'week').startOf('week').format('YYYY-MM-DD');
-		const vouchers = await embarqueService.listVouchers({
-			finca_id: props.fincaId,
-			estado: 'CONFIRMADO',
-			fecha_desde: fechaDesde,
-			fecha_hasta: fechaHasta,
-		});
-		backtestingSemanal.value = construirBacktestingSemanal(
-			vouchers.items || [],
-			vm.ratioAplicado,
+		let resumenBacktestingActual = { mae: 0, mape: 0, sesgoPct: 0, totalSemanas: 0 };
+
+		try {
+			const fechaHasta = dayjs().format('YYYY-MM-DD');
+			const fechaDesde = dayjs().subtract(8, 'week').startOf('isoWeek').format('YYYY-MM-DD');
+			const vouchers = await embarqueService.listVouchers({
+				finca_id: props.fincaId,
+				estado: 'CONFIRMADO',
+				fecha_desde: fechaDesde,
+				fecha_hasta: fechaHasta,
+			});
+			backtestingSemanal.value = construirBacktestingSemanal(
+				vouchers.items || [],
+				vm.ratioAplicado,
+			);
+			resumenBacktestingActual = resumirBacktestingSemanal(backtestingSemanal.value);
+		} catch {
+			backtestingSemanal.value = [];
+		}
+
+		resumenBacktesting.value = resumenBacktestingActual;
+		diagnosticoBacktesting.value = diagnosticarBacktesting(resumenBacktestingActual);
+		calidadDatos.value = evaluarCalidadDatosPrediccion(vm, resumenBacktestingActual);
+		recomendacionesOperativas.value = generarRecomendacionesOperativas(
+			vm,
+			calidadDatos.value,
+			resumenBacktestingActual,
 		);
-		resumenBacktesting.value = resumirBacktestingSemanal(backtestingSemanal.value);
-		diagnosticoBacktesting.value = diagnosticarBacktesting(resumenBacktesting.value);
 	} catch {
 		error.value = 'No fue posible cargar la predicción para esta finca.';
 		const emptyVM = crearPrediccionVacia();
 		proyecciones.value = emptyVM.filas;
 		proximoEmbarque.value = null;
 		cachePrediccion.value = null;
+		climaPrediccion.value = null;
+		calidadDatos.value = crearCalidadDatosVacia();
+		recomendacionesOperativas.value = [];
 		backtestingSemanal.value = [];
 		resumenBacktesting.value = { mae: 0, mape: 0, sesgoPct: 0, totalSemanas: 0 };
 		diagnosticoBacktesting.value = diagnosticarBacktesting(resumenBacktesting.value);
@@ -537,6 +695,32 @@ watch(() => props.fincaId, cargarPrediccion, { immediate: true });
 	height: 10px;
 	border-radius: 50%;
 	display: inline-block;
+}
+
+.quality-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 10px;
+}
+
+.quality-check {
+	display: grid;
+	grid-template-columns: 22px 1fr;
+	gap: 8px;
+	align-items: flex-start;
+	padding: 9px;
+	border: 1px solid rgba(var(--v-border-color), 0.12);
+	border-radius: 8px;
+}
+
+.recommendation-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+	gap: 10px;
+}
+
+.recommendation-alert {
+	margin: 0;
 }
 
 @media (max-width: 600px) {
