@@ -7,7 +7,7 @@
         </v-avatar>
         <div>
           <span class="text-subtitle-2 font-weight-black text-high-emphasis uppercase tracking-wider">Historial Operativo</span>
-          <p class="text-caption text-medium-emphasis mb-0">Registros del periodo {{ enfundeStore.anioSeleccionado }}</p>
+          <p class="text-caption text-medium-emphasis mb-0">Registros del periodo {{ anio }}</p>
         </div>
       </div>
 
@@ -37,6 +37,16 @@
         class="custom-search"
       />
     </v-card-text>
+
+    <v-alert
+      v-if="error"
+      type="error"
+      variant="tonal"
+      density="comfortable"
+      class="mx-4 mb-2"
+    >
+      {{ error }}
+    </v-alert>
 
     <v-data-table
       :headers="headers"
@@ -108,22 +118,37 @@
       <template #loading>
         <v-skeleton-loader type="table-row@5" class="bg-surface" />
       </template>
+
+      <template #no-data>
+        <div class="pa-8 text-center text-medium-emphasis">
+          <v-icon size="32" class="mb-2">mdi-archive-search-outline</v-icon>
+          <div class="font-weight-bold">No hay registros para esta finca y periodo.</div>
+        </div>
+      </template>
     </v-data-table>
   </v-card>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import { useTheme } from 'vuetify'
-import { useEnfundeStore, type RegistroEnfundeItem } from '@/stores/enfundeStore'
-import { useFincaStore } from '@/stores/fincaStore'
+import type { RegistroEnfundeItem } from '@/stores/enfundeStore'
+import { parseLocalIsoDate } from '@/utils/dateIso'
 
 const theme = useTheme()
 const isDark = computed(() => theme.global.current.value.dark)
 
-const enfundeStore = useEnfundeStore()
-const fincaStore = useFincaStore()
 const search = ref('')
+
+const props = withDefaults(defineProps<{
+  items: RegistroEnfundeItem[]
+  loading?: boolean
+  anio: number
+  error?: string | null
+}>(), {
+  loading: false,
+  error: null,
+})
 
 interface RegistroTablaItem extends RegistroEnfundeItem {
   empresa?: string
@@ -146,24 +171,16 @@ interface DataTableHeaderItem {
 
 // NORMALIZACIÓN DE REGISTROS: Asegura que el campo se llame 'color' para la tabla
 const registros = computed<RegistroTablaItem[]>(() => {
-  return (enfundeStore.registrosFiltrados || []).map(reg => ({
+  return (props.items || []).map(reg => ({
     ...reg,
     // Si el backend envía 'cinta' en lugar de 'color', lo unificamos aquí
     color: reg.color || reg.cinta || null
   }))
 })
 
-const loading = computed(() => enfundeStore.loading)
-const totalFundas = computed(() => enfundeStore.totalFundasFiltradas)
-
-onMounted(() => {
-  if (enfundeStore.registros.length === 0) {
-    const fincaId = fincaStore.fincaSeleccionadaId
-    if (fincaId) {
-      enfundeStore.cargarRegistros(fincaId)
-    }
-  }
-})
+const totalFundas = computed(() =>
+  registros.value.reduce((total, item) => total + (Number(item.cantidad_fundas) || 0), 0)
+)
 
 const headers: DataTableHeaderItem[] = [
   { title: 'Fecha de Registro', key: 'fecha', align: 'start', width: '130px' },
@@ -174,10 +191,14 @@ const headers: DataTableHeaderItem[] = [
   { title: 'Obs.', key: 'observaciones', align: 'start', sortable: false }
 ]
 
-const formatFecha = (f: string | undefined) =>
-  f ? new Date(f).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
-const formatDiaSemana = (f: string | undefined) =>
-  f ? new Date(f).toLocaleDateString('es-ES', { weekday: 'long' }) : ''
+const formatFecha = (f: string | undefined) => {
+  const date = parseLocalIsoDate(f)
+  return date ? date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+}
+const formatDiaSemana = (f: string | undefined) => {
+  const date = parseLocalIsoDate(f)
+  return date ? date.toLocaleDateString('es-ES', { weekday: 'long' }) : ''
+}
 
 const colores: Record<string, string> = { 
   Blanca: '#ffffff', 

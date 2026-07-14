@@ -3,18 +3,15 @@ import {
 	cosechaService,
 	type FechaOcupadaItem,
 } from '@/services/cosecha/cosechaService';
+import { toLocalIsoDate } from '@/utils/dateIso';
 
 export interface FechaOcupadaState {
 	cosecha: boolean;
 	voucher: boolean;
 }
 
-const MS_PER_MINUTE = 60 * 1000;
-
 function toIsoDate(value: Date): string {
-	return new Date(value.getTime() - value.getTimezoneOffset() * MS_PER_MINUTE)
-		.toISOString()
-		.slice(0, 10);
+	return toLocalIsoDate(value);
 }
 
 function toIsoDateUnknown(value: unknown): string | null {

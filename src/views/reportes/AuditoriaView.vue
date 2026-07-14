@@ -68,13 +68,17 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { reportesSeguridadService, type AuditoriaItem } from '@/services/reportes/reportesSeguridadService';
+import { toLocalIsoDate } from '@/utils/dateIso';
 
 const loading = ref(false);
 const error = ref('');
 const rows = ref<AuditoriaItem[]>([]);
 
-const today = new Date().toISOString().slice(0, 10);
-const last7 = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const todayDate = new Date();
+const last7Date = new Date(todayDate);
+last7Date.setDate(todayDate.getDate() - 6);
+const today = toLocalIsoDate(todayDate);
+const last7 = toLocalIsoDate(last7Date);
 const fechaDesde = ref(last7);
 const fechaHasta = ref(today);
 const accion = ref<string | null>(null);

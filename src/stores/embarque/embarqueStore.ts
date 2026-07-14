@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { embarqueService } from '@/services/embarque/embarqueService';
 import { useAuthStore } from '@/stores/auth/authStore';
-import { getCurrentIsoWeekInfo } from '@/utils/dateIso';
+import { getCurrentIsoWeekInfo, normalizeDateOnly, toLocalIsoDate } from '@/utils/dateIso';
 import type {
 	EmbarqueAnularRequest,
 	EmbarqueConfirmRequest,
@@ -40,17 +40,11 @@ interface EmbarqueState {
 }
 
 function hoyISO(): string {
-	return new Date().toISOString().split('T')[0];
+	return toLocalIsoDate();
 }
 
 function normalizarFechaISO(value: unknown): string {
-	if (value instanceof Date && !Number.isNaN(value.getTime())) {
-		return value.toISOString().slice(0, 10);
-	}
-	if (typeof value !== 'string') return hoyISO();
-	const raw = value.trim();
-	const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-	return match ? match[1] : hoyISO();
+	return normalizeDateOnly(value, hoyISO());
 }
 
 function safeNumber(value: unknown, fallback = 0): number {
@@ -71,7 +65,7 @@ function normalizarFincaIds(ids: number[]): number[] {
 function fechaHaceUnAnioISO(): string {
   const d = new Date();
   d.setFullYear(d.getFullYear() - 1);
-  return d.toISOString().slice(0, 10);
+  return toLocalIsoDate(d);
 }
 
 function semanaIsoDesdeFecha(fechaISO: string): number {

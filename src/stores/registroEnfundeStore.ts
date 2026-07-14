@@ -3,6 +3,7 @@ import { useEnfundeStore } from '@/stores/enfundeStore';
 import { useReportesStore } from '@/stores/reportesStore';
 import { useFincaStore } from '@/stores/fincaStore';
 import { useAuthStore } from '@/stores/auth/authStore';
+import { getCurrentIsoWeekInfo, toLocalIsoDate } from '@/utils/dateIso';
 
 interface RegistroFormData {
 	finca_id: number | null;
@@ -44,12 +45,14 @@ interface ApiErrorLike {
 }
 
 function hoyIso(): string {
-	return new Date().toISOString().split('T')[0];
+	return toLocalIsoDate();
 }
 
 function horaActual(): string {
 	return new Date().toTimeString().slice(0, 5);
 }
+
+const MAX_FUNDAS_POR_REGISTRO = 50000;
 
 export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 	state: (): RegistroEnfundeState => ({
@@ -86,10 +89,8 @@ export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 		resetFormulario() {
 			this.formData.cantidad_fundas = null;
 			this.formData.calidad = null;
-			this.formData.color = null;
-			this.formData.operario_id = null;
 			this.formData.observaciones = '';
-			this.initForm();
+			this.formData.hora_registro = horaActual();
 		},
 
 		mostrarMensaje(message: string, type: SnackbarType = 'success') {
@@ -114,13 +115,35 @@ export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 			}
 
 			this.formData.usuario_id = usuarioAutenticadoId;
+			if (!Number(this.formData.finca_id)) {
+				this.mostrarMensaje('Debe seleccionar una finca destino.', 'warning');
+				return false;
+			}
 			if (!Number(this.formData.operario_id)) {
 				this.mostrarMensaje('Debe seleccionar un operario responsable.', 'warning');
 				return false;
 			}
+			if (!Number(this.formData.calendario_id)) {
+				this.mostrarMensaje('Debe seleccionar la semana de calendario.', 'warning');
+				return false;
+			}
+
+			const cantidadFundas = Number(this.formData.cantidad_fundas);
+			if (!Number.isInteger(cantidadFundas) || cantidadFundas <= 0) {
+				this.mostrarMensaje('La cantidad de fundas debe ser un numero entero mayor a cero.', 'warning');
+				return false;
+			}
+			if (cantidadFundas > MAX_FUNDAS_POR_REGISTRO) {
+				this.mostrarMensaje(
+					`La cantidad supera el maximo permitido (${MAX_FUNDAS_POR_REGISTRO.toLocaleString()} fundas).`,
+					'warning',
+				);
+				return false;
+			}
+			this.formData.cantidad_fundas = cantidadFundas;
 
 			const reportesStore = useReportesStore();
-			const anioFormulario = new Date(`${this.formData.fecha}T00:00:00`).getFullYear();
+			const anioFormulario = getCurrentIsoWeekInfo(this.formData.fecha || new Date()).anio;
 			const anioFiltro = reportesStore.anioSeleccionado;
 
 			if (anioFormulario !== anioFiltro) {
@@ -138,7 +161,7 @@ export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 
 				const fincaStore = useFincaStore();
 				const fincaId = Number(this.formData.finca_id ?? fincaStore.fincaSeleccionadaId ?? 0);
-				await enfundeStore.cargarRegistros(fincaId || null);
+				await enfundeStore.cargarRegistros(fincaId || null, anioFiltro);
 
 				this.mostrarMensaje('Registro guardado correctamente');
 				this.resetFormulario();

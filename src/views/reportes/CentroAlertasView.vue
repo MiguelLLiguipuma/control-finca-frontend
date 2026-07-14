@@ -164,6 +164,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFincaStore } from '@/stores/fincaStore';
 import { reportesSeguridadService, type AlertaItem } from '@/services/reportes/reportesSeguridadService';
+import { toLocalIsoDate } from '@/utils/dateIso';
 
 const fincaStore = useFincaStore();
 const { fincas } = storeToRefs(fincaStore);
@@ -174,7 +175,7 @@ const rechazoMinPct = ref(20);
 const loading = ref(false);
 const error = ref('');
 const alertas = ref<AlertaItem[]>([]);
-const fechaFumigacion = ref(new Date().toISOString().slice(0, 10));
+const fechaFumigacion = ref(toLocalIsoDate());
 const fincaFumigacionId = ref<number | null>(null);
 const observacionFumigacion = ref('');
 const loadingGuardarFumigacion = ref(false);

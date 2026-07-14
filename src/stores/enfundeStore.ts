@@ -68,8 +68,16 @@ export const useEnfundeStore = defineStore('enfunde', {
 	},
 
 	actions: {
-		async cargarRegistros(fincaId: number | null): Promise<void> {
-			if (!fincaId) return;
+		async cargarRegistros(fincaId: number | null, anio?: number): Promise<void> {
+			if (Number.isFinite(Number(anio))) {
+				this.anioSeleccionado = Number(anio);
+			}
+
+			if (!fincaId) {
+				this.registros = [];
+				this.error = null;
+				return;
+			}
 
 			this.loading = true;
 			this.registros = [];

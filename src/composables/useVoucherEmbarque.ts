@@ -6,7 +6,7 @@ import { useEmbarqueStore } from '@/stores/embarque/embarqueStore';
 import { useFincaStore } from '@/stores/fincaStore';
 import { cosechaService } from '@/services/cosecha/cosechaService';
 import type { EmbarqueEstado } from '@/services/embarque/embarqueTypes';
-import { getCurrentIsoWeekInfo } from '@/utils/dateIso';
+import { getCurrentIsoWeekInfo, parseLocalIsoDate, toLocalIsoDate } from '@/utils/dateIso';
 
 interface FechaOcupadaState {
 	cosecha: boolean;
@@ -37,7 +37,7 @@ export function useVoucherEmbarque() {
 	const menuFecha = ref(false);
 	const fechaVoucherPicker = ref<Date | null>(new Date());
 	const menuFechaBusqueda = ref(false);
-	const fechaBusqueda = ref(new Date().toISOString().split('T')[0]);
+	const fechaBusqueda = ref(toLocalIsoDate());
 	const fechaBusquedaPicker = ref<Date | null>(new Date());
 	const numeroVoucherBusqueda = ref('');
 	const modoBusquedaNumero = ref<'contains' | 'exact'>('contains');
@@ -159,9 +159,7 @@ export function useVoucherEmbarque() {
 	}
 
 	function toIsoDate(value: Date): string {
-		return new Date(value.getTime() - value.getTimezoneOffset() * 60000)
-			.toISOString()
-			.slice(0, 10);
+		return toLocalIsoDate(value);
 	}
 
 	function toIsoDateUnknown(value: unknown): string | null {
@@ -186,13 +184,13 @@ export function useVoucherEmbarque() {
 	}
 
 	function syncPickerWithStoreDate() {
-		const parsed = new Date(`${embarqueStore.fechaEmbarque}T00:00:00`);
-		fechaVoucherPicker.value = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+		const parsed = parseLocalIsoDate(embarqueStore.fechaEmbarque);
+		fechaVoucherPicker.value = parsed || new Date();
 	}
 
 	function syncBusquedaPicker() {
-		const parsed = new Date(`${fechaBusqueda.value}T00:00:00`);
-		fechaBusquedaPicker.value = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+		const parsed = parseLocalIsoDate(fechaBusqueda.value);
+		fechaBusquedaPicker.value = parsed || new Date();
 	}
 
 	function semanaIsoDesdeFecha(fechaISO: string): number {

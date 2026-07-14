@@ -88,6 +88,7 @@
                       class="custom-input"
                       :rules="[rules.required]"
                       prepend-inner-icon="mdi-domain"
+                      @update:model-value="onFincaChange"
                     />
                   </v-col>
                   <v-col cols="12" md="4">
@@ -135,7 +136,24 @@
                 </div>
 
                 <v-row>
-                  <v-col cols="12" md="6">
+                  <v-col cols="12" md="4">
+                    <label class="custom-label" for="enfunde-fecha">Fecha de Registro</label>
+                    <v-text-field
+                      id="enfunde-fecha"
+                      v-model="registroStore.formData.fecha"
+                      type="date"
+                      variant="solo-filled"
+                      flat
+                      density="comfortable"
+                      rounded="lg"
+                      class="custom-input"
+                      :rules="[rules.required]"
+                      prepend-inner-icon="mdi-calendar-today"
+                      @update:model-value="onFechaChange"
+                    />
+                  </v-col>
+
+                  <v-col cols="12" md="4">
                     <label class="custom-label" for="enfunde-calendario">Semana de Calendario</label>
                     <v-autocomplete
                       id="enfunde-calendario"
@@ -152,11 +170,11 @@
                       :rules="[rules.required]"
                       prepend-inner-icon="mdi-calendar-search"
                       @update:model-value="onSemanaChange"
-                      :no-data-text="`No hay calendarios para el año ${reportesStore.anioSeleccionado}`"
+                      :no-data-text="`No hay calendarios para el año ${anioActivo}`"
                     />
                   </v-col>
 
-                  <v-col cols="12" md="6">
+                  <v-col cols="12" md="4">
                     <label class="custom-label" for="enfunde-cantidad">Cantidad de Fundas</label>
                     <v-text-field
                       id="enfunde-cantidad"
@@ -168,11 +186,38 @@
                       density="comfortable"
                       rounded="lg"
                       class="custom-input"
-                      :rules="[rules.required, rules.minCantidad]"
+                      :rules="[rules.required, rules.minCantidad, rules.integerCantidad, rules.maxCantidad]"
                       prepend-inner-icon="mdi-numeric-box-outline"
                       inputmode="numeric"
                       min="1"
+                      :max="MAX_FUNDAS_POR_REGISTRO"
+                      step="1"
                     />
+                  </v-col>
+
+                  <v-col cols="12">
+                    <v-sheet class="pa-3 rounded-lg week-preview" color="surface">
+                      <div class="d-flex align-center justify-space-between flex-wrap gap-3">
+                        <div class="d-flex align-center">
+                          <v-avatar :style="{ backgroundColor: colorAsignadoHex + '22' }" size="36" rounded="lg" class="mr-3">
+                            <v-icon :style="{ color: colorAsignadoHex }">mdi-calendar-check</v-icon>
+                          </v-avatar>
+                          <div>
+                            <div class="text-caption text-medium-emphasis">Semana calculada desde la fecha</div>
+                            <div class="text-body-2 font-weight-black text-high-emphasis">
+                              Semana {{ semanaFormulario.semana }} · Año {{ semanaFormulario.anio }}
+                            </div>
+                          </div>
+                        </div>
+                        <v-chip
+                          :style="{ backgroundColor: colorAsignadoHex + '22', color: colorAsignadoHex }"
+                          class="font-weight-black"
+                          variant="flat"
+                        >
+                          Cinta {{ registroStore.formData.color || 'sin calendario' }}
+                        </v-chip>
+                      </div>
+                    </v-sheet>
                   </v-col>
 
                   <v-col cols="12">
@@ -196,6 +241,26 @@
 
                 <v-expand-transition>
                   <v-alert
+                    v-if="posibleDuplicado"
+                    type="warning"
+                    variant="tonal"
+                    rounded="xl"
+                    class="mb-6"
+                    density="comfortable"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <div class="font-weight-bold">
+                      Ya existe un registro parecido para esta finca, fecha, cinta y operario.
+                    </div>
+                    <div class="text-caption">
+                      Revise el historial antes de guardar si no desea duplicar la captura.
+                    </div>
+                  </v-alert>
+                </v-expand-transition>
+
+                <v-expand-transition>
+                  <v-alert
                     v-if="!esAnioValido"
                     type="warning"
                     variant="tonal"
@@ -208,7 +273,7 @@
                     <div class="d-flex flex-column flex-sm-row align-center justify-space-between gap-3">
                       <div class="text-caption font-weight-bold">
                         <v-icon start size="small">mdi-calendar-alert</v-icon>
-                        Registro del <b>{{ anioFormulario }}</b>, pero el Panel visualiza el <b>{{ reportesStore.anioSeleccionado }}</b>.
+                        Registro del <b>{{ anioFormulario }}</b>, pero el Panel visualiza el <b>{{ anioActivo }}</b>.
                       </div>
                       <v-btn
                         size="x-small"
@@ -254,11 +319,24 @@
             <v-avatar color="primary" size="32" variant="tonal" class="mr-3">
               <v-icon size="18">mdi-history</v-icon>
             </v-avatar>
-            <h2 class="text-h5 font-weight-black text-high-emphasis">Registros Recientes ({{ reportesStore.anioSeleccionado }})</h2>
+            <h2 class="text-h5 font-weight-black text-high-emphasis">Registros Recientes ({{ anioActivo }})</h2>
             <v-spacer />
-            <v-btn variant="tonal" color="medium-emphasis" icon="mdi-refresh" size="small" aria-label="Actualizar tabla de registros recientes" @click="registroStore.tablaKey++"></v-btn>
+            <v-btn
+              variant="tonal"
+              color="medium-emphasis"
+              icon="mdi-refresh"
+              size="small"
+              :loading="enfundeStore.loading"
+              aria-label="Actualizar tabla de registros recientes"
+              @click="refrescarRegistros"
+            ></v-btn>
           </div>
-          <TablaEnfunde :key="registroStore.tablaKey" />
+          <TablaEnfunde
+            :items="enfundeStore.registrosFiltrados"
+            :loading="enfundeStore.loading"
+            :anio="anioActivo"
+            :error="enfundeStore.error"
+          />
         </div>
 
       </v-col>
@@ -281,15 +359,18 @@ import { useFincaStore, type Finca } from '@/stores/fincaStore'
 import { useUsuarioStore, type Usuario } from '@/stores/usuarioStore'
 import { useCalendarioStore } from '@/stores/calendarioStore'
 import { useReportesStore } from '@/stores/reportesStore'
+import { useEnfundeStore } from '@/stores/enfundeStore'
 import { useAuthStore } from '@/stores/auth/authStore'
 import TablaEnfunde from '@/components/registros/tablaEnfunde.vue'
 import ViewHelpHint from '@/components/ui/ViewHelpHint.vue'
+import { getCurrentIsoWeekInfo } from '@/utils/dateIso'
 
 const theme = useTheme()
 const isDark = computed(() => theme.global.current.value.dark)
 
 const registroStore = useRegistroEnfundeStore()
 const reportesStore = useReportesStore()
+const enfundeStore = useEnfundeStore()
 const fincaStore = useFincaStore()
 const usuarioStore = useUsuarioStore()
 const calendarioStore = useCalendarioStore()
@@ -335,28 +416,37 @@ const rawData = ref<{
   calendarios: [],
 })
 
+const MAX_FUNDAS_POR_REGISTRO = 50000
+
 const rules = {
   required: (v: unknown) => !!v || 'Requerido',
   minCantidad: (v: unknown) => (Number(v) > 0) || 'Mínimo 1',
+  integerCantidad: (v: unknown) => Number.isInteger(Number(v)) || 'Debe ser entero',
+  maxCantidad: (v: unknown) => Number(v) <= MAX_FUNDAS_POR_REGISTRO || `Maximo ${MAX_FUNDAS_POR_REGISTRO.toLocaleString()} fundas`,
   usuarioAutenticado: (v: unknown) => Number(v) > 0 || 'Sesion invalida: vuelva a iniciar sesion'
 }
 
+const anioActivo = computed(() =>
+  Number(reportesStore.anioSeleccionado || new Date().getFullYear())
+)
+
+const semanaFormulario = computed(() =>
+  getCurrentIsoWeekInfo(registroStore.formData.fecha || new Date())
+)
+
 // LÓGICA DE AÑO Y VALIDACIÓN
-const anioFormulario = computed(() => {
-  if (!registroStore.formData.fecha) return null;
-  return new Date(registroStore.formData.fecha + 'T00:00:00').getFullYear();
-});
+const anioFormulario = computed(() => semanaFormulario.value.anio);
 
 const esAnioValido = computed(() => {
   if (!anioFormulario.value) return true;
-  return Number(anioFormulario.value) === Number(reportesStore.anioSeleccionado);
+  return Number(anioFormulario.value) === Number(anioActivo.value);
 });
 
 const sincronizarYRefrescar = async () => {
   if (!anioFormulario.value) return;
   const fincaId = Number(registroStore.formData.finca_id || fincaStore.fincaSeleccionadaId || 0);
   await reportesStore.actualizarPeriodo(anioFormulario.value, fincaId || null);
-  registroStore.tablaKey++;
+  await refrescarRegistros();
   registroStore.mostrarMensaje(`Panel sincronizado al año ${anioFormulario.value}`, 'success');
 };
 
@@ -380,10 +470,8 @@ const usuariosActivos = computed<UsuarioSelectItem[]>(() => {
 });
 
 const calendariosAnioActual = computed<CalendarioSelectItem[]>(() => {
-  const anioAFiltrar = reportesStore.anioSeleccionado || new Date().getFullYear();
-  
   return rawData.value.calendarios
-    .filter(c => Number(c.anio) === Number(anioAFiltrar)) // Filtrado corregido por anio
+    .filter(c => Number(c.anio) === Number(anioActivo.value))
     .sort((a, b) => a.semana - b.semana)
     .map(c => ({ 
       ...c, 
@@ -397,10 +485,90 @@ const semanaActual = computed(() => {
   return sel ? sel.semana : null
 })
 
+const posibleDuplicado = computed(() => {
+  const fincaId = Number(registroStore.formData.finca_id || 0)
+  const operarioId = Number(registroStore.formData.operario_id || 0)
+  const calendarioId = Number(registroStore.formData.calendario_id || 0)
+  const fecha = String(registroStore.formData.fecha || '').slice(0, 10)
+  const color = String(registroStore.formData.color || '')
+
+  if (!fincaId || !operarioId || !calendarioId || !fecha) return false
+
+  return enfundeStore.registrosFiltrados.some((registro) => {
+    const registroFecha = String(registro.fecha || '').slice(0, 10)
+    if (registroFecha !== fecha) return false
+
+    const registroFincaId = toOptionalNumber(registro.finca_id)
+    if (registroFincaId !== null && registroFincaId !== fincaId) return false
+
+    const registroOperarioId = toOptionalNumber(registro.operario_id)
+    if (registroOperarioId !== null && registroOperarioId !== operarioId) return false
+
+    const registroCalendarioId = toOptionalNumber(registro.calendario_id)
+    if (registroCalendarioId !== null) return registroCalendarioId === calendarioId
+
+    return !!color && String(registro.color || registro.cinta || '') === color
+  })
+})
+
 // FUNCIONES DE SOPORTE
+function toOptionalNumber(value: unknown): number | null {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
 function onSemanaChange(id: number | null) {
   const sel = rawData.value.calendarios.find(c => c.id === id)
   if (sel) registroStore.formData.color = sel.color || null
+  else registroStore.formData.color = null
+}
+
+function seleccionarSemanaPorFechaRegistro(force = false) {
+  if (!force && registroStore.formData.calendario_id) return
+
+  const semanaFecha = semanaFormulario.value
+  if (Number(semanaFecha.anio) !== Number(anioActivo.value)) {
+    registroStore.formData.calendario_id = null
+    registroStore.formData.color = null
+    return
+  }
+
+  const calendarioActual = rawData.value.calendarios.find(
+    (calendario) =>
+      Number(calendario.anio) === Number(semanaFecha.anio) &&
+      Number(calendario.semana) === Number(semanaFecha.semana),
+  )
+
+  if (!calendarioActual) return
+
+  registroStore.formData.calendario_id = calendarioActual.id
+  registroStore.formData.color = calendarioActual.color || null
+}
+
+function onFechaChange() {
+  seleccionarSemanaPorFechaRegistro(true)
+}
+
+async function refrescarRegistros() {
+  const fincaId = Number(registroStore.formData.finca_id || fincaStore.fincaSeleccionadaId || 0)
+  await enfundeStore.cargarRegistros(fincaId || null, anioActivo.value)
+}
+
+async function onFincaChange(value: number | string | null) {
+  const fincaId = Number(value || 0)
+  if (Number.isFinite(fincaId) && fincaId > 0) {
+    fincaStore.seleccionarFinca(fincaId)
+  }
+  await refrescarRegistros()
+}
+
+function limpiarCalendarioSiNoPerteneceAlAnio() {
+  const calendarioId = registroStore.formData.calendario_id
+  if (!calendarioId) return
+  const calendarioActual = rawData.value.calendarios.find(c => c.id === calendarioId)
+  if (calendarioActual && Number(calendarioActual.anio) === Number(anioActivo.value)) return
+  registroStore.formData.calendario_id = null
+  registroStore.formData.color = null
 }
 
 function getColorHex(c: string | null) {
@@ -418,11 +586,14 @@ function getColorHex(c: string | null) {
 }
 
 // WATCH PARA SINCRONIZACIÓN REACTIVA
-watch(() => reportesStore.anioSeleccionado, async (nuevoAnio) => {
+watch(() => anioActivo.value, async (nuevoAnio) => {
   if (nuevoAnio) {
     // Al cambiar el año en el panel, refrescamos calendarios para asegurar consistencia
     const c = await calendarioStore.obtenerCalendarios()
     rawData.value.calendarios = c || []
+    limpiarCalendarioSiNoPerteneceAlAnio()
+    seleccionarSemanaPorFechaRegistro()
+    await refrescarRegistros()
   }
 })
 
@@ -445,6 +616,7 @@ onMounted(async () => {
     const u: Usuario[] = uRes.status === 'fulfilled' ? uRes.value : [];
 
     rawData.value = { fincas: f || [], usuarios: u || [], calendarios: c || [] }
+    seleccionarSemanaPorFechaRegistro()
 
     if (!registroStore.formData.finca_id && fincaStore.fincaSeleccionadaId) {
       registroStore.formData.finca_id = fincaStore.fincaSeleccionadaId
@@ -458,6 +630,8 @@ onMounted(async () => {
     if (!registroStore.formData.operario_id && usuariosActivos.value.length) {
       registroStore.formData.operario_id = Number(usuariosActivos.value[0].id || 0);
     }
+
+    await refrescarRegistros()
   } catch (error) {
     console.error("Error cargando datos de inicio:", error)
   } finally { 
@@ -516,6 +690,10 @@ const onSubmit = async () => {
 
 .custom-input :deep(.v-field__input) {
   color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+.week-preview {
+  border: 1px solid rgba(var(--v-border-color), 0.14);
 }
 
 .shadow-primary { 
