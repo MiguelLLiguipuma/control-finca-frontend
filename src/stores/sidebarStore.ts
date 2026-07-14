@@ -20,7 +20,7 @@ export const useSidebarStore = defineStore('sidebar', () => {
 				isOpen: isSidebarOpen.value,
 				isMini: false,
 				isHoverExpanded: false,
-				width: isSidebarOpen.value ? 260 : 0,
+				width: isSidebarOpen.value ? 248 : 0,
 			};
 		}
 
@@ -30,7 +30,7 @@ export const useSidebarStore = defineStore('sidebar', () => {
 			isOpen: true,
 			isMini: isMiniSidebar.value,
 			isHoverExpanded: isHoverExpanded.value,
-			width: expanded ? 260 : 80,
+			width: expanded ? 248 : 68,
 		};
 	});
 

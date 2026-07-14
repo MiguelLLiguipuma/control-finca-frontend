@@ -5,6 +5,7 @@
     :permanent="!isMobileView"
     :temporary="isMobileView"
     :width="sidebarWidth"
+    :rail-width="railSidebarWidth"
     :rail="isMiniSidebar && !isMobileView && !isHoverExpanded"
     :color="isDark ? '#0f172a' : 'white'"
     elevation="0"
@@ -14,8 +15,8 @@
   >
     <div class="sidebar-header" v-if="shouldShowContent || isMiniSidebar">
       <div class="logo-container" :class="{ 'logo-container-rail': !shouldShowContent }">
-        <v-avatar color="primary" variant="tonal" size="36" rounded="lg">
-          <v-icon size="24">mdi-chart-areaspline</v-icon>
+        <v-avatar color="primary" variant="tonal" size="32" rounded="lg">
+          <v-icon size="21">mdi-chart-areaspline</v-icon>
         </v-avatar>
         <span v-if="shouldShowContent" class="logo-text">ControlFinca</span>
       </div>
@@ -209,6 +210,7 @@ const visibleSections = computed<MenuSection[]>(() =>
 )
 
 const sidebarWidth = computed(() => sidebarStore.currentSidebarWidth)
+const railSidebarWidth = 68
 const shouldShowContent = computed(
   () => !isMiniSidebar.value || isMobileView.value || isHoverExpanded.value,
 )
@@ -257,8 +259,8 @@ onUnmounted(() => {
 }
 
 .sidebar-header {
-  height: 68px;
-  padding: 0 16px;
+  height: 60px;
+  padding: 0 14px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -267,8 +269,8 @@ onUnmounted(() => {
 .logo-container {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 40px;
+  gap: 10px;
+  min-width: 36px;
 }
 
 .logo-container-rail {
@@ -289,7 +291,7 @@ onUnmounted(() => {
   color: rgba(var(--v-theme-on-surface), 0.72) !important;
   transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
   overflow: hidden;
-  min-height: 44px;
+  min-height: 42px;
   border: 1px solid transparent;
   position: relative;
 }
@@ -303,11 +305,11 @@ onUnmounted(() => {
 }
 
 .nav-item-rail {
-  width: 56px;
-  min-height: 56px;
+  width: 46px;
+  min-height: 46px;
   margin-inline: auto;
   padding-inline: 0 !important;
-  border-radius: 16px !important;
+  border-radius: 12px !important;
 }
 
 .nav-item-rail :deep(.v-list-item__prepend) {
@@ -326,11 +328,11 @@ onUnmounted(() => {
 }
 
 .nav-item-rail .nav-icon {
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .nav-item-rail:deep(.v-list-item__overlay) {
-  border-radius: 16px;
+  border-radius: 12px;
 }
 
 .nav-item:deep(.v-list-item--active) {
@@ -340,7 +342,7 @@ onUnmounted(() => {
 }
 
 .nav-icon {
-  font-size: 18px;
+  font-size: 17px;
   opacity: 0.9;
 }
 
@@ -362,14 +364,14 @@ onUnmounted(() => {
 }
 
 .sidebar-scroll {
-  padding: 8px 10px 14px;
+  padding: 6px 8px 12px;
   overflow-y: auto;
-  height: calc(100% - 69px - 58px);
+  height: calc(100% - 61px - 50px);
 }
 
 .menu-section + .menu-section {
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px solid rgba(var(--v-border-color), 0.06);
 }
 
@@ -388,6 +390,10 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
+}
+
+.footer-content {
+  min-height: 50px;
 }
 
 .menu-badge {
