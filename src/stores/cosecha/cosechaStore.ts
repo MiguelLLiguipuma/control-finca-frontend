@@ -8,6 +8,8 @@ import { useUIStore } from '../../stores/uiStore';
 import {
 	calculateIsoWeekAge,
 	getCurrentIsoWeekInfo,
+	MAX_VISIBLE_CINTA_AGE_WEEKS,
+	isIsoWeekAgeVisible,
 } from '../../utils/dateIso';
 
 export interface CintaCosecha {
@@ -311,26 +313,41 @@ export const useCosechaStore = defineStore('cosecha', {
 			item.cantidad_a_cosechar = Math.max(0, toNonNegativeInt(item.saldo_en_campo) - toNonNegativeInt(item.rechazo));
 		},
 
-		async cargarSaldos(fincaId: number) {
+		async cargarSaldos(fincaId: number): Promise<boolean> {
+			const fincaAnteriorId = this.fincaActivaId;
 			this.loading = true;
 			this.fincaActivaId = fincaId;
 			try {
 				const data: BackendCinta[] = await cosechaService.getBalance(fincaId);
 				const anioFallback = this.infoSistema.anio;
 
-				this.saldosPendientes = data.map((item) => ({
-					calendario_id: item.calendario_id,
-					semana_enfunde: Number(item.semana_enfunde),
-					anio: resolverAnioDesdeBackend(item, anioFallback),
-					saldo_en_campo: Number(item.saldo_en_campo),
-					color_cinta: item.color_cinta,
-					color_hex: item.color_hex,
-					cantidad_a_cosechar: 0,
-					rechazo: 0,
-					edad: 0,
-				}));
+				this.saldosPendientes = data
+					.map((item) => {
+						const semanaEnfunde = Number(item.semana_enfunde);
+						const anio = resolverAnioDesdeBackend(item, anioFallback);
+
+						return {
+							calendario_id: item.calendario_id,
+							semana_enfunde: semanaEnfunde,
+							anio,
+							saldo_en_campo: Number(item.saldo_en_campo),
+							color_cinta: item.color_cinta,
+							color_hex: item.color_hex,
+							cantidad_a_cosechar: 0,
+							rechazo: 0,
+							edad: calculateIsoWeekAge(semanaEnfunde, anio),
+						};
+					})
+					.filter((item) =>
+						isIsoWeekAgeVisible(item.semana_enfunde, item.anio),
+					);
+				return true;
 			} catch (error) {
+				if (fincaAnteriorId !== fincaId) {
+					this.saldosPendientes = [];
+				}
 				useUIStore().showError('Error al cargar inventario del servidor.');
+				return false;
 			} finally {
 				this.loading = false;
 			}
@@ -343,7 +360,10 @@ export const useCosechaStore = defineStore('cosecha', {
 					item.anio,
 				);
 
-				if (edadActual >= this.semanaInicioCorte) {
+				if (
+					edadActual >= this.semanaInicioCorte &&
+					edadActual < MAX_VISIBLE_CINTA_AGE_WEEKS
+				) {
 					item.cantidad_a_cosechar = item.saldo_en_campo;
 					item.rechazo = 0;
 				}

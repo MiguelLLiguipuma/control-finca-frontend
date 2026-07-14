@@ -1,4 +1,4 @@
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
@@ -9,6 +9,7 @@ import {
 import { useEmpresaStore } from '@/stores/empresaStore';
 import { useFincaStore } from '@/stores/fincaStore';
 import { useFechasOcupadas } from '@/composables/useFechasOcupadas';
+import { toLocalIsoDate } from '@/utils/dateIso';
 
 dayjs.extend(isoWeek);
 
@@ -23,6 +24,21 @@ interface SetCampoPayload {
 	campo: 'cantidad_a_cosechar' | 'rechazo';
 	valor: number;
 }
+
+interface BorradorCosechaItem {
+	calendario_id: number;
+	cantidad_a_cosechar: number;
+	rechazo: number;
+}
+
+interface BorradorCosechaLocal {
+	finca_id: number;
+	fecha: string;
+	actualizado_en: number;
+	items: BorradorCosechaItem[];
+}
+
+const BORRADOR_COSECHA_PREFIX = 'borrador_cosecha_conteo';
 
 export function useRegistroCosecha() {
 	const cosechaStore = useCosechaStore();
@@ -39,10 +55,11 @@ export function useRegistroCosecha() {
 	} = useFechasOcupadas();
 
 	const fincaSeleccionada = ref<number | null>(fincaStore.fincaSeleccionadaId);
-	const fechaCosecha = ref(new Date().toISOString().split('T')[0]);
+	const fechaCosecha = ref(toLocalIsoDate());
 	const fechaObjetoPicker = ref<Date | null>(new Date());
 	const menuFecha = ref(false);
 	const hidratandoPantalla = ref(true);
+	const restaurandoBorrador = ref(false);
 	const snackbar = ref<SnackbarState>({
 		show: false,
 		message: '',
@@ -79,9 +96,97 @@ export function useRegistroCosecha() {
 	const estadoFechaSeleccionada = computed(() =>
 		obtenerEstadoFecha(fechaCosecha.value),
 	);
+	const hayConteoSinEnviar = computed(() =>
+		crearBorradorDesdeDigitacion() !== null,
+	);
 
 	function notify(message: string, color = 'info') {
 		snackbar.value = { show: true, message, color };
+	}
+
+	function getBorradorKey(fincaId = fincaSeleccionada.value, fecha = fechaCosecha.value) {
+		if (!fincaId || !fecha) return '';
+		return `${BORRADOR_COSECHA_PREFIX}:${fincaId}:${fecha}`;
+	}
+
+	function crearBorradorDesdeDigitacion(): BorradorCosechaLocal | null {
+		if (!fincaSeleccionada.value || !fechaCosecha.value) return null;
+		const items = cosechaStore.saldosPendientes
+			.filter((item) => item.cantidad_a_cosechar > 0 || item.rechazo > 0)
+			.map((item) => ({
+				calendario_id: item.calendario_id,
+				cantidad_a_cosechar: Number(item.cantidad_a_cosechar || 0),
+				rechazo: Number(item.rechazo || 0),
+			}));
+
+		if (!items.length) return null;
+		return {
+			finca_id: fincaSeleccionada.value,
+			fecha: fechaCosecha.value,
+			actualizado_en: Date.now(),
+			items,
+		};
+	}
+
+	function guardarBorradorLocal() {
+		if (restaurandoBorrador.value || typeof localStorage === 'undefined') return;
+		const key = getBorradorKey();
+		if (!key) return;
+
+		const borrador = crearBorradorDesdeDigitacion();
+		if (!borrador) {
+			localStorage.removeItem(key);
+			return;
+		}
+
+		localStorage.setItem(key, JSON.stringify(borrador));
+	}
+
+	function limpiarBorradorLocal(fincaId = fincaSeleccionada.value, fecha = fechaCosecha.value) {
+		if (typeof localStorage === 'undefined') return;
+		const key = getBorradorKey(fincaId, fecha);
+		if (key) localStorage.removeItem(key);
+	}
+
+	function limpiarDigitacionActual() {
+		cosechaStore.saldosPendientes.forEach((item) => {
+			item.cantidad_a_cosechar = 0;
+			item.rechazo = 0;
+		});
+	}
+
+	function restaurarBorradorLocal() {
+		if (typeof localStorage === 'undefined') return false;
+		const key = getBorradorKey();
+		if (!key) return false;
+		const raw = localStorage.getItem(key);
+		if (!raw) {
+			limpiarDigitacionActual();
+			return false;
+		}
+
+		try {
+			const parsed = JSON.parse(raw) as BorradorCosechaLocal;
+			const items = Array.isArray(parsed?.items) ? parsed.items : [];
+			const mapa = new Map(
+				items.map((item) => [Number(item.calendario_id), item]),
+			);
+
+			restaurandoBorrador.value = true;
+			cosechaStore.saldosPendientes.forEach((item) => {
+				const draft = mapa.get(Number(item.calendario_id));
+				item.cantidad_a_cosechar = Number(draft?.cantidad_a_cosechar || 0);
+				item.rechazo = Number(draft?.rechazo || 0);
+				cosechaStore.normalizarItemDigitacion(item);
+			});
+			return items.length > 0;
+		} catch {
+			localStorage.removeItem(key);
+			limpiarDigitacionActual();
+			return false;
+		} finally {
+			restaurandoBorrador.value = false;
+		}
 	}
 
 	function obtenerColorTarjeta(item: CintaCosecha) {
@@ -109,7 +214,20 @@ export function useRegistroCosecha() {
 	async function cargarSaldos(fincaId: number) {
 		if (!fincaId || cosechaStore.loading) return;
 		fincaStore.seleccionarFinca(fincaId);
-		await cosechaStore.cargarSaldos(fincaId);
+		let saldosActualizados = false;
+		restaurandoBorrador.value = true;
+		try {
+			saldosActualizados = await cosechaStore.cargarSaldos(fincaId);
+		} finally {
+			restaurandoBorrador.value = false;
+		}
+		if (!saldosActualizados) {
+			notify('No se pudieron actualizar los saldos de cosecha.', 'error');
+			return;
+		}
+		if (restaurarBorradorLocal()) {
+			notify('Se restauró un conteo guardado localmente.', 'info');
+		}
 	}
 
 	function fechaCosechaPermitida(value: unknown): boolean {
@@ -152,13 +270,14 @@ export function useRegistroCosecha() {
 			notify(result.message, 'error');
 			return;
 		}
-		if (fincaSeleccionada.value) {
+		if (fincaSeleccionada.value && !result.queued) {
 			await cargarFechasOcupadas({
 				fincaId: fincaSeleccionada.value,
 				fechaDesde: fechaMinima.value,
 				fechaHasta: fechaMaxima.value,
 			});
 		}
+		limpiarBorradorLocal();
 		notify(result.message, result.queued ? 'warning' : 'success');
 	}
 
@@ -204,9 +323,15 @@ export function useRegistroCosecha() {
 
 	watch(fechaObjetoPicker, (newDate) => {
 		if (!newDate) return;
-		const offset = newDate.getTimezoneOffset();
-		const dateLocal = new Date(newDate.getTime() - offset * 60 * 1000);
-		fechaCosecha.value = dateLocal.toISOString().split('T')[0];
+		fechaCosecha.value = toLocalIsoDate(newDate);
+	});
+
+	watch(fechaCosecha, async () => {
+		if (hidratandoPantalla.value) return;
+		await nextTick();
+		if (restaurarBorradorLocal()) {
+			notify('Se restauró el conteo guardado para esta fecha.', 'info');
+		}
 	});
 
 	watch(
@@ -224,6 +349,19 @@ export function useRegistroCosecha() {
 				fechaHasta: fechaMaxima.value,
 			});
 		},
+	);
+
+	watch(
+		() =>
+			cosechaStore.saldosPendientes.map((item) => ({
+				id: item.calendario_id,
+				buenos: item.cantidad_a_cosechar,
+				rechazo: item.rechazo,
+			})),
+		() => {
+			guardarBorradorLocal();
+		},
+		{ deep: true },
 	);
 
 	onMounted(async () => {
@@ -248,6 +386,7 @@ export function useRegistroCosecha() {
 		fechaMaxima,
 		fechaMinima,
 		estadoFechaSeleccionada,
+		hayConteoSinEnviar,
 		obtenerColorTarjeta,
 		obtenerVarianteTarjeta,
 		cargarSaldos,

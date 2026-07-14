@@ -2,6 +2,7 @@
   <v-card
     rounded="xl"
     class="mb-3 border-s-xl elevation-2"
+    :class="{ 'scanner-highlight': isHighlighted }"
     :style="{ borderLeftColor: `${item.color_hex} !important`, borderLeftWidth: '8px !important' }"
     :color="cardColor"
     :variant="cardVariant"
@@ -26,6 +27,12 @@
         >
           <v-icon start size="small">mdi-basket</v-icon>
           LISTA PARA CORTE
+        </v-chip>
+      </div>
+      <div v-if="isHighlighted" class="mb-3">
+        <v-chip color="info" size="small" class="font-weight-black" variant="flat">
+          <v-icon start size="small">mdi-camera-iris</v-icon>
+          CINTA DETECTADA
         </v-chip>
       </div>
 
@@ -183,6 +190,7 @@ interface Props {
   exceeded: boolean;
   isCurrentCut: boolean;
   isReadyForCut: boolean;
+  isHighlighted?: boolean;
   cardColor: string;
   cardVariant: 'tonal' | 'elevated' | 'flat' | 'outlined' | 'plain' | 'text';
 }
@@ -257,6 +265,12 @@ const vSelectAll = {
 
 .digitacion-group {
   width: 100%;
+}
+
+.scanner-highlight {
+  outline: 3px solid rgb(var(--v-theme-info));
+  outline-offset: 2px;
+  box-shadow: 0 14px 34px rgba(14, 116, 144, 0.24) !important;
 }
 
 .input-container {
