@@ -1,11 +1,6 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
 import {
-	canUsePlatformAuthenticator,
-	loginWithPasskey,
-	registerPasskey,
-} from '@/services/auth/passkeyService';
-import {
 	canAccess,
 	normalizeRole,
 	permissionsForRole,
@@ -110,86 +105,6 @@ export const useAuthStore = defineStore('auth', {
 					success: false,
 					message:
 						e.response?.data?.message || 'No se pudo autenticar con Google',
-				};
-			} finally {
-				this.loading = false;
-			}
-		},
-
-		async loginWithBiometric(email?: string) {
-			this.loading = true;
-			try {
-				const available = await canUsePlatformAuthenticator();
-				if (!available) {
-					return {
-						success: false,
-						message: 'Este dispositivo no tiene huella, Face ID o passkey disponible.',
-					};
-				}
-
-				const response = await loginWithPasskey(email);
-				this.establishSession(response);
-				return { success: true };
-			} catch (error) {
-				const e = error as {
-					name?: string;
-					message?: string;
-					response?: { status?: number; data?: { message?: string; error?: string } };
-				};
-				if (e?.name === 'NotAllowedError') {
-					return {
-						success: false,
-						message: 'Autenticación biométrica cancelada o no autorizada.',
-					};
-				}
-				return {
-					success: false,
-					message:
-						e.response?.data?.message ||
-						e.response?.data?.error ||
-						e.message ||
-						'No se pudo iniciar sesión con huella.',
-				};
-			} finally {
-				this.loading = false;
-			}
-		},
-
-		async registerBiometric() {
-			this.loading = true;
-			try {
-				const available = await canUsePlatformAuthenticator();
-				if (!available) {
-					return {
-						success: false,
-						message: 'Este dispositivo no tiene autenticación biométrica disponible.',
-					};
-				}
-
-				await registerPasskey();
-				return {
-					success: true,
-					message: 'Huella/passkey activada correctamente para este dispositivo.',
-				};
-			} catch (error) {
-				const e = error as {
-					name?: string;
-					message?: string;
-					response?: { data?: { message?: string; error?: string } };
-				};
-				if (e?.name === 'NotAllowedError') {
-					return {
-						success: false,
-						message: 'Registro biométrico cancelado o no autorizado.',
-					};
-				}
-				return {
-					success: false,
-					message:
-						e.response?.data?.message ||
-						e.response?.data?.error ||
-						e.message ||
-						'No se pudo activar la huella en este dispositivo.',
 				};
 			} finally {
 				this.loading = false;

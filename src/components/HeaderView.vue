@@ -79,14 +79,8 @@
                     <v-icon>mdi-chevron-down</v-icon>
                   </v-btn>
                 </template>
-                  <v-list nav width="180" class="rounded-lg mt-2">
-                    <v-list-item prepend-icon="mdi-account-outline" title="Mi Perfil" />
-                  <v-list-item
-                    prepend-icon="mdi-fingerprint"
-                    title="Activar huella"
-                    :disabled="authStore.loading"
-                    @click="activarHuella"
-                  />
+                <v-list nav width="180" class="rounded-lg mt-2">
+                  <v-list-item prepend-icon="mdi-account-outline" title="Mi Perfil" />
                   <v-list-item prepend-icon="mdi-cog-outline" title="Ajustes" />
                   <v-divider class="my-2" />
                   <v-list-item 
@@ -109,7 +103,6 @@
 import { useTheme } from 'vuetify'; // 1. Importamos el hook de tema
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useAuthStore } from '../stores/auth/authStore';
-import { useUIStore } from '@/stores/uiStore';
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 
@@ -122,7 +115,6 @@ interface BreadcrumbItem {
 const theme = useTheme(); // 2. Instanciamos el tema
 const sidebarStore = useSidebarStore();
 const authStore = useAuthStore();
-const uiStore = useUIStore();
 const route = useRoute();
 
 const toggleSidebar = () => sidebarStore.toggleSidebar();
@@ -130,15 +122,6 @@ const toggleSidebar = () => sidebarStore.toggleSidebar();
 // 3. Función para alternar entre light y dark
 const toggleDarkMode = () => {
   theme.global.name.value = theme.global.current.value.dark ? 'light' : 'dark';
-};
-
-const activarHuella = async () => {
-  const result = await authStore.registerBiometric();
-  if (result.success) {
-    uiStore.showSuccess(result.message || 'Huella activada correctamente.');
-  } else {
-    uiStore.showError(result.message || 'No se pudo activar la huella.');
-  }
 };
 
 const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
