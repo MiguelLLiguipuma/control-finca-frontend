@@ -42,13 +42,25 @@
           hide-details
         />
       </v-col>
-      <v-col cols="6" md="3">
+      <v-col cols="6" md="2">
         <label class="text-caption font-weight-bold">Edad crítica cinta</label>
         <v-text-field
           v-model.number="edadCriticaCinta"
           type="number"
           min="12"
           max="20"
+          variant="outlined"
+          density="comfortable"
+          hide-details
+        />
+      </v-col>
+      <v-col cols="6" md="2">
+        <label class="text-caption font-weight-bold">Edad histórica</label>
+        <v-text-field
+          v-model.number="edadHistoricaCinta"
+          type="number"
+          min="13"
+          max="30"
           variant="outlined"
           density="comfortable"
           hide-details
@@ -204,6 +216,7 @@ const { fincas } = storeToRefs(fincaStore);
 const fincaId = ref<number | null>(null);
 const estadoFiltro = ref<AlertaEstado | null>(null);
 const edadCriticaCinta = ref(15);
+const edadHistoricaCinta = ref(17);
 const error = ref('');
 const fechaFumigacion = ref(toLocalIsoDate());
 const fincaFumigacionId = ref<number | null>(null);
@@ -258,6 +271,7 @@ async function generarDiagnostico() {
     await alertaStore.generar({
       finca_id: fincaId.value || undefined,
       edad_critica_cinta: edadCriticaCinta.value,
+      edad_historica_cinta: edadHistoricaCinta.value,
     });
     await cargarAlertas();
   } catch (e) {

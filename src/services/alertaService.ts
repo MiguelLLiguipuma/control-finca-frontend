@@ -43,6 +43,7 @@ export interface GenerarAlertasPayload {
 	finca_ids?: number[];
 	fecha?: string;
 	edad_critica_cinta?: number;
+	edad_historica_cinta?: number;
 	dias_fumigacion?: number;
 	dias_clima?: number;
 }
