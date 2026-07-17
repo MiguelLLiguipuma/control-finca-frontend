@@ -187,12 +187,20 @@
             <tbody>
               <tr v-for="item in inventarioHistorico" :key="item.calendario_id">
                 <td>
-                  <v-checkbox-btn
-                    v-model="historicoSeleccionado"
-                    :value="item.calendario_id"
-                    density="compact"
+                  <button
+                    type="button"
+                    class="historico-selector"
+                    :class="{
+                      'historico-selector--active': isHistoricoSeleccionado(item.calendario_id),
+                    }"
+                    :aria-pressed="isHistoricoSeleccionado(item.calendario_id)"
                     :aria-label="`Seleccionar semana ${item.semana_enfunde}`"
-                  />
+                    @click="toggleHistorico(item.calendario_id)"
+                  >
+                    <v-icon v-if="isHistoricoSeleccionado(item.calendario_id)" size="16">
+                      mdi-check
+                    </v-icon>
+                  </button>
                 </td>
                 <td class="font-weight-bold">Sem {{ item.semana_enfunde }}/{{ item.anio }}</td>
                 <td>
@@ -274,7 +282,7 @@
             <td>{{ item.mensaje }}</td>
             <td class="text-right">
               <v-btn
-                icon="mdi-eye-check-outline"
+                icon="mdi-check-circle-outline"
                 size="small"
                 variant="text"
                 color="primary"
@@ -459,6 +467,20 @@ function seleccionarTodoHistorico() {
   );
 }
 
+function isHistoricoSeleccionado(calendarioId: number): boolean {
+  return historicoSeleccionado.value.includes(Number(calendarioId));
+}
+
+function toggleHistorico(calendarioId: number) {
+  const id = Number(calendarioId);
+  if (historicoSeleccionado.value.includes(id)) {
+    historicoSeleccionado.value = historicoSeleccionado.value.filter((item) => item !== id);
+    return;
+  }
+
+  historicoSeleccionado.value = [...historicoSeleccionado.value, id];
+}
+
 async function cerrarInventarioSeleccionado() {
   const fincaIdTarget = Number(fincaId.value || 0);
   if (!fincaIdTarget || !historicoSeleccionado.value.length) return;
@@ -514,6 +536,30 @@ watch(fincaId, (next) => {
   margin-right: 8px;
   border: 1px solid rgba(var(--v-border-color), 0.28);
   border-radius: 50%;
+}
+
+.historico-selector {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  color: rgb(var(--v-theme-on-primary));
+  background: transparent;
+  border: 2px solid rgba(var(--v-border-color), 0.42);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.historico-selector:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
+}
+
+.historico-selector--active {
+  background: rgb(var(--v-theme-primary));
+  border-color: rgb(var(--v-theme-primary));
 }
 
 .gap-2 {

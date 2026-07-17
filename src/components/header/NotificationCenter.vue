@@ -23,13 +23,13 @@ const canGenerateAlerts = computed(() =>
 
 function notificationIcon(color: SnackbarColor): string {
 	if (color === 'success') return 'mdi-check-circle-outline';
-	if (color === 'warning') return 'mdi-alert-circle-outline';
-	if (color === 'error') return 'mdi-alert-octagon-outline';
+	if (color === 'warning') return 'mdi-alert-circle';
+	if (color === 'error') return 'mdi-alert-rhombus';
 	return 'mdi-information-outline';
 }
 
 function alertIcon(severity: AlertaSeveridad): string {
-	if (severity === 'critica') return 'mdi-alert-octagon';
+	if (severity === 'critica') return 'mdi-alert-rhombus';
 	if (severity === 'alta') return 'mdi-alert-circle';
 	if (severity === 'media') return 'mdi-alert';
 	return 'mdi-information-outline';
@@ -104,9 +104,9 @@ onMounted(() => {
 					color="error"
 					floating
 				>
-					<v-icon>mdi-bell-outline</v-icon>
+					<v-icon>mdi-bell-alert-outline</v-icon>
 				</v-badge>
-				<v-icon v-else>mdi-bell-outline</v-icon>
+				<v-icon v-else>mdi-bell-alert-outline</v-icon>
 			</v-btn>
 		</template>
 
@@ -130,7 +130,7 @@ onMounted(() => {
 					/>
 					<v-btn
 						v-if="canGenerateAlerts"
-						icon="mdi-radar"
+						icon="mdi-database-check"
 						size="small"
 						variant="text"
 						color="primary"
@@ -140,7 +140,7 @@ onMounted(() => {
 						@click="generateAlerts"
 					/>
 					<v-btn
-						icon="mdi-check-all"
+						icon="mdi-check-circle-outline"
 						size="small"
 						variant="text"
 						:disabled="!uiStore.notifications.length"
@@ -177,7 +177,7 @@ onMounted(() => {
 					v-if="!operationalAlerts.length && !recentNotifications.length && !alertaStore.loading"
 					class="pa-6 text-center text-medium-emphasis"
 				>
-					<v-icon size="34" class="mb-2">mdi-bell-check-outline</v-icon>
+					<v-icon size="34" class="mb-2">mdi-bell-alert-outline</v-icon>
 					<div class="font-weight-bold">Sin notificaciones recientes</div>
 					<div class="text-caption">Las alertas de las vistas aparecerán aquí.</div>
 				</div>
