@@ -170,6 +170,36 @@ export interface FechasOcupadasResponse {
 	fechas: FechaOcupadaItem[];
 }
 
+export interface InventarioHistoricoItem {
+	finca_id: number;
+	finca_nombre: string;
+	calendario_id: number;
+	semana_enfunde: number;
+	anio: number;
+	color_cinta: string;
+	color_hex: string;
+	total_enfunde: number | string;
+	total_cosechado: number | string;
+	total_ajustado: number | string;
+	saldo_en_campo: number | string;
+	edad_semanas: number;
+}
+
+export interface CerrarInventarioHistoricoPayload {
+	finca_id: number;
+	motivo: string;
+	items: Array<{
+		calendario_id: number;
+		cantidad_ajustada?: number;
+	}>;
+}
+
+export interface CerrarInventarioHistoricoResponse {
+	total_ajustes: number;
+	total_racimos_ajustados: number;
+	ajustes: Array<Record<string, unknown>>;
+}
+
 export const cosechaService = {
 	// Obtiene el balance. Le decimos a TS que la promesa devuelve un array de BackendCinta
 	async getBalance(fincaId: number): Promise<BackendCinta[]> {
@@ -226,5 +256,36 @@ export const cosechaService = {
 			| FechasOcupadasResponse
 			| { success?: boolean; data?: FechasOcupadasResponse };
 		return (payload as any).data || (payload as FechasOcupadasResponse);
+	},
+
+	async getInventarioHistorico(params: {
+		finca_id: number;
+		edad_historica?: number;
+	}): Promise<InventarioHistoricoItem[]> {
+		const response = await api.get<
+			| InventarioHistoricoItem[]
+			| { success?: boolean; data?: InventarioHistoricoItem[] }
+		>('/cosecha/inventario-historico', {
+			params,
+		});
+		const payload = response.data as
+			| InventarioHistoricoItem[]
+			| { success?: boolean; data?: InventarioHistoricoItem[] };
+		return (payload as any).data || (payload as InventarioHistoricoItem[]);
+	},
+
+	async cerrarInventarioHistorico(
+		payload: CerrarInventarioHistoricoPayload,
+	): Promise<CerrarInventarioHistoricoResponse> {
+		const response = await api.post<
+			| CerrarInventarioHistoricoResponse
+			| { success?: boolean; data?: CerrarInventarioHistoricoResponse }
+		>('/cosecha/inventario-historico/cerrar', payload, {
+			skipGlobalError: true,
+		} as any);
+		const data = response.data as
+			| CerrarInventarioHistoricoResponse
+			| { success?: boolean; data?: CerrarInventarioHistoricoResponse };
+		return (data as any).data || (data as CerrarInventarioHistoricoResponse);
 	},
 };

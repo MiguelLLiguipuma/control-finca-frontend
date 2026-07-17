@@ -128,6 +128,108 @@
       </v-card-text>
     </v-card>
 
+    <v-card class="rounded-xl mb-4" elevation="1">
+      <v-card-text>
+        <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-3">
+          <div>
+            <div class="text-subtitle-1 font-weight-bold">Depuración de inventario histórico</div>
+            <div class="text-caption text-medium-emphasis">
+              Cierra saldos antiguos sin borrar registros; el ajuste queda auditado.
+            </div>
+          </div>
+          <div class="d-flex align-center gap-2">
+            <v-chip color="warning" variant="tonal" size="small">
+              {{ inventarioHistorico.length }} cinta(s)
+            </v-chip>
+            <v-btn
+              color="primary"
+              variant="tonal"
+              :loading="loadingInventarioHistorico"
+              :disabled="!fincaId"
+              @click="cargarInventarioHistorico"
+            >
+              Cargar histórico
+            </v-btn>
+          </div>
+        </div>
+
+        <v-alert v-if="!fincaId" type="info" variant="tonal" density="compact" class="mb-3">
+          Selecciona una finca para revisar y cerrar inventario histórico.
+        </v-alert>
+
+        <div v-if="inventarioHistorico.length" class="mb-3">
+          <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-2">
+            <div class="text-body-2 text-medium-emphasis">
+              Seleccionadas: <strong>{{ historicoSeleccionado.length }}</strong> ·
+              Saldo a cerrar: <strong>{{ totalHistoricoSeleccionado }}</strong>
+            </div>
+            <div class="d-flex align-center gap-2">
+              <v-btn size="small" variant="text" @click="seleccionarTodoHistorico">
+                Seleccionar todo
+              </v-btn>
+              <v-btn size="small" variant="text" color="medium-emphasis" @click="historicoSeleccionado = []">
+                Limpiar
+              </v-btn>
+            </div>
+          </div>
+
+          <v-table density="compact" class="historico-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Semana</th>
+                <th>Color</th>
+                <th>Edad</th>
+                <th>Saldo</th>
+                <th>Ajustado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in inventarioHistorico" :key="item.calendario_id">
+                <td>
+                  <v-checkbox-btn
+                    v-model="historicoSeleccionado"
+                    :value="item.calendario_id"
+                    density="compact"
+                    :aria-label="`Seleccionar semana ${item.semana_enfunde}`"
+                  />
+                </td>
+                <td class="font-weight-bold">Sem {{ item.semana_enfunde }}/{{ item.anio }}</td>
+                <td>
+                  <span class="historico-color-dot" :style="{ backgroundColor: item.color_hex }" />
+                  {{ item.color_cinta }}
+                </td>
+                <td>{{ item.edad_semanas }} sem</td>
+                <td>{{ item.saldo_en_campo }}</td>
+                <td>{{ item.total_ajustado }}</td>
+              </tr>
+            </tbody>
+          </v-table>
+
+          <v-textarea
+            v-model="motivoCierreHistorico"
+            label="Motivo del cierre"
+            placeholder="Ejemplo: depuración de saldos históricos anteriores al control operativo actual"
+            variant="outlined"
+            density="comfortable"
+            rows="2"
+            class="mt-3"
+          />
+
+          <div class="d-flex justify-end">
+            <v-btn
+              color="error"
+              :loading="loadingCerrarHistorico"
+              :disabled="!historicoSeleccionado.length || motivoCierreHistorico.trim().length < 8"
+              @click="cerrarInventarioSeleccionado"
+            >
+              Cerrar seleccionadas
+            </v-btn>
+          </div>
+        </div>
+      </v-card-text>
+    </v-card>
+
     <v-row>
       <v-col cols="12" md="4">
         <v-card rounded="xl" class="pa-4" color="error" variant="tonal">
@@ -206,6 +308,10 @@ import { storeToRefs } from 'pinia';
 import { useFincaStore } from '@/stores/fincaStore';
 import { useAlertaStore } from '@/stores/alertaStore';
 import { reportesSeguridadService } from '@/services/reportes/reportesSeguridadService';
+import {
+  cosechaService,
+  type InventarioHistoricoItem,
+} from '@/services/cosecha/cosechaService';
 import { toLocalIsoDate } from '@/utils/dateIso';
 import type { AlertaEstado, AlertaSeveridad } from '@/services/alertaService';
 
@@ -222,6 +328,11 @@ const fechaFumigacion = ref(toLocalIsoDate());
 const fincaFumigacionId = ref<number | null>(null);
 const observacionFumigacion = ref('');
 const loadingGuardarFumigacion = ref(false);
+const inventarioHistorico = ref<InventarioHistoricoItem[]>([]);
+const historicoSeleccionado = ref<number[]>([]);
+const motivoCierreHistorico = ref('');
+const loadingInventarioHistorico = ref(false);
+const loadingCerrarHistorico = ref(false);
 
 const estadoOptions = [
   { label: 'Pendientes', value: 'pendiente' },
@@ -231,6 +342,11 @@ const estadoOptions = [
 ];
 
 const alertas = computed(() => alertaStore.items);
+const totalHistoricoSeleccionado = computed(() =>
+  inventarioHistorico.value
+    .filter((item) => historicoSeleccionado.value.includes(Number(item.calendario_id)))
+    .reduce((total, item) => total + Number(item.saldo_en_campo || 0), 0),
+);
 
 function colorSeveridad(level: AlertaSeveridad): string {
   if (level === 'critica' || level === 'alta') return 'error';
@@ -313,6 +429,65 @@ async function guardarFumigacion() {
   }
 }
 
+async function cargarInventarioHistorico() {
+  const fincaIdTarget = Number(fincaId.value || 0);
+  if (!fincaIdTarget) {
+    error.value = 'Seleccione una finca para revisar inventario histórico.';
+    return;
+  }
+
+  loadingInventarioHistorico.value = true;
+  error.value = '';
+  try {
+    inventarioHistorico.value = await cosechaService.getInventarioHistorico({
+      finca_id: fincaIdTarget,
+      edad_historica: edadHistoricaCinta.value,
+    });
+    historicoSeleccionado.value = [];
+  } catch (e) {
+    const err = e as { response?: { data?: { error?: string; message?: string } } };
+    error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo cargar inventario histórico';
+    inventarioHistorico.value = [];
+  } finally {
+    loadingInventarioHistorico.value = false;
+  }
+}
+
+function seleccionarTodoHistorico() {
+  historicoSeleccionado.value = inventarioHistorico.value.map((item) =>
+    Number(item.calendario_id),
+  );
+}
+
+async function cerrarInventarioSeleccionado() {
+  const fincaIdTarget = Number(fincaId.value || 0);
+  if (!fincaIdTarget || !historicoSeleccionado.value.length) return;
+
+  loadingCerrarHistorico.value = true;
+  error.value = '';
+  try {
+    const seleccionados = new Set(historicoSeleccionado.value);
+    await cosechaService.cerrarInventarioHistorico({
+      finca_id: fincaIdTarget,
+      motivo: motivoCierreHistorico.value.trim(),
+      items: inventarioHistorico.value
+        .filter((item) => seleccionados.has(Number(item.calendario_id)))
+        .map((item) => ({
+          calendario_id: Number(item.calendario_id),
+          cantidad_ajustada: Number(item.saldo_en_campo || 0),
+        })),
+    });
+    motivoCierreHistorico.value = '';
+    await cargarInventarioHistorico();
+    await generarDiagnostico();
+  } catch (e) {
+    const err = e as { response?: { data?: { error?: string; message?: string } } };
+    error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo cerrar inventario histórico';
+  } finally {
+    loadingCerrarHistorico.value = false;
+  }
+}
+
 onMounted(async () => {
   await fincaStore.obtenerFincas();
   fincaFumigacionId.value = fincaId.value;
@@ -321,5 +496,31 @@ onMounted(async () => {
 
 watch(fincaId, (next) => {
   fincaFumigacionId.value = next;
+  inventarioHistorico.value = [];
+  historicoSeleccionado.value = [];
 });
 </script>
+
+<style scoped>
+.historico-table {
+  border: 1px solid rgba(var(--v-border-color), 0.14);
+  border-radius: 8px;
+}
+
+.historico-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border: 1px solid rgba(var(--v-border-color), 0.28);
+  border-radius: 50%;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
+.gap-3 {
+  gap: 12px;
+}
+</style>
