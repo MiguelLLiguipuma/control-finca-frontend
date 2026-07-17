@@ -298,27 +298,6 @@
       </v-card>
     </v-dialog>
 
-    <v-snackbar
-      v-model="store.snackbar.show"
-      :color="store.snackbar.color"
-      rounded="lg"
-      elevation="12"
-      timeout="3000"
-    >
-      <div class="d-flex align-center">
-        <v-icon class="mr-2" color="white">{{ store.snackbar.icon }}</v-icon>
-        <span class="font-weight-bold text-white">{{ store.snackbar.message }}</span>
-      </div>
-      <template v-slot:actions>
-        <v-btn
-          color="white"
-          variant="text"
-          icon="mdi-close"
-          @click="store.snackbar.show = false"
-        ></v-btn>
-      </template>
-    </v-snackbar>
-
     <v-divider class="my-12 border-dashed" />
 
     <div class="mt-8">

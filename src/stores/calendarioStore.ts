@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import { useUIStore, type SnackbarColor } from '@/stores/uiStore';
 
 export interface CintaCatalogo {
 	id: number;
@@ -31,13 +32,6 @@ export interface SemanaGenerada {
 	cinta: CintaCatalogo | null;
 }
 
-interface SnackbarState {
-	show: boolean;
-	message: string;
-	color: string;
-	icon: string;
-}
-
 interface GuardarCalendarioPayload {
 	empresa_id: number;
 	anio: number;
@@ -58,7 +52,6 @@ interface CalendarioState {
 	calendarioGenerado: SemanaGenerada[];
 	loading: boolean;
 	loadingCintas: boolean;
-	snackbar: SnackbarState;
 }
 
 interface ApiErrorLike {
@@ -91,12 +84,6 @@ export const useCalendarioStore = defineStore('calendario', {
 		calendarioGenerado: [],
 		loading: false,
 		loadingCintas: false,
-		snackbar: {
-			show: false,
-			message: '',
-			color: 'success',
-			icon: 'mdi-check-circle',
-		},
 	}),
 
 	getters: {
@@ -112,11 +99,15 @@ export const useCalendarioStore = defineStore('calendario', {
 	},
 
 	actions: {
-		mostrarNotificacion(mensaje: string, color = 'success', icon = 'mdi-check-circle') {
-			this.snackbar.message = mensaje;
-			this.snackbar.color = color;
-			this.snackbar.icon = icon;
-			this.snackbar.show = true;
+		mostrarNotificacion(
+			mensaje: string,
+			color: SnackbarColor = 'success',
+			_icon = 'mdi-check-circle',
+		) {
+			useUIStore().notify(mensaje, color, {
+				source: 'Gestión de calendarios',
+				scope: 'operacion',
+			});
 		},
 
 		async obtenerCalendarios(): Promise<CalendarioListado[]> {

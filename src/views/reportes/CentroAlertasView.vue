@@ -6,7 +6,12 @@
           <div class="text-overline text-medium-emphasis">Monitoreo Operativo</div>
           <h1 class="text-h4 font-weight-black">Centro de Alertas</h1>
         </div>
-        <v-btn color="primary" :loading="loading" @click="cargarAlertas">Actualizar</v-btn>
+        <div class="d-flex align-center gap-2">
+          <v-btn color="primary" variant="tonal" :loading="alertaStore.loading" @click="generarDiagnostico">
+            Generar diagnóstico
+          </v-btn>
+          <v-btn color="primary" :loading="alertaStore.loading" @click="cargarAlertas">Actualizar</v-btn>
+        </div>
       </v-card-text>
     </v-card>
 
@@ -24,32 +29,33 @@
           hide-details
         />
       </v-col>
-      <v-col cols="6" md="3">
-        <label class="text-caption font-weight-bold">Días de análisis</label>
-        <v-text-field
-          v-model.number="dias"
-          type="number"
-          min="1"
-          max="30"
+      <v-col cols="12" md="3">
+        <label class="text-caption font-weight-bold">Estado</label>
+        <v-select
+          v-model="estadoFiltro"
+          :items="estadoOptions"
+          item-title="label"
+          item-value="value"
+          clearable
           variant="outlined"
           density="comfortable"
           hide-details
         />
       </v-col>
       <v-col cols="6" md="3">
-        <label class="text-caption font-weight-bold">Rechazo mínimo (%)</label>
+        <label class="text-caption font-weight-bold">Edad crítica cinta</label>
         <v-text-field
-          v-model.number="rechazoMinPct"
+          v-model.number="edadCriticaCinta"
           type="number"
-          min="1"
-          max="80"
+          min="12"
+          max="20"
           variant="outlined"
           density="comfortable"
           hide-details
         />
       </v-col>
       <v-col cols="12" md="2" class="d-flex align-end">
-        <v-btn block color="secondary" variant="tonal" :loading="loading" @click="cargarAlertas">Filtrar</v-btn>
+        <v-btn block color="secondary" variant="tonal" :loading="alertaStore.loading" @click="cargarAlertas">Filtrar</v-btn>
       </v-col>
     </v-row>
 
@@ -113,20 +119,20 @@
     <v-row>
       <v-col cols="12" md="4">
         <v-card rounded="xl" class="pa-4" color="error" variant="tonal">
-          <div class="text-caption">Alertas Altas</div>
-          <div class="text-h3 font-weight-black">{{ resumen.altas }}</div>
+          <div class="text-caption">Críticas</div>
+          <div class="text-h3 font-weight-black">{{ alertaStore.resumen.criticas }}</div>
         </v-card>
       </v-col>
       <v-col cols="12" md="4">
         <v-card rounded="xl" class="pa-4" color="warning" variant="tonal">
-          <div class="text-caption">Alertas Medias</div>
-          <div class="text-h3 font-weight-black">{{ resumen.medias }}</div>
+          <div class="text-caption">Altas</div>
+          <div class="text-h3 font-weight-black">{{ alertaStore.resumen.altas }}</div>
         </v-card>
       </v-col>
       <v-col cols="12" md="4">
         <v-card rounded="xl" class="pa-4" color="info" variant="tonal">
-          <div class="text-caption">Alertas Bajas</div>
-          <div class="text-h3 font-weight-black">{{ resumen.bajas }}</div>
+          <div class="text-caption">Abiertas</div>
+          <div class="text-h3 font-weight-black">{{ alertaStore.resumen.abiertas }}</div>
         </v-card>
       </v-col>
     </v-row>
@@ -136,22 +142,45 @@
         <thead>
           <tr>
             <th>Fecha</th>
+            <th>Finca</th>
             <th>Tipo</th>
             <th>Severidad</th>
             <th>Detalle</th>
+            <th class="text-right">Acciones</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in alertas" :key="`${item.tipo}-${item.referencia_id}-${item.fecha_evento}`">
-            <td>{{ item.fecha_evento }}</td>
+          <tr v-for="item in alertas" :key="item.id">
+            <td>{{ formatFecha(item.detectada_en) }}</td>
+            <td>{{ item.finca_nombre || 'General' }}</td>
             <td>{{ item.tipo }}</td>
             <td>
               <v-chip :color="colorSeveridad(item.severidad)" size="small">{{ item.severidad.toUpperCase() }}</v-chip>
             </td>
             <td>{{ item.mensaje }}</td>
+            <td class="text-right">
+              <v-btn
+                icon="mdi-eye-check-outline"
+                size="small"
+                variant="text"
+                color="primary"
+                :disabled="item.estado === 'leida' || item.estado === 'resuelta'"
+                aria-label="Marcar alerta como leída"
+                @click="marcarLeida(item.id)"
+              />
+              <v-btn
+                icon="mdi-check-circle-outline"
+                size="small"
+                variant="text"
+                color="success"
+                :disabled="item.estado === 'resuelta'"
+                aria-label="Resolver alerta"
+                @click="resolverAlerta(item.id)"
+              />
+            </td>
           </tr>
-          <tr v-if="!loading && !alertas.length">
-            <td colspan="4" class="text-center text-medium-emphasis py-8">No hay alertas con los filtros actuales.</td>
+          <tr v-if="!alertaStore.loading && !alertas.length">
+            <td colspan="6" class="text-center text-medium-emphasis py-8">No hay alertas con los filtros actuales.</td>
           </tr>
         </tbody>
       </v-table>
@@ -163,51 +192,86 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFincaStore } from '@/stores/fincaStore';
-import { reportesSeguridadService, type AlertaItem } from '@/services/reportes/reportesSeguridadService';
+import { useAlertaStore } from '@/stores/alertaStore';
+import { reportesSeguridadService } from '@/services/reportes/reportesSeguridadService';
 import { toLocalIsoDate } from '@/utils/dateIso';
+import type { AlertaEstado, AlertaSeveridad } from '@/services/alertaService';
 
 const fincaStore = useFincaStore();
+const alertaStore = useAlertaStore();
 const { fincas } = storeToRefs(fincaStore);
 
 const fincaId = ref<number | null>(null);
-const dias = ref(7);
-const rechazoMinPct = ref(20);
-const loading = ref(false);
+const estadoFiltro = ref<AlertaEstado | null>(null);
+const edadCriticaCinta = ref(15);
 const error = ref('');
-const alertas = ref<AlertaItem[]>([]);
 const fechaFumigacion = ref(toLocalIsoDate());
 const fincaFumigacionId = ref<number | null>(null);
 const observacionFumigacion = ref('');
 const loadingGuardarFumigacion = ref(false);
 
-const resumen = computed(() => ({
-  altas: alertas.value.filter((a) => a.severidad === 'alta').length,
-  medias: alertas.value.filter((a) => a.severidad === 'media').length,
-  bajas: alertas.value.filter((a) => a.severidad === 'baja').length,
-}));
+const estadoOptions = [
+  { label: 'Pendientes', value: 'pendiente' },
+  { label: 'Enviadas', value: 'enviada' },
+  { label: 'Leídas', value: 'leida' },
+  { label: 'Resueltas', value: 'resuelta' },
+];
 
-function colorSeveridad(level: string): string {
-  if (level === 'alta') return 'error';
+const alertas = computed(() => alertaStore.items);
+
+function colorSeveridad(level: AlertaSeveridad): string {
+  if (level === 'critica' || level === 'alta') return 'error';
   if (level === 'media') return 'warning';
   return 'info';
 }
 
+function formatFecha(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('es-EC', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 async function cargarAlertas() {
-  loading.value = true;
   error.value = '';
   try {
-    alertas.value = await reportesSeguridadService.getAlertas({
+    await alertaStore.cargar({
+      query: {
       finca_id: fincaId.value || undefined,
-      dias: dias.value,
-      rechazo_min_pct: rechazoMinPct.value,
+      estado: estadoFiltro.value || undefined,
+      },
     });
   } catch (e) {
     const err = e as { response?: { data?: { error?: string; message?: string } } };
     error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudieron cargar alertas';
-    alertas.value = [];
-  } finally {
-    loading.value = false;
   }
+}
+
+async function generarDiagnostico() {
+  error.value = '';
+  try {
+    await alertaStore.generar({
+      finca_id: fincaId.value || undefined,
+      edad_critica_cinta: edadCriticaCinta.value,
+    });
+    await cargarAlertas();
+  } catch (e) {
+    const err = e as { response?: { data?: { error?: string; message?: string } } };
+    error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo generar el diagnóstico';
+  }
+}
+
+async function marcarLeida(id: number) {
+  await alertaStore.marcarLeida(id);
+}
+
+async function resolverAlerta(id: number) {
+  await alertaStore.resolver(id);
 }
 
 async function guardarFumigacion() {

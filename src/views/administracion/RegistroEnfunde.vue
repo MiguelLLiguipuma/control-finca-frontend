@@ -342,12 +342,6 @@
       </v-col>
     </v-row>
 
-    <v-snackbar v-model="registroStore.snackbar.show" :color="registroStore.snackbar.color" rounded="lg" elevation="12">
-      <div class="d-flex align-center">
-        <v-icon class="mr-2">{{ registroStore.snackbar.icon }}</v-icon>
-        <span class="font-weight-bold" role="status" aria-live="polite">{{ registroStore.snackbar.message }}</span>
-      </div>
-    </v-snackbar>
   </v-container>
 </template>
 

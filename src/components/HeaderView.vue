@@ -50,6 +50,8 @@
                 </v-icon>
               </v-btn>
 
+              <NotificationCenter />
+
               <div class="user-info d-none d-sm-flex mr-2 align-center">
                 <v-avatar size="36" color="primary" class="mr-2">
                   <span class="text-white font-weight-bold text-h6">
@@ -101,6 +103,7 @@
 
 <script setup lang="ts">
 import { useTheme } from 'vuetify'; // 1. Importamos el hook de tema
+import NotificationCenter from '@/components/header/NotificationCenter.vue';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useAuthStore } from '../stores/auth/authStore';
 import { computed } from 'vue';

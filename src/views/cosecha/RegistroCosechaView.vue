@@ -1,12 +1,5 @@
 <template>
   <v-container fluid class="pa-4 pt-6 pb-16 bg-background min-h-screen transition-colors">
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="3000" location="top">
-      {{ snackbar.message }}
-      <template #actions>
-        <v-btn variant="text" @click="snackbar.show = false">Cerrar</v-btn>
-      </template>
-    </v-snackbar>
-
     <v-row justify="center">
       <v-col cols="12" class="cosecha-shell">
         <CosechaHeaderCard
@@ -210,6 +203,7 @@ import {
   type CintaColorNombre,
 } from '@/domain/cosecha/cintaColorRecognition';
 import type { CintaCosecha } from '@/stores/cosecha/cosechaStore';
+import { useUIStore } from '@/stores/uiStore';
 
 interface AjustePayload {
   item: CintaCosecha;
@@ -235,7 +229,6 @@ const {
   fincaSeleccionada,
   fechaObjetoPicker,
   menuFecha,
-  snackbar,
   sortedYears,
   fechaFormateada,
   infoDiaSemana,
@@ -251,6 +244,7 @@ const {
   guardarCosecha,
 } = useRegistroCosecha();
 
+const uiStore = useUIStore();
 const colorDetectado = shallowRef<CintaColorNombre | null>(null);
 const semanasConteoSeleccionadas = ref<string[]>([]);
 
@@ -373,11 +367,13 @@ function handleRacimoContado(color: CintaColorNombre) {
 
   const item = candidatos[0];
   if (!item) {
-    snackbar.value = {
-      show: true,
-      message: `No hay saldo disponible para cinta ${color} en las semanas seleccionadas.`,
-      color: 'warning',
-    };
+    uiStore.showWarning(
+      `No hay saldo disponible para cinta ${color} en las semanas seleccionadas.`,
+      {
+        source: 'Liquidación de cosecha',
+        scope: 'operacion',
+      },
+    );
     return;
   }
 

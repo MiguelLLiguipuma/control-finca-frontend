@@ -28,6 +28,7 @@
           {{ 
             uiStore.snackbar.color === 'error' ? 'mdi-alert-circle' : 
             uiStore.snackbar.color === 'warning' ? 'mdi-alert' : 
+            uiStore.snackbar.color === 'success' ? 'mdi-check-circle' :
             'mdi-information' 
           }}
         </v-icon>

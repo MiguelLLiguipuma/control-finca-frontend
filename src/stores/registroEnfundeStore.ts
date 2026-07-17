@@ -3,6 +3,7 @@ import { useEnfundeStore } from '@/stores/enfundeStore';
 import { useReportesStore } from '@/stores/reportesStore';
 import { useFincaStore } from '@/stores/fincaStore';
 import { useAuthStore } from '@/stores/auth/authStore';
+import { useUIStore, type SnackbarColor } from '@/stores/uiStore';
 import { getCurrentIsoWeekInfo, toLocalIsoDate } from '@/utils/dateIso';
 
 interface RegistroFormData {
@@ -18,23 +19,15 @@ interface RegistroFormData {
 	fecha: string;
 }
 
-interface SnackbarState {
-	show: boolean;
-	message: string;
-	color: 'success' | 'error' | 'warning';
-	icon: string;
-}
-
 interface RegistroEnfundeState {
 	globalLoading: boolean;
 	loadingGuardar: boolean;
 	isValid: boolean;
 	tablaKey: number;
 	formData: RegistroFormData;
-	snackbar: SnackbarState;
 }
 
-type SnackbarType = 'success' | 'error' | 'warning';
+type SnackbarType = Extract<SnackbarColor, 'success' | 'error' | 'warning'>;
 
 interface ApiErrorLike {
 	response?: {
@@ -72,12 +65,6 @@ export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 			observaciones: '',
 			fecha: '',
 		},
-		snackbar: {
-			show: false,
-			message: '',
-			color: 'success',
-			icon: 'mdi-check-circle',
-		},
 	}),
 
 	actions: {
@@ -94,13 +81,10 @@ export const useRegistroEnfundeStore = defineStore('registroEnfunde', {
 		},
 
 		mostrarMensaje(message: string, type: SnackbarType = 'success') {
-			const config: Record<SnackbarType, Omit<SnackbarState, 'show' | 'message'>> = {
-				success: { color: 'success', icon: 'mdi-check-circle' },
-				error: { color: 'error', icon: 'mdi-alert-circle' },
-				warning: { color: 'warning', icon: 'mdi-alert' },
-			};
-			const cfg = config[type] || config.success;
-			this.snackbar = { show: true, message, color: cfg.color, icon: cfg.icon };
+			useUIStore().notify(message, type, {
+				source: 'Registro de enfunde',
+				scope: 'operacion',
+			});
 		},
 
 		async guardarRegistro(): Promise<boolean> {

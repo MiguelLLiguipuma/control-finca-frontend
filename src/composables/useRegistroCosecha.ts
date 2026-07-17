@@ -8,16 +8,11 @@ import {
 } from '@/stores/cosecha/cosechaStore';
 import { useEmpresaStore } from '@/stores/empresaStore';
 import { useFincaStore } from '@/stores/fincaStore';
+import { useUIStore, type SnackbarColor } from '@/stores/uiStore';
 import { useFechasOcupadas } from '@/composables/useFechasOcupadas';
 import { toLocalIsoDate } from '@/utils/dateIso';
 
 dayjs.extend(isoWeek);
-
-interface SnackbarState {
-	show: boolean;
-	message: string;
-	color: string;
-}
 
 interface SetCampoPayload {
 	item: CintaCosecha;
@@ -44,6 +39,7 @@ export function useRegistroCosecha() {
 	const cosechaStore = useCosechaStore();
 	const fincaStore = useFincaStore();
 	const empresaStore = useEmpresaStore();
+	const uiStore = useUIStore();
 	const { fincas } = storeToRefs(fincaStore);
 	const {
 		cargarFechasOcupadas,
@@ -60,11 +56,6 @@ export function useRegistroCosecha() {
 	const menuFecha = ref(false);
 	const hidratandoPantalla = ref(true);
 	const restaurandoBorrador = ref(false);
-	const snackbar = ref<SnackbarState>({
-		show: false,
-		message: '',
-		color: 'info',
-	});
 
 	const sortedYears = computed(() =>
 		Object.keys(cosechaStore.saldosPorAnio || {}).sort(
@@ -100,8 +91,11 @@ export function useRegistroCosecha() {
 		crearBorradorDesdeDigitacion() !== null,
 	);
 
-	function notify(message: string, color = 'info') {
-		snackbar.value = { show: true, message, color };
+	function notify(message: string, color: SnackbarColor = 'info') {
+		uiStore.notify(message, color, {
+			source: 'Liquidación de cosecha',
+			scope: 'operacion',
+		});
 	}
 
 	function getBorradorKey(fincaId = fincaSeleccionada.value, fecha = fechaCosecha.value) {
@@ -379,7 +373,6 @@ export function useRegistroCosecha() {
 		fechaCosecha,
 		fechaObjetoPicker,
 		menuFecha,
-		snackbar,
 		sortedYears,
 		fechaFormateada,
 		infoDiaSemana,
