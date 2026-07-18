@@ -564,9 +564,19 @@ async function cargarContactos() {
 }
 
 function normalizarTelefonoContacto(contacto: AlertaContacto) {
-  contacto.telefono_whatsapp = String(contacto.telefono_whatsapp || '')
-    .replace(/[^\d+]/g, '')
-    .slice(0, 20);
+  const raw = String(contacto.telefono_whatsapp || '').replace(/[^\d+]/g, '');
+  const digits = raw.replace(/\D/g, '');
+
+  if (raw.startsWith('+')) {
+    contacto.telefono_whatsapp = raw.slice(0, 20);
+  } else if (digits.startsWith('593')) {
+    contacto.telefono_whatsapp = `+${digits}`.slice(0, 20);
+  } else if (digits.startsWith('09') && digits.length === 10) {
+    contacto.telefono_whatsapp = `+593${digits.slice(1)}`;
+  } else {
+    contacto.telefono_whatsapp = digits.slice(0, 18);
+  }
+
   if (!contacto.telefono_whatsapp) contacto.whatsapp_activo = false;
 }
 
