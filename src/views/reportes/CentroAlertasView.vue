@@ -77,6 +77,80 @@
       <v-card-text>
         <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-3">
           <div>
+            <div class="text-subtitle-1 font-weight-bold">Bandeja WhatsApp</div>
+            <div class="text-caption text-medium-emphasis">
+              Mensajes pendientes para enviar manualmente desde WhatsApp.
+            </div>
+          </div>
+          <div class="d-flex align-center gap-2">
+            <v-chip color="success" variant="tonal" size="small">
+              {{ whatsappPendientes.length }} pendiente(s)
+            </v-chip>
+            <v-btn
+              color="primary"
+              variant="tonal"
+              :loading="loadingWhatsapp"
+              @click="cargarWhatsappPendientes"
+            >
+              Actualizar bandeja
+            </v-btn>
+          </div>
+        </div>
+
+        <v-table density="compact" class="whatsapp-alerta-table">
+          <thead>
+            <tr>
+              <th>Destinatario</th>
+              <th>Alerta</th>
+              <th>Mensaje</th>
+              <th class="text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in whatsappPendientes" :key="item.destinatario_id">
+              <td>
+                <div class="font-weight-bold">{{ item.usuario_nombre || 'Usuario' }}</div>
+                <div class="text-caption text-medium-emphasis">{{ item.telefono_whatsapp }}</div>
+              </td>
+              <td>
+                <v-chip :color="colorSeveridad(item.severidad)" size="small" class="mb-1">
+                  {{ item.severidad.toUpperCase() }}
+                </v-chip>
+                <div class="text-body-2 font-weight-bold">{{ item.titulo }}</div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ item.finca_nombre || 'General' }} · {{ formatFecha(item.detectada_en) }}
+                </div>
+              </td>
+              <td class="whatsapp-alerta-message">
+                {{ item.mensaje }}
+              </td>
+              <td class="text-right">
+                <v-btn
+                  size="small"
+                  color="success"
+                  variant="tonal"
+                  :disabled="!item.whatsapp_url || sendingWhatsappId === item.destinatario_id"
+                  :loading="sendingWhatsappId === item.destinatario_id"
+                  @click="abrirWhatsapp(item)"
+                >
+                  Abrir WhatsApp
+                </v-btn>
+              </td>
+            </tr>
+            <tr v-if="!loadingWhatsapp && !whatsappPendientes.length">
+              <td colspan="4" class="text-center text-medium-emphasis py-6">
+                No hay mensajes WhatsApp pendientes.
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
+    </v-card>
+
+    <v-card v-if="canManageAlertConfig" class="rounded-xl mb-4" elevation="1">
+      <v-card-text>
+        <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-3">
+          <div>
             <div class="text-subtitle-1 font-weight-bold">Destinatarios de alertas</div>
             <div class="text-caption text-medium-emphasis">
               Configura quién recibe alertas internas y quién queda preparado para WhatsApp.
@@ -437,6 +511,7 @@ import { reportesSeguridadService } from '@/services/reportes/reportesSeguridadS
 import {
   alertaService,
   type AlertaContacto,
+  type AlertaWhatsappPendiente,
 } from '@/services/alertaService';
 import {
   cosechaService,
@@ -465,8 +540,11 @@ const motivoCierreHistorico = ref('');
 const loadingInventarioHistorico = ref(false);
 const loadingCerrarHistorico = ref(false);
 const contactosAlertas = ref<AlertaContacto[]>([]);
+const whatsappPendientes = ref<AlertaWhatsappPendiente[]>([]);
 const loadingContactos = ref(false);
+const loadingWhatsapp = ref(false);
 const savingContactoId = ref<number | null>(null);
+const sendingWhatsappId = ref<number | null>(null);
 
 const estadoOptions = [
   { label: 'Pendientes', value: 'pendiente' },
@@ -560,6 +638,52 @@ async function cargarContactos() {
     error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudieron cargar contactos de alerta';
   } finally {
     loadingContactos.value = false;
+  }
+}
+
+async function cargarWhatsappPendientes() {
+  if (!canManageAlertConfig.value) return;
+
+  loadingWhatsapp.value = true;
+  error.value = '';
+  try {
+    whatsappPendientes.value = await alertaService.listarWhatsappPendientes({
+      finca_id: fincaId.value || undefined,
+      limit: 30,
+    });
+  } catch (e) {
+    const err = e as { response?: { data?: { error?: string; message?: string } } };
+    error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo cargar la bandeja WhatsApp';
+  } finally {
+    loadingWhatsapp.value = false;
+  }
+}
+
+async function abrirWhatsapp(item: AlertaWhatsappPendiente) {
+  if (!item.whatsapp_url) {
+    error.value = 'Este mensaje no tiene un enlace WhatsApp válido.';
+    return;
+  }
+
+  const opened = window.open(item.whatsapp_url, '_blank', 'noopener,noreferrer');
+  if (!opened) {
+    error.value = 'El navegador bloqueó la apertura de WhatsApp. Permite ventanas emergentes para esta app.';
+    return;
+  }
+
+  sendingWhatsappId.value = item.destinatario_id;
+  error.value = '';
+  try {
+    await alertaService.marcarWhatsappEnviado(item.destinatario_id);
+    whatsappPendientes.value = whatsappPendientes.value.filter(
+      (pending) => pending.destinatario_id !== item.destinatario_id,
+    );
+    await cargarAlertas();
+  } catch (e) {
+    const err = e as { response?: { data?: { error?: string; message?: string } } };
+    error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo marcar WhatsApp como enviado';
+  } finally {
+    sendingWhatsappId.value = null;
   }
 }
 
@@ -713,6 +837,7 @@ async function cerrarInventarioSeleccionado() {
 onMounted(async () => {
   await fincaStore.obtenerFincas();
   fincaFumigacionId.value = fincaId.value;
+  await cargarWhatsappPendientes();
   await cargarContactos();
   await cargarAlertas();
 });
@@ -721,6 +846,7 @@ watch(fincaId, (next) => {
   fincaFumigacionId.value = next;
   inventarioHistorico.value = [];
   historicoSeleccionado.value = [];
+  void cargarWhatsappPendientes();
 });
 </script>
 
@@ -733,6 +859,16 @@ watch(fincaId, (next) => {
 .contactos-alerta-table {
   border: 1px solid rgba(var(--v-border-color), 0.14);
   border-radius: 8px;
+}
+
+.whatsapp-alerta-table {
+  border: 1px solid rgba(var(--v-border-color), 0.14);
+  border-radius: 8px;
+}
+
+.whatsapp-alerta-message {
+  max-width: 360px;
+  white-space: normal;
 }
 
 .contactos-alerta-phone {

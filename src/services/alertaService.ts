@@ -72,6 +72,27 @@ export interface GuardarAlertaContactoPayload {
 	severidad_minima?: AlertaSeveridad;
 }
 
+export interface AlertaWhatsappPendiente {
+	destinatario_id: number;
+	alerta_id: number;
+	usuario_id: number;
+	usuario_nombre: string | null;
+	telefono_whatsapp: string;
+	estado: 'pendiente' | 'enviado' | 'fallido' | 'omitido';
+	finca_id: number | null;
+	finca_nombre: string | null;
+	tipo: string;
+	severidad: AlertaSeveridad;
+	titulo: string;
+	mensaje: string;
+	detectada_en: string;
+	creado_en: string;
+	enviado_en: string | null;
+	error_envio: string | null;
+	mensaje_whatsapp: string;
+	whatsapp_url: string | null;
+}
+
 interface ApiEnvelope<T> {
 	success: boolean;
 	data: T;
@@ -124,6 +145,23 @@ export const alertaService = {
 			payload,
 		);
 		return unwrap<AlertaContacto>(data);
+	},
+
+	async listarWhatsappPendientes(params: Pick<AlertasQuery, 'finca_id' | 'finca_ids' | 'limit'> = {}): Promise<AlertaWhatsappPendiente[]> {
+		const { data } = await api.get<ApiEnvelope<AlertaWhatsappPendiente[]> | AlertaWhatsappPendiente[]>(
+			'/alertas/whatsapp/pendientes',
+			{ params, skipGlobalError: true } as any,
+		);
+		return unwrap<AlertaWhatsappPendiente[]>(data);
+	},
+
+	async marcarWhatsappEnviado(destinatarioId: number) {
+		const { data } = await api.patch(
+			`/alertas/whatsapp/${destinatarioId}/enviado`,
+			undefined,
+			{ skipGlobalError: true } as any,
+		);
+		return unwrap(data);
 	},
 
 	async marcarLeida(id: number) {
