@@ -48,6 +48,30 @@ export interface GenerarAlertasPayload {
 	dias_clima?: number;
 }
 
+export interface AlertaContacto {
+	usuario_id: number;
+	nombre: string;
+	email: string;
+	empresa_id: number | null;
+	usuario_activo: boolean;
+	rol: string | null;
+	contacto_id: number | null;
+	telefono_whatsapp: string | null;
+	whatsapp_activo: boolean;
+	in_app_activo: boolean;
+	tipos: string[];
+	severidad_minima: AlertaSeveridad;
+	actualizado_en: string | null;
+}
+
+export interface GuardarAlertaContactoPayload {
+	telefono_whatsapp?: string | null;
+	whatsapp_activo?: boolean;
+	in_app_activo?: boolean;
+	tipos?: string[];
+	severidad_minima?: AlertaSeveridad;
+}
+
 interface ApiEnvelope<T> {
 	success: boolean;
 	data: T;
@@ -81,6 +105,25 @@ export const alertaService = {
 	async generar(payload: GenerarAlertasPayload = {}) {
 		const { data } = await api.post('/alertas/generar', payload);
 		return unwrap(data);
+	},
+
+	async listarContactos(): Promise<AlertaContacto[]> {
+		const { data } = await api.get<ApiEnvelope<AlertaContacto[]> | AlertaContacto[]>(
+			'/alertas/contactos',
+			{ skipGlobalError: true } as any,
+		);
+		return unwrap<AlertaContacto[]>(data);
+	},
+
+	async guardarContacto(
+		usuarioId: number,
+		payload: GuardarAlertaContactoPayload,
+	): Promise<AlertaContacto> {
+		const { data } = await api.put<ApiEnvelope<AlertaContacto> | AlertaContacto>(
+			`/alertas/contactos/${usuarioId}`,
+			payload,
+		);
+		return unwrap<AlertaContacto>(data);
 	},
 
 	async marcarLeida(id: number) {

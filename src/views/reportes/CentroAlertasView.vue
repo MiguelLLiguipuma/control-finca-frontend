@@ -73,6 +73,123 @@
 
     <v-alert v-if="error" type="error" variant="tonal" class="mb-4">{{ error }}</v-alert>
 
+    <v-card v-if="canManageAlertConfig" class="rounded-xl mb-4" elevation="1">
+      <v-card-text>
+        <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-3">
+          <div>
+            <div class="text-subtitle-1 font-weight-bold">Destinatarios de alertas</div>
+            <div class="text-caption text-medium-emphasis">
+              Configura quién recibe alertas internas y quién queda preparado para WhatsApp.
+            </div>
+          </div>
+          <v-btn
+            color="primary"
+            variant="tonal"
+            :loading="loadingContactos"
+            @click="cargarContactos"
+          >
+            Actualizar contactos
+          </v-btn>
+        </div>
+
+        <v-alert type="info" variant="tonal" density="compact" class="mb-3">
+          WhatsApp queda activo solo si el usuario tiene número. El envío automático se conectará sobre estos destinatarios.
+        </v-alert>
+
+        <v-table density="compact" class="contactos-alerta-table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Canales</th>
+              <th>WhatsApp</th>
+              <th>Desde</th>
+              <th>Tipos</th>
+              <th class="text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="contacto in contactosAlertas" :key="contacto.usuario_id">
+              <td>
+                <div class="font-weight-bold">{{ contacto.nombre }}</div>
+                <div class="text-caption text-medium-emphasis">
+                  {{ contacto.rol || 'Sin rol' }} · {{ contacto.email }}
+                </div>
+              </td>
+              <td>
+                <div class="d-flex flex-column">
+                  <v-switch
+                    v-model="contacto.in_app_activo"
+                    color="primary"
+                    density="compact"
+                    hide-details
+                    label="App"
+                  />
+                  <v-switch
+                    v-model="contacto.whatsapp_activo"
+                    color="success"
+                    density="compact"
+                    hide-details
+                    label="WhatsApp"
+                    :disabled="!contacto.telefono_whatsapp"
+                  />
+                </div>
+              </td>
+              <td class="contactos-alerta-phone">
+                <v-text-field
+                  v-model="contacto.telefono_whatsapp"
+                  placeholder="+593..."
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  @update:model-value="normalizarTelefonoContacto(contacto)"
+                />
+              </td>
+              <td>
+                <v-select
+                  v-model="contacto.severidad_minima"
+                  :items="severidadOptions"
+                  item-title="label"
+                  item-value="value"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                />
+              </td>
+              <td class="contactos-alerta-tipos">
+                <v-select
+                  v-model="contacto.tipos"
+                  :items="tipoAlertaOptions"
+                  item-title="label"
+                  item-value="value"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  multiple
+                  chips
+                />
+              </td>
+              <td class="text-right">
+                <v-btn
+                  size="small"
+                  color="primary"
+                  variant="tonal"
+                  :loading="savingContactoId === contacto.usuario_id"
+                  @click="guardarContacto(contacto)"
+                >
+                  Guardar
+                </v-btn>
+              </td>
+            </tr>
+            <tr v-if="!loadingContactos && !contactosAlertas.length">
+              <td colspan="6" class="text-center text-medium-emphasis py-6">
+                No hay usuarios disponibles para configurar.
+              </td>
+            </tr>
+          </tbody>
+        </v-table>
+      </v-card-text>
+    </v-card>
+
     <v-card class="rounded-xl mb-4" elevation="1">
       <v-card-text>
         <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-2">
@@ -315,7 +432,12 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useFincaStore } from '@/stores/fincaStore';
 import { useAlertaStore } from '@/stores/alertaStore';
+import { useAuthStore } from '@/stores/auth/authStore';
 import { reportesSeguridadService } from '@/services/reportes/reportesSeguridadService';
+import {
+  alertaService,
+  type AlertaContacto,
+} from '@/services/alertaService';
 import {
   cosechaService,
   type InventarioHistoricoItem,
@@ -325,6 +447,7 @@ import type { AlertaEstado, AlertaSeveridad } from '@/services/alertaService';
 
 const fincaStore = useFincaStore();
 const alertaStore = useAlertaStore();
+const authStore = useAuthStore();
 const { fincas } = storeToRefs(fincaStore);
 
 const fincaId = ref<number | null>(null);
@@ -341,6 +464,9 @@ const historicoSeleccionado = ref<number[]>([]);
 const motivoCierreHistorico = ref('');
 const loadingInventarioHistorico = ref(false);
 const loadingCerrarHistorico = ref(false);
+const contactosAlertas = ref<AlertaContacto[]>([]);
+const loadingContactos = ref(false);
+const savingContactoId = ref<number | null>(null);
 
 const estadoOptions = [
   { label: 'Pendientes', value: 'pendiente' },
@@ -349,7 +475,25 @@ const estadoOptions = [
   { label: 'Resueltas', value: 'resuelta' },
 ];
 
+const tipoAlertaOptions = [
+  { label: 'Falta enfunde', value: 'enfunde_faltante' },
+  { label: 'Cinta crítica', value: 'cinta_critica' },
+  { label: 'Inventario histórico', value: 'inventario_historico_cintas' },
+  { label: 'Fumigación vencida', value: 'fumigacion_vencida' },
+  { label: 'Clima desactualizado', value: 'clima_desactualizado' },
+];
+
+const severidadOptions = [
+  { label: 'Baja', value: 'baja' },
+  { label: 'Media', value: 'media' },
+  { label: 'Alta', value: 'alta' },
+  { label: 'Crítica', value: 'critica' },
+];
+
 const alertas = computed(() => alertaStore.items);
+const canManageAlertConfig = computed(() =>
+  ['ADMIN', 'SUPERVISOR'].includes(authStore.normalizedRole),
+);
 const totalHistoricoSeleccionado = computed(() =>
   inventarioHistorico.value
     .filter((item) => historicoSeleccionado.value.includes(Number(item.calendario_id)))
@@ -401,6 +545,52 @@ async function generarDiagnostico() {
   } catch (e) {
     const err = e as { response?: { data?: { error?: string; message?: string } } };
     error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo generar el diagnóstico';
+  }
+}
+
+async function cargarContactos() {
+  if (!canManageAlertConfig.value) return;
+
+  loadingContactos.value = true;
+  error.value = '';
+  try {
+    contactosAlertas.value = await alertaService.listarContactos();
+  } catch (e) {
+    const err = e as { response?: { data?: { error?: string; message?: string } } };
+    error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudieron cargar contactos de alerta';
+  } finally {
+    loadingContactos.value = false;
+  }
+}
+
+function normalizarTelefonoContacto(contacto: AlertaContacto) {
+  contacto.telefono_whatsapp = String(contacto.telefono_whatsapp || '')
+    .replace(/[^\d+]/g, '')
+    .slice(0, 20);
+  if (!contacto.telefono_whatsapp) contacto.whatsapp_activo = false;
+}
+
+async function guardarContacto(contacto: AlertaContacto) {
+  savingContactoId.value = contacto.usuario_id;
+  error.value = '';
+  try {
+    const guardado = await alertaService.guardarContacto(contacto.usuario_id, {
+      telefono_whatsapp: contacto.telefono_whatsapp || null,
+      whatsapp_activo: Boolean(contacto.whatsapp_activo && contacto.telefono_whatsapp),
+      in_app_activo: contacto.in_app_activo,
+      tipos: contacto.tipos?.length
+        ? contacto.tipos
+        : tipoAlertaOptions.map((item) => item.value),
+      severidad_minima: contacto.severidad_minima,
+    });
+    contactosAlertas.value = contactosAlertas.value.map((item) =>
+      item.usuario_id === contacto.usuario_id ? { ...item, ...guardado } : item,
+    );
+  } catch (e) {
+    const err = e as { response?: { data?: { error?: string; message?: string } } };
+    error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo guardar el contacto';
+  } finally {
+    savingContactoId.value = null;
   }
 }
 
@@ -513,6 +703,7 @@ async function cerrarInventarioSeleccionado() {
 onMounted(async () => {
   await fincaStore.obtenerFincas();
   fincaFumigacionId.value = fincaId.value;
+  await cargarContactos();
   await cargarAlertas();
 });
 
@@ -527,6 +718,19 @@ watch(fincaId, (next) => {
 .historico-table {
   border: 1px solid rgba(var(--v-border-color), 0.14);
   border-radius: 8px;
+}
+
+.contactos-alerta-table {
+  border: 1px solid rgba(var(--v-border-color), 0.14);
+  border-radius: 8px;
+}
+
+.contactos-alerta-phone {
+  min-width: 160px;
+}
+
+.contactos-alerta-tipos {
+  min-width: 260px;
 }
 
 .historico-color-dot {
