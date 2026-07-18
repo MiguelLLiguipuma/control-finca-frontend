@@ -97,53 +97,83 @@
           </div>
         </div>
 
-        <v-table density="compact" class="whatsapp-alerta-table">
-          <thead>
-            <tr>
-              <th>Destinatario</th>
-              <th>Alerta</th>
-              <th>Mensaje</th>
-              <th class="text-right">Acción</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in whatsappPendientes" :key="item.destinatario_id">
-              <td>
-                <div class="font-weight-bold">{{ item.usuario_nombre || 'Usuario' }}</div>
-                <div class="text-caption text-medium-emphasis">{{ item.telefono_whatsapp }}</div>
-              </td>
-              <td>
-                <v-chip :color="colorSeveridad(item.severidad)" size="small" class="mb-1">
-                  {{ item.severidad.toUpperCase() }}
-                </v-chip>
-                <div class="text-body-2 font-weight-bold">{{ item.titulo }}</div>
-                <div class="text-caption text-medium-emphasis">
-                  {{ item.finca_nombre || 'General' }} · {{ formatFecha(item.detectada_en) }}
+        <v-alert
+          v-if="whatsappFeedback"
+          type="success"
+          variant="tonal"
+          density="compact"
+          class="mb-3"
+        >
+          {{ whatsappFeedback }}
+        </v-alert>
+
+        <div v-if="whatsappPendientes.length" class="whatsapp-outbox">
+          <article
+            v-for="item in whatsappPendientes"
+            :key="item.destinatario_id"
+            class="whatsapp-card"
+          >
+            <div class="whatsapp-card__header">
+              <div>
+                <div class="text-caption text-medium-emphasis">Para enviar a</div>
+                <div class="text-subtitle-2 font-weight-black">
+                  {{ item.usuario_nombre || 'Usuario' }}
                 </div>
-              </td>
-              <td class="whatsapp-alerta-message">
-                {{ item.mensaje }}
-              </td>
-              <td class="text-right">
-                <v-btn
-                  size="small"
-                  color="success"
-                  variant="tonal"
-                  :disabled="!item.whatsapp_url || sendingWhatsappId === item.destinatario_id"
-                  :loading="sendingWhatsappId === item.destinatario_id"
-                  @click="abrirWhatsapp(item)"
-                >
-                  Abrir WhatsApp
-                </v-btn>
-              </td>
-            </tr>
-            <tr v-if="!loadingWhatsapp && !whatsappPendientes.length">
-              <td colspan="4" class="text-center text-medium-emphasis py-6">
-                No hay mensajes WhatsApp pendientes.
-              </td>
-            </tr>
-          </tbody>
-        </v-table>
+                <div class="text-caption text-medium-emphasis">
+                  {{ item.telefono_whatsapp }}
+                </div>
+              </div>
+              <v-chip :color="colorSeveridad(item.severidad)" size="small">
+                {{ item.severidad.toUpperCase() }}
+              </v-chip>
+            </div>
+
+            <div class="whatsapp-card__body">
+              <div class="font-weight-bold">{{ item.titulo }}</div>
+              <div class="text-caption text-medium-emphasis mb-2">
+                {{ item.finca_nombre || 'General' }} · {{ formatFecha(item.detectada_en) }}
+              </div>
+              <pre class="whatsapp-message-preview">{{ item.mensaje_whatsapp }}</pre>
+            </div>
+
+            <div class="whatsapp-card__actions">
+              <v-btn
+                size="small"
+                variant="tonal"
+                color="primary"
+                @click="copiarMensajeWhatsapp(item)"
+              >
+                Copiar mensaje
+              </v-btn>
+              <v-btn
+                size="small"
+                color="success"
+                variant="tonal"
+                :disabled="!item.whatsapp_url"
+                @click="abrirWhatsapp(item)"
+              >
+                Abrir WhatsApp
+              </v-btn>
+              <v-btn
+                size="small"
+                color="success"
+                :loading="sendingWhatsappId === item.destinatario_id"
+                :disabled="sendingWhatsappId === item.destinatario_id"
+                @click="marcarWhatsappEnviado(item)"
+              >
+                Marcar enviado
+              </v-btn>
+            </div>
+          </article>
+        </div>
+
+        <div v-else-if="!loadingWhatsapp" class="whatsapp-empty">
+          <v-icon size="32">mdi-phone-outline</v-icon>
+          <div class="font-weight-bold mt-2">No hay mensajes WhatsApp pendientes</div>
+          <div class="text-caption text-medium-emphasis">
+            Genera el diagnóstico para crear alertas y luego actualiza esta bandeja.
+          </div>
+        </div>
       </v-card-text>
     </v-card>
 
@@ -545,6 +575,7 @@ const loadingContactos = ref(false);
 const loadingWhatsapp = ref(false);
 const savingContactoId = ref<number | null>(null);
 const sendingWhatsappId = ref<number | null>(null);
+const whatsappFeedback = ref('');
 
 const estadoOptions = [
   { label: 'Pendientes', value: 'pendiente' },
@@ -619,7 +650,7 @@ async function generarDiagnostico() {
       edad_critica_cinta: edadCriticaCinta.value,
       edad_historica_cinta: edadHistoricaCinta.value,
     });
-    await cargarAlertas();
+    await Promise.all([cargarAlertas(), cargarWhatsappPendientes()]);
   } catch (e) {
     const err = e as { response?: { data?: { error?: string; message?: string } } };
     error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo generar el diagnóstico';
@@ -645,6 +676,7 @@ async function cargarWhatsappPendientes() {
   if (!canManageAlertConfig.value) return;
 
   loadingWhatsapp.value = true;
+  whatsappFeedback.value = '';
   error.value = '';
   try {
     whatsappPendientes.value = await alertaService.listarWhatsappPendientes({
@@ -671,6 +703,21 @@ async function abrirWhatsapp(item: AlertaWhatsappPendiente) {
     return;
   }
 
+  whatsappFeedback.value = 'WhatsApp se abrió con el mensaje listo. Cuando confirmes el envío, marca este aviso como enviado.';
+}
+
+async function copiarMensajeWhatsapp(item: AlertaWhatsappPendiente) {
+  whatsappFeedback.value = '';
+  error.value = '';
+  try {
+    await navigator.clipboard.writeText(item.mensaje_whatsapp);
+    whatsappFeedback.value = 'Mensaje copiado. Puedes pegarlo directamente en WhatsApp.';
+  } catch {
+    error.value = 'No se pudo copiar el mensaje. Puedes seleccionarlo manualmente desde la tarjeta.';
+  }
+}
+
+async function marcarWhatsappEnviado(item: AlertaWhatsappPendiente) {
   sendingWhatsappId.value = item.destinatario_id;
   error.value = '';
   try {
@@ -679,6 +726,7 @@ async function abrirWhatsapp(item: AlertaWhatsappPendiente) {
       (pending) => pending.destinatario_id !== item.destinatario_id,
     );
     await cargarAlertas();
+    whatsappFeedback.value = 'Mensaje marcado como enviado.';
   } catch (e) {
     const err = e as { response?: { data?: { error?: string; message?: string } } };
     error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo marcar WhatsApp como enviado';
@@ -861,14 +909,57 @@ watch(fincaId, (next) => {
   border-radius: 8px;
 }
 
-.whatsapp-alerta-table {
-  border: 1px solid rgba(var(--v-border-color), 0.14);
+.whatsapp-outbox {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.whatsapp-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(var(--v-theme-surface), 1);
+  border: 1px solid rgba(var(--v-border-color), 0.16);
   border-radius: 8px;
 }
 
-.whatsapp-alerta-message {
-  max-width: 360px;
-  white-space: normal;
+.whatsapp-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.whatsapp-card__body {
+  padding: 12px;
+  background: rgba(var(--v-theme-success), 0.06);
+  border-radius: 8px;
+}
+
+.whatsapp-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.whatsapp-message-preview {
+  max-height: 160px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.whatsapp-empty {
+  padding: 28px 16px;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  text-align: center;
+  border: 1px dashed rgba(var(--v-border-color), 0.28);
+  border-radius: 8px;
 }
 
 .contactos-alerta-phone {
