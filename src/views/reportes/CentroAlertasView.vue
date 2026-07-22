@@ -79,7 +79,7 @@
           <div>
             <div class="text-subtitle-1 font-weight-bold">Bandeja WhatsApp</div>
             <div class="text-caption text-medium-emphasis">
-              Mensajes pendientes para enviar manualmente desde WhatsApp.
+              Envía cada alerta al contacto en dos pasos: abrir WhatsApp y confirmar el envío.
             </div>
           </div>
           <div class="d-flex align-center gap-2">
@@ -112,6 +112,7 @@
             v-for="item in whatsappPendientes"
             :key="item.destinatario_id"
             class="whatsapp-card"
+            :class="{ 'whatsapp-card--opened': isWhatsappOpened(item.destinatario_id) }"
           >
             <div class="whatsapp-card__header">
               <div>
@@ -119,7 +120,7 @@
                 <div class="text-subtitle-2 font-weight-black">
                   {{ item.usuario_nombre || 'Usuario' }}
                 </div>
-                <div class="text-caption text-medium-emphasis">
+                <div class="whatsapp-phone">
                   {{ item.telefono_whatsapp }}
                 </div>
               </div>
@@ -146,14 +147,26 @@
                 Copiar mensaje
               </v-btn>
               <v-btn
-                size="small"
+                size="large"
                 color="success"
-                variant="tonal"
+                variant="flat"
                 :disabled="!item.whatsapp_url"
                 @click="abrirWhatsapp(item)"
               >
-                Abrir WhatsApp
+                Enviar por WhatsApp
               </v-btn>
+            </div>
+
+            <div
+              v-if="isWhatsappOpened(item.destinatario_id)"
+              class="whatsapp-confirm"
+            >
+              <div>
+                <div class="font-weight-bold">¿Ya enviaste el mensaje?</div>
+                <div class="text-caption text-medium-emphasis">
+                  Confirma para quitarlo de pendientes y dejar historial.
+                </div>
+              </div>
               <v-btn
                 size="small"
                 color="success"
@@ -161,7 +174,24 @@
                 :disabled="sendingWhatsappId === item.destinatario_id"
                 @click="marcarWhatsappEnviado(item)"
               >
-                Marcar enviado
+                Sí, enviado
+              </v-btn>
+            </div>
+
+            <div
+              v-else
+              class="whatsapp-card__footer"
+            >
+              <span>Después de abrir WhatsApp, vuelve aquí y confirma el envío.</span>
+              <v-btn
+                size="x-small"
+                color="medium-emphasis"
+                variant="text"
+                :loading="sendingWhatsappId === item.destinatario_id"
+                :disabled="sendingWhatsappId === item.destinatario_id"
+                @click="marcarWhatsappEnviado(item)"
+              >
+                Ya lo envié
               </v-btn>
             </div>
           </article>
@@ -576,6 +606,7 @@ const loadingWhatsapp = ref(false);
 const savingContactoId = ref<number | null>(null);
 const sendingWhatsappId = ref<number | null>(null);
 const whatsappFeedback = ref('');
+const whatsappOpenedIds = ref<number[]>([]);
 
 const estadoOptions = [
   { label: 'Pendientes', value: 'pendiente' },
@@ -608,6 +639,10 @@ const totalHistoricoSeleccionado = computed(() =>
     .filter((item) => historicoSeleccionado.value.includes(Number(item.calendario_id)))
     .reduce((total, item) => total + Number(item.saldo_en_campo || 0), 0),
 );
+
+function isWhatsappOpened(destinatarioId: number): boolean {
+  return whatsappOpenedIds.value.includes(Number(destinatarioId));
+}
 
 function colorSeveridad(level: AlertaSeveridad): string {
   if (level === 'critica' || level === 'alta') return 'error';
@@ -683,6 +718,8 @@ async function cargarWhatsappPendientes() {
       finca_id: fincaId.value || undefined,
       limit: 30,
     });
+    const pendientes = new Set(whatsappPendientes.value.map((item) => item.destinatario_id));
+    whatsappOpenedIds.value = whatsappOpenedIds.value.filter((id) => pendientes.has(id));
   } catch (e) {
     const err = e as { response?: { data?: { error?: string; message?: string } } };
     error.value = err.response?.data?.error || err.response?.data?.message || 'No se pudo cargar la bandeja WhatsApp';
@@ -703,7 +740,10 @@ async function abrirWhatsapp(item: AlertaWhatsappPendiente) {
     return;
   }
 
-  whatsappFeedback.value = 'WhatsApp se abrió con el mensaje listo. Cuando confirmes el envío, marca este aviso como enviado.';
+  if (!whatsappOpenedIds.value.includes(item.destinatario_id)) {
+    whatsappOpenedIds.value = [...whatsappOpenedIds.value, item.destinatario_id];
+  }
+  whatsappFeedback.value = 'WhatsApp se abrió con el mensaje listo. Vuelve a esta pantalla y confirma cuando lo hayas enviado.';
 }
 
 async function copiarMensajeWhatsapp(item: AlertaWhatsappPendiente) {
@@ -724,6 +764,9 @@ async function marcarWhatsappEnviado(item: AlertaWhatsappPendiente) {
     await alertaService.marcarWhatsappEnviado(item.destinatario_id);
     whatsappPendientes.value = whatsappPendientes.value.filter(
       (pending) => pending.destinatario_id !== item.destinatario_id,
+    );
+    whatsappOpenedIds.value = whatsappOpenedIds.value.filter(
+      (id) => id !== item.destinatario_id,
     );
     await cargarAlertas();
     whatsappFeedback.value = 'Mensaje marcado como enviado.';
@@ -924,11 +967,28 @@ watch(fincaId, (next) => {
   border-radius: 8px;
 }
 
+.whatsapp-card--opened {
+  border-color: rgba(var(--v-theme-success), 0.42);
+  box-shadow: 0 8px 24px rgba(var(--v-theme-success), 0.08);
+}
+
 .whatsapp-card__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.whatsapp-phone {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin-top: 2px;
+  color: rgb(var(--v-theme-success));
+  background: rgba(var(--v-theme-success), 0.09);
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .whatsapp-card__body {
@@ -942,6 +1002,27 @@ watch(fincaId, (next) => {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.whatsapp-card__footer,
+.whatsapp-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.whatsapp-card__footer {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  font-size: 0.78rem;
+}
+
+.whatsapp-confirm {
+  background: rgba(var(--v-theme-success), 0.12);
+  border: 1px solid rgba(var(--v-theme-success), 0.22);
 }
 
 .whatsapp-message-preview {
