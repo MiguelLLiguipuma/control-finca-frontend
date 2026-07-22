@@ -511,30 +511,159 @@
       </v-window-item>
 
       <v-window-item value="resumen">
-    <v-row>
-      <v-col cols="12" md="4">
-        <v-card rounded="xl" class="pa-4" color="error" variant="tonal">
-          <div class="text-caption">Críticas</div>
-          <div class="text-h3 font-weight-black">{{ alertaStore.resumen.criticas }}</div>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="4">
-        <v-card rounded="xl" class="pa-4" color="warning" variant="tonal">
-          <div class="text-caption">Altas</div>
-          <div class="text-h3 font-weight-black">{{ alertaStore.resumen.altas }}</div>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="4">
-        <v-card rounded="xl" class="pa-4" color="info" variant="tonal">
-          <div class="text-caption">Abiertas</div>
-          <div class="text-h3 font-weight-black">{{ alertaStore.resumen.abiertas }}</div>
-        </v-card>
-      </v-col>
-    </v-row>
+    <v-card class="rounded-xl mb-4" elevation="1">
+      <v-card-text>
+        <div class="summary-hero">
+          <div>
+            <div class="text-overline text-medium-emphasis">Estado actual</div>
+            <h2 class="text-h5 font-weight-black mb-1">Resumen operativo</h2>
+            <div class="text-body-2 text-medium-emphasis">
+              {{ resumenContexto }}
+            </div>
+          </div>
+          <div class="summary-hero__actions">
+            <v-btn
+              color="primary"
+              :loading="alertaStore.loading"
+              @click="generarDiagnostico"
+            >
+              Generar diagnóstico
+            </v-btn>
+            <v-btn
+              variant="tonal"
+              color="primary"
+              :loading="alertaStore.loading"
+              @click="cargarAlertas"
+            >
+              Actualizar
+            </v-btn>
+          </div>
+        </div>
+
+        <div class="summary-metrics">
+          <button
+            type="button"
+            class="summary-metric summary-metric--error"
+            @click="irAAlertas('critica')"
+          >
+            <span>Críticas</span>
+            <strong>{{ alertaStore.resumen.criticas }}</strong>
+          </button>
+          <button
+            type="button"
+            class="summary-metric summary-metric--warning"
+            @click="irAAlertas('alta')"
+          >
+            <span>Altas</span>
+            <strong>{{ alertaStore.resumen.altas }}</strong>
+          </button>
+          <button
+            type="button"
+            class="summary-metric summary-metric--info"
+            @click="irAAlertas()"
+          >
+            <span>Abiertas</span>
+            <strong>{{ alertaStore.resumen.abiertas }}</strong>
+          </button>
+          <button
+            v-if="canManageAlertConfig"
+            type="button"
+            class="summary-metric summary-metric--success"
+            @click="activeAlertTab = 'whatsapp'"
+          >
+            <span>WhatsApp</span>
+            <strong>{{ whatsappPendientes.length }}</strong>
+          </button>
+        </div>
+
+        <div class="summary-actions">
+          <button
+            v-if="canManageAlertConfig"
+            type="button"
+            class="summary-action"
+            @click="activeAlertTab = 'whatsapp'"
+          >
+            <strong>Enviar WhatsApp</strong>
+            <span>{{ whatsappPendientes.length }} mensaje(s) pendiente(s)</span>
+          </button>
+          <button
+            type="button"
+            class="summary-action"
+            @click="activeAlertTab = 'historico'"
+          >
+            <strong>Depurar cintas</strong>
+            <span>Revisa saldos antiguos de la finca seleccionada</span>
+          </button>
+          <button
+            v-if="canManageAlertConfig"
+            type="button"
+            class="summary-action"
+            @click="activeAlertTab = 'configuracion'"
+          >
+            <strong>Configurar alertas</strong>
+            <span>Destinatarios, WhatsApp y fumigación</span>
+          </button>
+          <button
+            type="button"
+            class="summary-action"
+            @click="irAAlertas()"
+          >
+            <strong>Ver listado</strong>
+            <span>{{ alertas.length }} alerta(s) cargada(s)</span>
+          </button>
+        </div>
+
+        <v-alert
+          v-if="ultimoDiagnostico"
+          type="info"
+          variant="tonal"
+          density="compact"
+          class="mt-4"
+        >
+          Último diagnóstico: {{ ultimoDiagnostico.creadas }} nueva(s),
+          {{ ultimoDiagnostico.existentes }} existente(s) y
+          {{ ultimoDiagnostico.omitidas }} omitida(s).
+        </v-alert>
+      </v-card-text>
+    </v-card>
       </v-window-item>
 
       <v-window-item value="alertas">
     <v-card class="mt-4 rounded-xl" elevation="1">
+      <v-card-text class="d-flex align-center justify-space-between flex-wrap gap-3 pb-0">
+        <div>
+          <div class="text-subtitle-1 font-weight-bold">Alertas operativas</div>
+          <div class="text-caption text-medium-emphasis">
+            {{ alertas.length }} alerta(s) según los filtros actuales.
+          </div>
+        </div>
+        <div class="d-flex align-center gap-2">
+          <v-chip
+            :color="!severidadFiltro ? 'primary' : 'default'"
+            variant="tonal"
+            size="small"
+            @click="irAAlertas()"
+          >
+            Todas
+          </v-chip>
+          <v-chip
+            :color="severidadFiltro === 'critica' ? 'error' : 'default'"
+            variant="tonal"
+            size="small"
+            @click="irAAlertas('critica')"
+          >
+            Críticas
+          </v-chip>
+          <v-chip
+            :color="severidadFiltro === 'alta' ? 'warning' : 'default'"
+            variant="tonal"
+            size="small"
+            @click="irAAlertas('alta')"
+          >
+            Altas
+          </v-chip>
+        </div>
+      </v-card-text>
       <v-table density="comfortable">
         <thead>
           <tr>
@@ -606,6 +735,12 @@ import {
 import { toLocalIsoDate } from '@/utils/dateIso';
 import type { AlertaEstado, AlertaSeveridad } from '@/services/alertaService';
 
+interface DiagnosticoResumen {
+  creadas: number;
+  existentes: number;
+  omitidas: number;
+}
+
 const fincaStore = useFincaStore();
 const alertaStore = useAlertaStore();
 const authStore = useAuthStore();
@@ -613,6 +748,7 @@ const { fincas } = storeToRefs(fincaStore);
 
 const fincaId = ref<number | null>(null);
 const estadoFiltro = ref<AlertaEstado | null>(null);
+const severidadFiltro = ref<AlertaSeveridad | null>(null);
 const edadCriticaCinta = ref(15);
 const edadHistoricaCinta = ref(17);
 const error = ref('');
@@ -634,6 +770,7 @@ const sendingWhatsappId = ref<number | null>(null);
 const whatsappFeedback = ref('');
 const whatsappOpenedIds = ref<number[]>([]);
 const activeAlertTab = ref('resumen');
+const ultimoDiagnostico = ref<DiagnosticoResumen | null>(null);
 
 const estadoOptions = [
   { label: 'Pendientes', value: 'pendiente' },
@@ -657,10 +794,26 @@ const severidadOptions = [
   { label: 'Crítica', value: 'critica' },
 ];
 
-const alertas = computed(() => alertaStore.items);
+const alertas = computed(() =>
+  severidadFiltro.value
+    ? alertaStore.items.filter((item) => item.severidad === severidadFiltro.value)
+    : alertaStore.items,
+);
 const canManageAlertConfig = computed(() =>
   ['ADMIN', 'SUPERVISOR'].includes(authStore.normalizedRole),
 );
+const fincaSeleccionadaNombre = computed(() => {
+  const id = Number(fincaId.value || 0);
+  if (!id) return 'Todas las fincas';
+  return fincas.value.find((finca) => Number(finca.id) === id)?.nombre || 'Finca seleccionada';
+});
+const resumenContexto = computed(() =>
+  `${fincaSeleccionadaNombre.value} · ${alertaStore.resumen.pendientes} pendiente(s) · actualizado ${ultimoRefreshLabel.value}`,
+);
+const ultimoRefreshLabel = computed(() => {
+  if (!alertaStore.ultimoRefresh) return 'sin refrescar';
+  return formatFecha(alertaStore.ultimoRefresh);
+});
 const totalHistoricoSeleccionado = computed(() =>
   inventarioHistorico.value
     .filter((item) => historicoSeleccionado.value.includes(Number(item.calendario_id)))
@@ -669,6 +822,11 @@ const totalHistoricoSeleccionado = computed(() =>
 
 function isWhatsappOpened(destinatarioId: number): boolean {
   return whatsappOpenedIds.value.includes(Number(destinatarioId));
+}
+
+function irAAlertas(severidad: AlertaSeveridad | null = null) {
+  severidadFiltro.value = severidad;
+  activeAlertTab.value = 'alertas';
 }
 
 function colorSeveridad(level: AlertaSeveridad): string {
@@ -707,11 +865,16 @@ async function cargarAlertas() {
 async function generarDiagnostico() {
   error.value = '';
   try {
-    await alertaStore.generar({
+    const result = await alertaStore.generar({
       finca_id: fincaId.value || undefined,
       edad_critica_cinta: edadCriticaCinta.value,
       edad_historica_cinta: edadHistoricaCinta.value,
     });
+    ultimoDiagnostico.value = {
+      creadas: Number((result as DiagnosticoResumen)?.creadas || 0),
+      existentes: Number((result as DiagnosticoResumen)?.existentes || 0),
+      omitidas: Number((result as DiagnosticoResumen)?.omitidas || 0),
+    };
     await Promise.all([cargarAlertas(), cargarWhatsappPendientes()]);
   } catch (e) {
     const err = e as { response?: { data?: { error?: string; message?: string } } };
@@ -981,6 +1144,95 @@ watch(canManageAlertConfig, (canManage) => {
 
 .alert-tab-window {
   min-height: 260px;
+}
+
+.summary-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.summary-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.summary-metric {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px;
+  text-align: left;
+  background: rgba(var(--v-theme-surface), 1);
+  border: 1px solid rgba(var(--v-border-color), 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease;
+}
+
+.summary-metric:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--v-theme-primary), 0.34);
+}
+
+.summary-metric span {
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.summary-metric strong {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.summary-metric--error strong {
+  color: rgb(var(--v-theme-error));
+}
+
+.summary-metric--warning strong {
+  color: rgb(var(--v-theme-warning));
+}
+
+.summary-metric--info strong {
+  color: rgb(var(--v-theme-info));
+}
+
+.summary-metric--success strong {
+  color: rgb(var(--v-theme-success));
+}
+
+.summary-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.summary-action {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  text-align: left;
+  background: rgba(var(--v-theme-on-surface), 0.035);
+  border: 1px solid rgba(var(--v-border-color), 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.summary-action span {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.82rem;
 }
 
 .historico-table {
