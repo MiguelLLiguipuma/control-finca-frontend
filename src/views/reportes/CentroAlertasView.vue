@@ -73,6 +73,22 @@
 
     <v-alert v-if="error" type="error" variant="tonal" class="mb-4">{{ error }}</v-alert>
 
+    <v-card class="alert-tabs-card rounded-xl mb-4" elevation="1">
+      <v-tabs
+        v-model="activeAlertTab"
+        color="primary"
+        show-arrows
+      >
+        <v-tab value="resumen">Resumen</v-tab>
+        <v-tab v-if="canManageAlertConfig" value="whatsapp">WhatsApp</v-tab>
+        <v-tab v-if="canManageAlertConfig" value="configuracion">Configuración</v-tab>
+        <v-tab value="historico">Histórico</v-tab>
+        <v-tab value="alertas">Alertas</v-tab>
+      </v-tabs>
+    </v-card>
+
+    <v-window v-model="activeAlertTab" class="alert-tab-window">
+      <v-window-item v-if="canManageAlertConfig" value="whatsapp">
     <v-card v-if="canManageAlertConfig" class="rounded-xl mb-4" elevation="1">
       <v-card-text>
         <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-3">
@@ -206,7 +222,9 @@
         </div>
       </v-card-text>
     </v-card>
+      </v-window-item>
 
+      <v-window-item v-if="canManageAlertConfig" value="configuracion">
     <v-card v-if="canManageAlertConfig" class="rounded-xl mb-4" elevation="1">
       <v-card-text>
         <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-3">
@@ -378,7 +396,9 @@
         </v-row>
       </v-card-text>
     </v-card>
+      </v-window-item>
 
+      <v-window-item value="historico">
     <v-card class="rounded-xl mb-4" elevation="1">
       <v-card-text>
         <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-3">
@@ -488,7 +508,9 @@
         </div>
       </v-card-text>
     </v-card>
+      </v-window-item>
 
+      <v-window-item value="resumen">
     <v-row>
       <v-col cols="12" md="4">
         <v-card rounded="xl" class="pa-4" color="error" variant="tonal">
@@ -509,7 +531,9 @@
         </v-card>
       </v-col>
     </v-row>
+      </v-window-item>
 
+      <v-window-item value="alertas">
     <v-card class="mt-4 rounded-xl" elevation="1">
       <v-table density="comfortable">
         <thead>
@@ -558,6 +582,8 @@
         </tbody>
       </v-table>
     </v-card>
+      </v-window-item>
+    </v-window>
   </v-container>
 </template>
 
@@ -607,6 +633,7 @@ const savingContactoId = ref<number | null>(null);
 const sendingWhatsappId = ref<number | null>(null);
 const whatsappFeedback = ref('');
 const whatsappOpenedIds = ref<number[]>([]);
+const activeAlertTab = ref('resumen');
 
 const estadoOptions = [
   { label: 'Pendientes', value: 'pendiente' },
@@ -939,9 +966,23 @@ watch(fincaId, (next) => {
   historicoSeleccionado.value = [];
   void cargarWhatsappPendientes();
 });
+
+watch(canManageAlertConfig, (canManage) => {
+  if (!canManage && ['whatsapp', 'configuracion'].includes(activeAlertTab.value)) {
+    activeAlertTab.value = 'resumen';
+  }
+});
 </script>
 
 <style scoped>
+.alert-tabs-card {
+  overflow: hidden;
+}
+
+.alert-tab-window {
+  min-height: 260px;
+}
+
 .historico-table {
   border: 1px solid rgba(var(--v-border-color), 0.14);
   border-radius: 8px;
