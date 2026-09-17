@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { crearUuid } from '@/utils/uuid';
 import {
 	cosechaService,
 	type BackendCinta,
@@ -27,6 +28,7 @@ export interface CintaCosecha {
 interface CosechaState {
 	loading: boolean;
 	submitting: boolean;
+	sincronizando: boolean;
 	saldosPendientes: CintaCosecha[];
 	fincaActivaId: number | null;
 	semanaInicioCorte: number;
@@ -114,6 +116,7 @@ export const useCosechaStore = defineStore('cosecha', {
 	state: (): CosechaState => ({
 		loading: false,
 		submitting: false,
+		sincronizando: false,
 		saldosPendientes: [],
 		fincaActivaId: null,
 		semanaInicioCorte: VENTANA_CORTE_DEFAULT_INICIO,
@@ -319,6 +322,11 @@ export const useCosechaStore = defineStore('cosecha', {
 			this.fincaActivaId = fincaId;
 			try {
 				const data: BackendCinta[] = await cosechaService.getBalance(fincaId);
+				if (this.fincaActivaId !== fincaId) return false;
+				const digitado = new Map(
+					(fincaAnteriorId === fincaId ? this.saldosPendientes : []).map((item) =>
+						[item.calendario_id, { buenos: item.cantidad_a_cosechar, rechazo: item.rechazo }]),
+				);
 				const anioFallback = this.infoSistema.anio;
 
 				this.saldosPendientes = data
@@ -326,15 +334,20 @@ export const useCosechaStore = defineStore('cosecha', {
 						const semanaEnfunde = Number(item.semana_enfunde);
 						const anio = resolverAnioDesdeBackend(item, anioFallback);
 
+						const reservado = this.colaSincronizacion
+							.filter((pendiente) => pendiente.finca_id === fincaId)
+							.flatMap((pendiente) => pendiente.detalles)
+							.filter((detalle) => detalle.calendario_id === item.calendario_id)
+							.reduce((total, detalle) => total + detalle.cantidad_racimos + detalle.cantidad_rechazo, 0);
 						return {
 							calendario_id: item.calendario_id,
 							semana_enfunde: semanaEnfunde,
 							anio,
-							saldo_en_campo: Number(item.saldo_en_campo),
+							saldo_en_campo: Math.max(0, Number(item.saldo_en_campo) - reservado),
 							color_cinta: item.color_cinta,
 							color_hex: item.color_hex,
-							cantidad_a_cosechar: 0,
-							rechazo: 0,
+							cantidad_a_cosechar: digitado.get(item.calendario_id)?.buenos || 0,
+							rechazo: digitado.get(item.calendario_id)?.rechazo || 0,
 							edad: calculateIsoWeekAge(semanaEnfunde, anio),
 						};
 					})
@@ -343,13 +356,13 @@ export const useCosechaStore = defineStore('cosecha', {
 					);
 				return true;
 			} catch (error) {
-				if (fincaAnteriorId !== fincaId) {
+				if (this.fincaActivaId === fincaId && fincaAnteriorId !== fincaId) {
 					this.saldosPendientes = [];
 				}
 				useUIStore().showError('Error al cargar inventario del servidor.');
 				return false;
 			} finally {
-				this.loading = false;
+				if (this.fincaActivaId === fincaId) this.loading = false;
 			}
 		},
 
@@ -374,11 +387,14 @@ export const useCosechaStore = defineStore('cosecha', {
 			fincaId: number,
 			fecha: string,
 		): Promise<ResultadoEnvioCosecha> {
-			if (this.submitting) {
+			if (this.loading || this.fincaActivaId !== fincaId) {
+				return { ok: false, queued: false, message: 'Espera a que se cargue el inventario de la finca seleccionada.' };
+			}
+			if (this.submitting || this.sincronizando) {
 				return {
 					ok: false,
 					queued: false,
-					message: 'Ya hay un envío en progreso.',
+					message: 'Hay un envío o sincronización en progreso. Espera a que termine.',
 				};
 			}
 
@@ -403,7 +419,7 @@ export const useCosechaStore = defineStore('cosecha', {
 			}
 
 			const payload: PayloadCosecha = {
-				id_local: crypto.randomUUID(),
+				id_local: crearUuid(),
 				finca_id: fincaId,
 				fecha,
 				timestamp: Date.now(),
@@ -413,7 +429,8 @@ export const useCosechaStore = defineStore('cosecha', {
 			this.submitting = true;
 			try {
 				await cosechaService.registrarLiquidacion(payload);
-				await this.cargarSaldos(fincaId);
+				this.consumirConteoEnviado(payload);
+				if (this.fincaActivaId === fincaId) await this.cargarSaldos(fincaId);
 				return {
 					ok: true,
 					queued: false,
@@ -422,7 +439,13 @@ export const useCosechaStore = defineStore('cosecha', {
 			} catch (error) {
 				if (esErrorEncolable(error)) {
 					this.colaSincronizacion.push({ ...payload, intentos: 0 });
-					this.persistirCola();
+					try {
+						this.persistirCola();
+					} catch {
+						this.colaSincronizacion = this.colaSincronizacion.filter((item) => item.id_local !== payload.id_local);
+						return { ok: false, queued: false, message: 'No se pudo guardar en este dispositivo. El conteo sigue en pantalla; libera espacio y vuelve a intentar.' };
+					}
+					this.consumirConteoEnviado(payload);
 					return {
 						ok: true,
 						queued: true,
@@ -442,57 +465,59 @@ export const useCosechaStore = defineStore('cosecha', {
 
 		persistirCola() {
 			if (typeof localStorage === 'undefined') return;
-			localStorage.setItem(COLA_KEY, JSON.stringify(this.colaSincronizacion));
 			localStorage.setItem(COLA_FALLIDA_KEY, JSON.stringify(this.colaFallida));
+			localStorage.setItem(COLA_KEY, JSON.stringify(this.colaSincronizacion));
+		},
+
+		consumirConteoEnviado(payload: PayloadCosecha) {
+			if (this.fincaActivaId !== payload.finca_id) return;
+			for (const detalle of payload.detalles) {
+				const item = this.saldosPendientes.find((cinta) => cinta.calendario_id === detalle.calendario_id);
+				if (!item) continue;
+				item.cantidad_a_cosechar = Math.max(0, item.cantidad_a_cosechar - detalle.cantidad_racimos);
+				item.rechazo = Math.max(0, item.rechazo - detalle.cantidad_rechazo);
+				item.saldo_en_campo = Math.max(0, item.saldo_en_campo - detalle.cantidad_racimos - detalle.cantidad_rechazo);
+			}
 		},
 
 		async sincronizarCola() {
-			if (!this.isOnline || !this.colaSincronizacion.length) return;
-
-			const pendientes = [...this.colaSincronizacion];
-			const restantes: PayloadPendienteCosecha[] = [];
+			if (!localStorage.getItem('token')) return;
+			if (!this.isOnline || this.sincronizando || this.submitting || !this.colaSincronizacion.length) return;
+			this.sincronizando = true;
+			let enviados = 0;
 			let movidosAFallida = 0;
-
-			for (const payload of pendientes) {
-				try {
-					await cosechaService.registrarLiquidacion(payload);
-				} catch (error) {
-					const e = error as { response?: { status?: number; data?: { error?: string; message?: string } } } | undefined;
-					const intentos = (payload.intentos || 0) + 1;
-					const ultimoError =
-						e?.response?.data?.error ||
-						e?.response?.data?.message ||
-						'Error desconocido en sincronización';
-
-					if (!esErrorEncolable(error) && intentos >= MAX_INTENTOS_NO_ENCOLABLE) {
-						this.colaFallida.push({
-							...payload,
-							intentos,
-							ultimoError,
-						});
-						movidosAFallida += 1;
-						continue;
+			try {
+				const pendientes = [...this.colaSincronizacion];
+				for (const payload of pendientes) {
+					try {
+						await cosechaService.registrarLiquidacion(payload);
+						// Quitar solo el enviado, conservando los registros nuevos de la cola.
+						this.colaSincronizacion = this.colaSincronizacion.filter((item) => item.id_local !== payload.id_local);
+						enviados++;
+					} catch (error) {
+						const status = (error as { response?: { status?: number } })?.response?.status;
+						// Una sesion expirada no convierte el reporte en un error de datos.
+						if (status === 401 || status === 403) break;
+						const pendiente = this.colaSincronizacion.find((item) => item.id_local === payload.id_local);
+						if (!pendiente) continue;
+						pendiente.intentos = (pendiente.intentos || 0) + 1;
+						pendiente.ultimoError = extraerMensajeError(error);
+						if (!esErrorEncolable(error) && pendiente.intentos >= MAX_INTENTOS_NO_ENCOLABLE) {
+							this.colaFallida.push({ ...pendiente });
+							this.colaSincronizacion = this.colaSincronizacion.filter((item) => item.id_local !== payload.id_local);
+							movidosAFallida++;
+						}
 					}
-
-					restantes.push({
-						...payload,
-						intentos,
-						ultimoError,
-					});
+					this.persistirCola();
 				}
-			}
-
-			this.colaSincronizacion = restantes;
-			this.persistirCola();
-
-			if (this.fincaActivaId && pendientes.length !== restantes.length) {
-				await this.cargarSaldos(this.fincaActivaId);
-			}
-
-			if (movidosAFallida > 0) {
-				useUIStore().showWarning(
-					`${movidosAFallida} reporte(s) requieren revisión manual por errores de validación.`,
-				);
+				if (enviados && this.fincaActivaId) await this.cargarSaldos(this.fincaActivaId);
+				if (movidosAFallida) {
+					useUIStore().showWarning(`${movidosAFallida} reporte(s) requieren revisión manual por errores de validación.`);
+				}
+			} catch {
+				useUIStore().showError('No se pudo actualizar la cola local. Conserva este dispositivo y vuelve a intentar la sincronización.');
+			} finally {
+				this.sincronizando = false;
 			}
 		},
 

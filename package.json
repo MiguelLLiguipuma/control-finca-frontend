@@ -8,7 +8,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "vue-tsc --noEmit",
-    "verify:release": "npm run lint && npm run build"
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "verify:release": "npm test && npm run build"
   },
   "dependencies": {
     "@babel/core": "^7.26.9",

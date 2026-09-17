@@ -48,14 +48,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 import { RouterView, useRoute } from 'vue-router';
 import Header from './components/HeaderView.vue';
 import SidebarMenu from './components/SidebarMenu.vue';
 import { useUIStore } from './stores/uiStore';
 import { useCosechaStore } from './stores/cosecha/cosechaStore';
+import { useAuthStore } from './stores/auth/authStore';
 
 const cosechaStore = useCosechaStore();
+const authStore = useAuthStore();
 const route = useRoute();
 const uiStore = useUIStore();
 const isPublicRoute = computed(() =>
@@ -64,6 +66,9 @@ const isPublicRoute = computed(() =>
 
 onMounted(() => {
   cosechaStore.inicializarMonitoreoRed();
+});
+watch(() => authStore.token, (token) => {
+  if (token) void cosechaStore.sincronizarCola();
 });
 </script>
 

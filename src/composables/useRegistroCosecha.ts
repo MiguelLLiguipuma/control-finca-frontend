@@ -325,7 +325,8 @@ export function useRegistroCosecha() {
 			return;
 		}
 
-		const ultimoItemDigitado = obtenerUltimoItemDigitado();
+		const ultimoItem = obtenerUltimoItemDigitado();
+		const ultimoItemDigitado = ultimoItem ? { ...ultimoItem } : null;
 		const result = await cosechaStore.enviarCosecha(
 			fincaSeleccionada.value,
 			fechaCosecha.value,
@@ -345,7 +346,8 @@ export function useRegistroCosecha() {
 				fechaHasta: fechaMaxima.value,
 			});
 		}
-		limpiarBorradorLocal();
+		if (cosechaStore.totalDigitado > 0) guardarBorradorLocal();
+		else limpiarBorradorLocal();
 		notify(result.message, result.queued ? 'warning' : 'success');
 	}
 

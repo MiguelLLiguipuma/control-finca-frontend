@@ -494,3 +494,10 @@
   content: "\F0599";
 }
 
+.mdi-camera::before { content: "\F0100"; }
+.mdi-image::before { content: "\F02E9"; }
+.mdi-undo::before { content: "\F054C"; }
+.mdi-delete-outline::before { content: "\F09E7"; }
+.mdi-tag::before { content: "\F04F9"; }
+.mdi-broom::before { content: "\F00E2"; }
+.mdi-basket-check::before { content: "\F18E5"; }
