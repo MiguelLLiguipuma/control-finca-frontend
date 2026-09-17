@@ -27,6 +27,33 @@
           ]"
         />
 
+        <v-sheet border rounded="lg" class="conteo-movil-entry pa-3 mb-4">
+          <div class="d-flex align-center justify-space-between gap-3 flex-wrap">
+            <div class="d-flex align-center min-w-0">
+              <v-avatar color="primary" variant="tonal" rounded="lg" size="44" class="mr-3">
+                <v-icon>mdi-cellphone-check</v-icon>
+              </v-avatar>
+              <div class="min-w-0">
+                <div class="text-subtitle-2 font-weight-black text-high-emphasis">
+                  Conteo desde celular
+                </div>
+                <div class="text-caption text-medium-emphasis">
+                  Interfaz rápida para campo con botones grandes, borrador local y envío de liquidación.
+                </div>
+              </div>
+            </div>
+            <v-btn
+              color="primary"
+              variant="flat"
+              rounded="lg"
+              prepend-icon="mdi-open-in-new"
+              to="/conteo-cosecha-movil"
+            >
+              Abrir conteo móvil
+            </v-btn>
+          </div>
+        </v-sheet>
+
         <v-alert
           v-if="!cosechaStore.isOnline || cosechaStore.colaSincronizacion.length || hayConteoSinEnviar"
           :type="!cosechaStore.isOnline ? 'warning' : 'info'"
@@ -69,6 +96,37 @@
               :fecha-permitida="fechaCosechaPermitida"
               @guardar="guardarCosecha"
             />
+
+            <v-card border variant="flat" class="ultima-cinta-card mt-4">
+              <v-card-text class="pa-4">
+                <div class="d-flex align-center">
+                  <v-avatar
+                    :style="{ backgroundColor: ultimaCintaColorHex + '22' }"
+                    rounded="lg"
+                    size="44"
+                    class="mr-3"
+                  >
+                    <v-icon :style="{ color: ultimaCintaColorHex }">
+                      mdi-tag-check-outline
+                    </v-icon>
+                  </v-avatar>
+                  <div class="min-w-0">
+                    <div class="text-caption font-weight-black text-disabled uppercase tracking-widest">
+                      Última cinta liquidada
+                    </div>
+                    <div
+                      class="text-subtitle-1 font-weight-black text-truncate"
+                      :style="{ color: ultimaCintaColorHex }"
+                    >
+                      {{ ultimaCintaTitulo }}
+                    </div>
+                    <div class="text-caption text-medium-emphasis">
+                      {{ ultimaCintaResumen }}
+                    </div>
+                  </div>
+                </div>
+              </v-card-text>
+            </v-card>
           </v-col>
 
           <v-col cols="12" lg="8" xl="9">
@@ -236,6 +294,7 @@ const {
   fechaMinima,
   estadoFechaSeleccionada,
   hayConteoSinEnviar,
+  ultimaCintaLiquidada,
   obtenerColorTarjeta,
   obtenerVarianteTarjeta,
   fechaCosechaPermitida,
@@ -247,6 +306,26 @@ const {
 const uiStore = useUIStore();
 const colorDetectado = shallowRef<CintaColorNombre | null>(null);
 const semanasConteoSeleccionadas = ref<string[]>([]);
+
+const ultimaCintaColorHex = computed(
+  () => ultimaCintaLiquidada.value?.color_hex || '#94a3b8',
+);
+const ultimaCintaTitulo = computed(() => {
+  if (!fincaSeleccionada.value) return 'Seleccione una finca';
+  if (!ultimaCintaLiquidada.value) return 'Sin registro previo';
+  return `${ultimaCintaLiquidada.value.color_cinta} · Sem ${ultimaCintaLiquidada.value.semana_enfunde}/${ultimaCintaLiquidada.value.anio}`;
+});
+const ultimaCintaResumen = computed(() => {
+  if (!fincaSeleccionada.value) return 'Se mostrará al cargar la finca';
+  if (!ultimaCintaLiquidada.value) return 'Aún no se ha guardado una liquidación en este equipo.';
+
+  const estado =
+    ultimaCintaLiquidada.value.estado === 'pendiente_sincronizar'
+      ? 'pendiente de sincronizar'
+      : 'enviada';
+  const cantidad = ultimaCintaLiquidada.value.cantidad_total.toLocaleString('es-EC');
+  return `${formatFechaCorta(ultimaCintaLiquidada.value.fecha)} · ${cantidad} racimos · ${estado}`;
+});
 
 const semanaConteoOptions = computed<SemanaConteoOption[]>(() =>
   cosechaStore.saldosPendientes
@@ -343,6 +422,19 @@ function saldoDisponible(item: CintaCosecha): number {
   );
 }
 
+function formatFechaCorta(fecha: string) {
+  const fechaIso = String(fecha || '').slice(0, 10);
+  if (!fechaIso) return 'Sin fecha';
+  const parsed = new Date(`${fechaIso}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return fechaIso;
+
+  return parsed.toLocaleDateString('es-EC', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 function scoreCintaParaConteo(item: CintaCosecha): number {
   if (cosechaStore.esCintaDeCorteActual(item.semana_enfunde, item.anio)) return 0;
   if (cosechaStore.esFrutaDeCorte(item.semana_enfunde, item.anio)) return 1;
@@ -397,6 +489,14 @@ function handleMaximizarBuenos(item: CintaCosecha) {
 }
 
 .conteo-semanas-card {
+  border-radius: 8px;
+}
+
+.conteo-movil-entry {
+  background: rgb(var(--v-theme-surface));
+}
+
+.ultima-cinta-card {
   border-radius: 8px;
 }
 

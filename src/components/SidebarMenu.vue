@@ -176,6 +176,7 @@ const menuItems: MenuItem[] = [
 
   { title: 'Registro Enfunde', icon: 'mdi-leaf', route: '/registro-enfunde', permission: 'view.enfunde', section: 'operacion' },
   { title: 'Liquidación Cosecha', icon: 'mdi-basket-check-outline', route: '/registro-cosecha', permission: 'view.cosecha', section: 'operacion' },
+  { title: 'Conteo Móvil', icon: 'mdi-cellphone-check', route: '/conteo-cosecha-movil', permission: 'view.cosecha', section: 'operacion' },
   { title: 'Predicción Cosecha', icon: 'mdi-chart-bell-curve-cumulative', route: '/prediccion-cosecha', permission: 'view.cosecha', section: 'control' },
   { title: 'Voucher Embarque', icon: 'mdi-file-document-check-outline', route: '/voucher-embarque', permission: 'view.voucher', section: 'control' },
   { title: 'Centro de Alertas', icon: 'mdi-bell-alert-outline', route: '/alertas', permission: 'view.alertas', section: 'control' },

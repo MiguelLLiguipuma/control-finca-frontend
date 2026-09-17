@@ -84,6 +84,16 @@ const routes: RouteRecordRaw[] = [
 		},
 	},
 	{
+		path: '/conteo-cosecha-movil',
+		name: 'ConteoCosechaMovil',
+		component: () => import('@/views/cosecha/ConteoCosechaMovilView.vue'),
+		meta: {
+			requiresAuth: true,
+			permission: 'view.cosecha',
+			breadcrumb: 'Conteo Móvil',
+		},
+	},
+	{
 		path: '/prediccion-cosecha',
 		name: 'PrediccionCosecha',
 		component: () => import('@/views/cosecha/PrediccionCosechaView.vue'),

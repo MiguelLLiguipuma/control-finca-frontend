@@ -33,7 +33,20 @@ interface BorradorCosechaLocal {
 	items: BorradorCosechaItem[];
 }
 
+export interface UltimaCintaLiquidada {
+	finca_id: number;
+	fecha: string;
+	color_cinta: string;
+	color_hex: string;
+	semana_enfunde: number;
+	anio: number;
+	cantidad_total: number;
+	registrado_en: number;
+	estado: 'enviado' | 'pendiente_sincronizar';
+}
+
 const BORRADOR_COSECHA_PREFIX = 'borrador_cosecha_conteo';
+const ULTIMA_CINTA_LIQUIDADA_PREFIX = 'ultima_cinta_liquidacion';
 
 export function useRegistroCosecha() {
 	const cosechaStore = useCosechaStore();
@@ -56,6 +69,7 @@ export function useRegistroCosecha() {
 	const menuFecha = ref(false);
 	const hidratandoPantalla = ref(true);
 	const restaurandoBorrador = ref(false);
+	const ultimaCintaLiquidada = ref<UltimaCintaLiquidada | null>(null);
 
 	const sortedYears = computed(() =>
 		Object.keys(cosechaStore.saldosPorAnio || {}).sort(
@@ -103,6 +117,11 @@ export function useRegistroCosecha() {
 		return `${BORRADOR_COSECHA_PREFIX}:${fincaId}:${fecha}`;
 	}
 
+	function getUltimaCintaKey(fincaId = fincaSeleccionada.value) {
+		if (!fincaId) return '';
+		return `${ULTIMA_CINTA_LIQUIDADA_PREFIX}:${fincaId}`;
+	}
+
 	function crearBorradorDesdeDigitacion(): BorradorCosechaLocal | null {
 		if (!fincaSeleccionada.value || !fechaCosecha.value) return null;
 		const items = cosechaStore.saldosPendientes
@@ -140,6 +159,56 @@ export function useRegistroCosecha() {
 		if (typeof localStorage === 'undefined') return;
 		const key = getBorradorKey(fincaId, fecha);
 		if (key) localStorage.removeItem(key);
+	}
+
+	function cargarUltimaCintaLiquidada(fincaId = fincaSeleccionada.value) {
+		if (typeof localStorage === 'undefined') return;
+		const key = getUltimaCintaKey(fincaId);
+		if (!key) {
+			ultimaCintaLiquidada.value = null;
+			return;
+		}
+
+		try {
+			const raw = localStorage.getItem(key);
+			ultimaCintaLiquidada.value = raw
+				? (JSON.parse(raw) as UltimaCintaLiquidada)
+				: null;
+		} catch {
+			localStorage.removeItem(key);
+			ultimaCintaLiquidada.value = null;
+		}
+	}
+
+	function obtenerUltimoItemDigitado() {
+		return [...cosechaStore.saldosPendientes]
+			.filter((item) => item.cantidad_a_cosechar > 0 || item.rechazo > 0)
+			.pop() || null;
+	}
+
+	function guardarUltimaCintaLiquidada(
+		estado: UltimaCintaLiquidada['estado'],
+		ultimoItem: CintaCosecha | null,
+	) {
+		if (typeof localStorage === 'undefined' || !fincaSeleccionada.value) return;
+		if (!ultimoItem) return;
+
+		const data: UltimaCintaLiquidada = {
+			finca_id: fincaSeleccionada.value,
+			fecha: fechaCosecha.value,
+			color_cinta: ultimoItem.color_cinta,
+			color_hex: ultimoItem.color_hex,
+			semana_enfunde: ultimoItem.semana_enfunde,
+			anio: ultimoItem.anio,
+			cantidad_total:
+				Number(ultimoItem.cantidad_a_cosechar || 0) +
+				Number(ultimoItem.rechazo || 0),
+			registrado_en: Date.now(),
+			estado,
+		};
+		const key = getUltimaCintaKey();
+		if (key) localStorage.setItem(key, JSON.stringify(data));
+		ultimaCintaLiquidada.value = data;
 	}
 
 	function limpiarDigitacionActual() {
@@ -256,6 +325,7 @@ export function useRegistroCosecha() {
 			return;
 		}
 
+		const ultimoItemDigitado = obtenerUltimoItemDigitado();
 		const result = await cosechaStore.enviarCosecha(
 			fincaSeleccionada.value,
 			fechaCosecha.value,
@@ -264,6 +334,10 @@ export function useRegistroCosecha() {
 			notify(result.message, 'error');
 			return;
 		}
+		guardarUltimaCintaLiquidada(
+			result.queued ? 'pendiente_sincronizar' : 'enviado',
+			ultimoItemDigitado,
+		);
 		if (fincaSeleccionada.value && !result.queued) {
 			await cargarFechasOcupadas({
 				fincaId: fincaSeleccionada.value,
@@ -305,6 +379,7 @@ export function useRegistroCosecha() {
 
 		try {
 			await cargarSaldos(fincaSeleccionada.value);
+			cargarUltimaCintaLiquidada(fincaSeleccionada.value);
 			await cargarFechasOcupadas({
 				fincaId: fincaSeleccionada.value,
 				fechaDesde: fechaMinima.value,
@@ -337,6 +412,7 @@ export function useRegistroCosecha() {
 				return;
 			}
 			await cargarSaldos(id);
+			cargarUltimaCintaLiquidada(id);
 			await cargarFechasOcupadas({
 				fincaId: id,
 				fechaDesde: fechaMinima.value,
@@ -380,6 +456,7 @@ export function useRegistroCosecha() {
 		fechaMinima,
 		estadoFechaSeleccionada,
 		hayConteoSinEnviar,
+		ultimaCintaLiquidada,
 		obtenerColorTarjeta,
 		obtenerVarianteTarjeta,
 		cargarSaldos,
