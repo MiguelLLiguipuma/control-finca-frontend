@@ -86,7 +86,6 @@ async function cargarFoto(event: Event) {
     if (turno !== versionCarga) { URL.revokeObjectURL(url); return; }
     limpiar();
     foto.value = url;
-    await generarBorrador();
   } catch {
     URL.revokeObjectURL(url);
     if (turno === versionCarga) error.value = 'No se pudo abrir la imagen. Prueba con una foto JPG o PNG.';
@@ -96,8 +95,8 @@ async function cargarFoto(event: Event) {
 }
 
 async function generarBorrador() {
-  if (!foto.value || props.bloqueado || detectando.value) return;
-  if (marcas.value.length && !window.confirm('¿Volver a detectar? Si termina correctamente, reemplazará las marcas y el reparto actuales.')) return;
+  if (!foto.value || props.bloqueado || ocupado.value) return;
+  if (marcas.value.length && !window.confirm('¿Detectar con IA? Si termina correctamente, reemplazará las marcas y el reparto actuales.')) return;
   const resultado = await detectar(foto.value, props.fincaId || 0);
   if (resultado === null) return;
   marcas.value = resultado;
@@ -128,7 +127,7 @@ onBeforeUnmount(() => {
   <section class="foto-panel" aria-label="Conteo asistido por foto">
     <div class="cabecera">
       <h2 class="text-subtitle-1 font-weight-bold">Conteo por foto</h2>
-      <v-chip size="small" variant="tonal">{{ detectando ? 'Detectando' : propuestas !== null ? 'Borrador asistido' : 'Detección por foto' }}</v-chip>
+      <v-chip size="small" variant="tonal">{{ detectando ? 'Detectando' : propuestas !== null ? 'Borrador asistido' : 'Marcado manual' }}</v-chip>
     </div>
     <input ref="camara" class="archivo" type="file" accept="image/*" capture="environment" @change="cargarFoto">
     <input ref="galeria" class="archivo" type="file" accept="image/*" @change="cargarFoto">
@@ -137,7 +136,7 @@ onBeforeUnmount(() => {
       <v-btn variant="outlined" prepend-icon="mdi-image" :disabled="bloqueado || ocupado" @click="galeria?.click()">Elegir foto</v-btn>
       <v-btn v-if="foto" variant="text" color="error" :disabled="bloqueado || cargando" @click="descartar">Descartar foto</v-btn>
     </div>
-    <p v-if="!foto" class="text-caption text-medium-emphasis">Al elegir una foto con conexión, se envía una copia comprimida a Google Gemini para proponer marcas. El operador confirma el conteo.</p>
+    <p class="text-caption text-medium-emphasis">La foto permanece en este dispositivo. Solo «Detectar con IA» envía una copia a Google Gemini; requiere internet.</p>
     <v-alert v-if="error || errorAplicacion" type="error" variant="tonal" density="compact">{{ error || errorAplicacion }}</v-alert>
     <template v-if="foto">
       <div v-if="detectando" role="status" class="deteccion-estado">
@@ -146,7 +145,7 @@ onBeforeUnmount(() => {
         <v-btn variant="text" @click="continuarManual">Continuar manualmente</v-btn>
       </div>
       <v-alert v-else-if="aviso" type="info" variant="tonal" density="compact" role="status">{{ aviso }}</v-alert>
-      <v-btn v-if="!detectando" variant="text" prepend-icon="mdi-refresh" :disabled="bloqueado || cargando" @click="generarBorrador">{{ propuestas === null ? 'Detectar racimos' : 'Volver a detectar' }}</v-btn>
+      <v-btn v-if="!detectando" variant="text" prepend-icon="mdi-refresh" :disabled="bloqueado || cargando" @click="generarBorrador">{{ propuestas === null ? 'Detectar con IA' : 'Volver a detectar con IA' }}</v-btn>
       <EditorMarcasRacimos :key="`${foto}-${revisionEditor}`" v-model="marcas" :src="foto" :disabled="bloqueado || ocupado" />
       <div v-if="marcas.length" class="distribucion">
         <h3 class="text-subtitle-2">Repartir {{ marcas.length }} racimos buenos por cinta y semana</h3>
@@ -169,7 +168,7 @@ onBeforeUnmount(() => {
           <v-btn color="success" prepend-icon="mdi-check" :disabled="!valido || !revisado || bloqueado || ocupado" @click="aplicar">Aplicar {{ marcas.length }} al conteo</v-btn>
         </div>
       </div>
-      <p class="text-caption text-medium-emphasis">Foto sin aplicar. La detección usa Google Gemini; la cosecha guarda solo las cantidades confirmadas. Las marcas se conservan mientras esta pantalla siga abierta.</p>
+      <p class="text-caption text-medium-emphasis">Foto sin aplicar. La cosecha guarda solo las cantidades confirmadas. Las marcas se conservan mientras esta pantalla siga abierta.</p>
     </template>
   </section>
 </template>

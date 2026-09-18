@@ -4,7 +4,8 @@
 
 - Iniciar sesion y abrir Conteo Movil con conexion; seleccionar finca y fecha.
 - Comprobar que las cintas y saldos se hayan cargado antes de desconectarse.
-- Al elegir una foto, solicita un borrador de marcas al backend con Gemini. Requiere internet y una clave configurada.
+- Al elegir una foto, se abre inmediatamente el marcado manual: no se envia al backend ni se llama a Gemini.
+- La opcion "Detectar con IA" solicita un borrador de marcas solo al pulsarla. Requiere internet y una clave configurada.
 - Sin conexion o si falla la deteccion, se mantiene el marcado manual. La deteccion no registra una cosecha ni cambia inventario.
 - La foto y sus marcas no se conservan al cerrar la pagina. Aplicar al conteo primero.
 - Las cantidades aplicadas se guardan como borrador local. No borrar los datos del navegador.
@@ -12,7 +13,7 @@
 
 ## Recorrido
 
-1. Tomar o elegir una foto de pocos racimos cuyo total real se conozca. Esperar el borrador; comprobar cuantos faltan o sobran.
+1. Tomar o elegir una foto de pocos racimos cuyo total real se conozca. Marcar manualmente sin esperar una deteccion. Opcionalmente pulsar "Detectar con IA" con conexion y revisar el borrador.
 2. Ampliar, mover una marca, eliminar otra y probar Deshacer.
 3. Repartir el total entre cinta y semana. Un total distinto o superior al saldo debe bloquear Aplicar.
 4. Confirmar la casilla de revision, aplicar y verificar que Digitado aumenta exactamente lo repartido. Repetir con otra foto diferente. Cambiar marcas debe desmarcar la confirmacion.
@@ -31,7 +32,7 @@ No reutilizar una fotografia de racimos ya registrados: el sistema no identifica
 
 Gemini ofrece cuota gratuita limitada, no uso gratuito ilimitado. Confirmar el nivel de la cuenta en AI Studio; una clave de un proyecto con facturacion puede generar cargos. Esta implementacion no activa facturacion ni cambia de proveedor al agotar cuota.
 
-Privacidad: se envia a Google una copia JPEG comprimida (maximo 1600 px de lado y 650 KB, sin EXIF), no el nombre del archivo ni la identidad del operador. El backend no guarda la foto. Google aplica sus propias condiciones; en el nivel gratuito puede usar contenido para mejorar productos. Evitar personas, documentos y otras imagenes sensibles.
+Privacidad: solo al pulsar "Detectar con IA" se envia a Google una copia JPEG comprimida (maximo 1600 px de lado y 650 KB, sin EXIF), no el nombre del archivo ni la identidad del operador. El backend no guarda la foto. Google aplica sus propias condiciones; en el nivel gratuito puede usar contenido para mejorar productos. Evitar personas, documentos y otras imagenes sensibles.
 Referencias: https://ai.google.dev/gemini-api/docs/pricing y https://ai.google.dev/gemini-api/docs/image-understanding.
 
 El servicio devuelve posiciones de racimos completos, no bananas individuales. Sigue siendo un borrador de un modelo generalista, no un detector entrenado y validado en esta finca. La revision del operador es obligatoria.
@@ -39,13 +40,14 @@ Reintentar reemplaza marcas y reparto solo si tiene exito; un error conserva las
 
 ## Validacion realizada
 
-- Frontend: 17 pruebas locales aprobadas, comprobacion TypeScript y compilacion de produccion.
+- Frontend: 19 pruebas locales aprobadas, comprobacion TypeScript y compilacion de produccion. Se comprueba que cargar o reemplazar una foto no llama a la IA, y que el marcado y reparto funcionan offline.
 - Backend: 29 pruebas aprobadas; una prueba E2E de aislamiento por finca omitida por falta de credenciales dedicadas.
 - Navegador: foto, marcas, arrastre, deshacer, zoom, reparto, borrador tras recarga y envio a cola offline, en escritorio y emulacion movil.
 - Las pruebas de interfaz usaron datos simulados y no enviaron cosechas reales al servidor.
 - Deteccion: contrato de posiciones, limites de imagen, falta de clave, cuota, respuesta invalida/truncada y cancelacion probados sin llamadas al proveedor.
-- Navegador de escritorio y emulacion movil: peticion automatica y compresion de la foto real, marcas iniciales simuladas, agregar/borrar/deshacer, confirmacion obligatoria, reintento fallido, respuesta tardia, correccion y aplicacion offline. Sin desbordamiento horizontal ni errores JavaScript.
-- Pendiente: activar la clave, evaluar la deteccion con fotos reales, probar la camara y gestos en el telefono fisico y verificar el backend desplegado. Los mocks no validan precision del modelo.
+- Navegador de escritorio y emulacion movil: compresion de la foto real, marcas iniciales simuladas, agregar/borrar/deshacer, confirmacion obligatoria, reintento fallido, respuesta tardia, correccion y aplicacion offline. Sin desbordamiento horizontal ni errores JavaScript.
+- Prueba real en produccion: clave y modelo configurados; una foto devolvio 12 marcas en la interfaz. No se envio ninguna cosecha de prueba. Una solicitud previa devolvio 11: son propuestas revisables, no una medicion de precision.
+- Pendiente: evaluar la precision con un conjunto de fotos contadas por el operador, y probar la camara y gestos en el telefono fisico. Los mocks no validan precision del modelo.
 
 ## Carga estimada de enfunde
 
