@@ -502,3 +502,5 @@
 .mdi-tag::before { content: "\F04F9"; }
 .mdi-broom::before { content: "\F00E2"; }
 .mdi-basket-check::before { content: "\F18E5"; }
+.mdi-checkbox-blank-outline::before { content: "\F0131"; }
+.mdi-checkbox-marked::before { content: "\F0132"; }

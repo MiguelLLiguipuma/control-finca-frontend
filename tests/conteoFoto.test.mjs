@@ -1,9 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { validarRepartoFoto } from '../src/utils/conteoFoto.ts';
+import { validarRepartoFoto, leerMarcasDetectadas } from '../src/utils/conteoFoto.ts';
 import { crearUuid } from '../src/utils/uuid.ts';
 
 const cintas = [{ calendario_id: 1, disponible: 8 }, { calendario_id: 2, disponible: 7 }];
+test('normaliza las marcas del borrador con ids unicos', () => {
+  assert.deepEqual(leerMarcasDetectadas({ borrador: true, marcas: [{ id: 7, x: 0, y: 1 }, { id: 7, x: 0.4, y: 0.5 }] }),
+    [{ id: 1, x: 0, y: 1 }, { id: 2, x: 0.4, y: 0.5 }]);
+  assert.deepEqual(leerMarcasDetectadas({ borrador: true, marcas: [] }), []);
+});
+test('rechaza respuestas invalidas en vez de presentarlas como cero racimos', () => {
+  for (const payload of [null, {}, { borrador: false, marcas: [] }, { borrador: true, marcas: Array(201).fill({ x: 0, y: 0 }) }]) {
+    assert.throws(() => leerMarcasDetectadas(payload));
+  }
+  for (const x of [NaN, Infinity, -0.1, 1.1, '0.4', null]) {
+    assert.throws(() => leerMarcasDetectadas({ borrador: true, marcas: [{ x, y: 0.5 }] }));
+  }
+});
 test('acepta un reparto exacto entre dos semanas', () => {
   assert.equal(validarRepartoFoto(15, [{ calendario_id: 1, cantidad: 8 }, { calendario_id: 2, cantidad: 7 }], cintas), true);
 });

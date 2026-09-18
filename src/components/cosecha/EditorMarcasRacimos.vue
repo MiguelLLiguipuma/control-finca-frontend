@@ -47,7 +47,8 @@ function posicion(event: PointerEvent | MouseEvent) {
 function agregar(event?: MouseEvent) {
   recordar();
   const punto = event ? posicion(event) : { x: 0.5, y: 0.5 };
-  const id = siguienteId++;
+  const id = Math.max(siguienteId, ...marcas.value.map((marca) => marca.id + 1));
+  siguienteId = id + 1;
   marcas.value = [...marcas.value, { id, ...punto }];
   seleccion.value = id;
 }

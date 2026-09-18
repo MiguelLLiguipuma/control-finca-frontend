@@ -2,9 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import EditorMarcasRacimos from './EditorMarcasRacimos.vue';
+import { useDeteccionFoto } from '@/composables/useDeteccionFoto';
 import { validarRepartoFoto, type CintaFoto, type MarcaRacimo, type RepartoFoto } from '@/utils/conteoFoto';
 
-const props = defineProps<{ cintas: CintaFoto[]; bloqueado: boolean; errorAplicacion: string }>();
+const props = defineProps<{ fincaId: number | null; cintas: CintaFoto[]; bloqueado: boolean; errorAplicacion: string }>();
 const emit = defineEmits<{
   pending: [value: boolean];
   apply: [total: number, reparto: RepartoFoto[]];
@@ -17,6 +18,11 @@ const error = shallowRef('');
 const marcas = ref<MarcaRacimo[]>([]);
 const cantidades = reactive<Record<number, number | string>>({});
 let versionCarga = 0;
+const { detectando, aviso, propuestas, detectar, reiniciar, continuarManual } = useDeteccionFoto();
+const revisado = shallowRef(false);
+const revisionEditor = shallowRef(0);
+const ocupado = computed(() => cargando.value || detectando.value);
+watch(marcas, () => { revisado.value = false; }, { deep: true, flush: 'sync' });
 
 const pendiente = computed(() => Boolean(foto.value) || cargando.value);
 const reparto = computed<RepartoFoto[]>(() => Object.entries(cantidades)
@@ -42,6 +48,8 @@ function errorCantidad(cinta: CintaFoto) {
 }
 
 function limpiar() {
+  reiniciar();
+  revisado.value = false;
   versionCarga++;
   if (foto.value) URL.revokeObjectURL(foto.value);
   foto.value = '';
@@ -61,6 +69,7 @@ async function cargarFoto(event: Event) {
   const file = input.files?.[0];
   input.value = '';
   if (!file) return;
+  if (props.bloqueado || ocupado.value) return;
   if (marcas.value.length && !window.confirm('¿Reemplazar la foto y descartar sus marcas?')) return;
   if (file.size > 25 * 1024 * 1024) { error.value = 'La imagen supera 25 MB. Selecciona una más pequeña.'; return; }
   const turno = ++versionCarga;
@@ -77,6 +86,7 @@ async function cargarFoto(event: Event) {
     if (turno !== versionCarga) { URL.revokeObjectURL(url); return; }
     limpiar();
     foto.value = url;
+    await generarBorrador();
   } catch {
     URL.revokeObjectURL(url);
     if (turno === versionCarga) error.value = 'No se pudo abrir la imagen. Prueba con una foto JPG o PNG.';
@@ -85,8 +95,19 @@ async function cargarFoto(event: Event) {
   }
 }
 
+async function generarBorrador() {
+  if (!foto.value || props.bloqueado || detectando.value) return;
+  if (marcas.value.length && !window.confirm('¿Volver a detectar? Si termina correctamente, reemplazará las marcas y el reparto actuales.')) return;
+  const resultado = await detectar(foto.value, props.fincaId || 0);
+  if (resultado === null) return;
+  marcas.value = resultado;
+  revisado.value = false;
+  revisionEditor.value++;
+  Object.keys(cantidades).forEach((id) => delete cantidades[Number(id)]);
+}
+
 function aplicar() {
-  if (props.bloqueado || cargando.value || !valido.value) return;
+  if (props.bloqueado || ocupado.value || !revisado.value || !valido.value) return;
   emit('apply', marcas.value.length, reparto.value.map((fila) => ({ ...fila })));
 }
 
@@ -107,18 +128,26 @@ onBeforeUnmount(() => {
   <section class="foto-panel" aria-label="Conteo asistido por foto">
     <div class="cabecera">
       <h2 class="text-subtitle-1 font-weight-bold">Conteo por foto</h2>
-      <v-chip size="small" variant="tonal">Marcado manual</v-chip>
+      <v-chip size="small" variant="tonal">{{ detectando ? 'Detectando' : propuestas !== null ? 'Borrador asistido' : 'Detección por foto' }}</v-chip>
     </div>
     <input ref="camara" class="archivo" type="file" accept="image/*" capture="environment" @change="cargarFoto">
     <input ref="galeria" class="archivo" type="file" accept="image/*" @change="cargarFoto">
     <div class="acciones">
-      <v-btn color="primary" prepend-icon="mdi-camera" :loading="cargando" :disabled="bloqueado" @click="camara?.click()">Tomar foto</v-btn>
-      <v-btn variant="outlined" prepend-icon="mdi-image" :disabled="bloqueado || cargando" @click="galeria?.click()">Elegir foto</v-btn>
+      <v-btn color="primary" prepend-icon="mdi-camera" :loading="cargando" :disabled="bloqueado || ocupado" @click="camara?.click()">Tomar foto</v-btn>
+      <v-btn variant="outlined" prepend-icon="mdi-image" :disabled="bloqueado || ocupado" @click="galeria?.click()">Elegir foto</v-btn>
       <v-btn v-if="foto" variant="text" color="error" :disabled="bloqueado || cargando" @click="descartar">Descartar foto</v-btn>
     </div>
+    <p v-if="!foto" class="text-caption text-medium-emphasis">Al elegir una foto con conexión, se envía una copia comprimida a Google Gemini para proponer marcas. El operador confirma el conteo.</p>
     <v-alert v-if="error || errorAplicacion" type="error" variant="tonal" density="compact">{{ error || errorAplicacion }}</v-alert>
     <template v-if="foto">
-      <EditorMarcasRacimos :key="foto" v-model="marcas" :src="foto" :disabled="bloqueado || cargando" />
+      <div v-if="detectando" role="status" class="deteccion-estado">
+        <v-progress-linear indeterminate color="primary" aria-label="Detectando racimos" />
+        <span>Buscando racimos en la foto…</span>
+        <v-btn variant="text" @click="continuarManual">Continuar manualmente</v-btn>
+      </div>
+      <v-alert v-else-if="aviso" type="info" variant="tonal" density="compact" role="status">{{ aviso }}</v-alert>
+      <v-btn v-if="!detectando" variant="text" prepend-icon="mdi-refresh" :disabled="bloqueado || cargando" @click="generarBorrador">{{ propuestas === null ? 'Detectar racimos' : 'Volver a detectar' }}</v-btn>
+      <EditorMarcasRacimos :key="`${foto}-${revisionEditor}`" v-model="marcas" :src="foto" :disabled="bloqueado || ocupado" />
       <div v-if="marcas.length" class="distribucion">
         <h3 class="text-subtitle-2">Repartir {{ marcas.length }} racimos buenos por cinta y semana</h3>
         <v-alert v-if="!cintas.length" type="warning" variant="tonal">No hay cintas disponibles para esta finca.</v-alert>
@@ -131,15 +160,16 @@ onBeforeUnmount(() => {
             v-model="cantidades[cinta.calendario_id]" type="number" min="0" :max="cinta.disponible" step="1"
             inputmode="numeric" density="compact" variant="outlined" hide-details="auto"
             :aria-label="`${cinta.color_cinta}, semana ${cinta.semana_enfunde} de ${cinta.anio}`"
-            :error-messages="errorCantidad(cinta)" :disabled="bloqueado || cargando" class="cantidad"
+            :error-messages="errorCantidad(cinta)" :disabled="bloqueado || ocupado" class="cantidad"
           />
         </div>
+        <v-checkbox v-model="revisado" label="Revisé las marcas y confirmo el conteo" :disabled="bloqueado || ocupado" hide-details density="compact" />
         <div class="pie">
           <span role="status" :class="valido ? 'text-success' : 'text-warning'">{{ estado }}</span>
-          <v-btn color="success" prepend-icon="mdi-check" :disabled="!valido || bloqueado || cargando" @click="aplicar">Aplicar {{ marcas.length }} al conteo</v-btn>
+          <v-btn color="success" prepend-icon="mdi-check" :disabled="!valido || !revisado || bloqueado || ocupado" @click="aplicar">Aplicar {{ marcas.length }} al conteo</v-btn>
         </div>
       </div>
-      <p class="text-caption text-medium-emphasis">Foto sin aplicar. Al aplicar, las cantidades pasan al borrador de cosecha; la fotografía no se envía.</p>
+      <p class="text-caption text-medium-emphasis">Foto sin aplicar. La detección usa Google Gemini; la cosecha guarda solo las cantidades confirmadas. Las marcas se conservan mientras esta pantalla siga abierta.</p>
     </template>
   </section>
 </template>
@@ -147,6 +177,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .foto-panel { display: grid; gap: 12px; min-width: 0; padding: 12px; margin-bottom: 12px; background: rgb(var(--v-theme-surface)); border: 1px solid rgba(var(--v-border-color), 0.16); border-radius: 8px; }
 .archivo { display: none; }
+.deteccion-estado { display: grid; gap: 8px; }
 .cabecera, .acciones, .pie { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; justify-content: space-between; }
 .acciones { justify-content: flex-start; }
 .distribucion { display: grid; gap: 12px; }

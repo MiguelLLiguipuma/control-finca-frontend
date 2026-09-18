@@ -232,6 +232,7 @@ function aplicarFoto(total: number, reparto: RepartoFoto[]) {
 
     <ConteoFotoPanel
       :key="sesionFoto"
+      :finca-id="fincaSeleccionada"
       :cintas="cintasFoto"
       :bloqueado="cosechaStore.loading || cosechaStore.submitting || !fincaSeleccionada || !fechaCampo"
       :error-aplicacion="errorFoto"
