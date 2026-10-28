@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import ConteoFotoPanel from '@/components/cosecha/ConteoFotoPanel.vue';
+import CosechaSyncPanel from '@/components/cosecha/CosechaSyncPanel.vue';
+import CosechaRecoveryPanel from '@/components/cosecha/CosechaRecoveryPanel.vue';
+import ConteoManualPanel from '@/components/cosecha/ConteoManualPanel.vue';
 import { validarRepartoFoto, type RepartoFoto } from '@/utils/conteoFoto';
 import { useRegistroCosecha } from '@/composables/useRegistroCosecha';
 import type { CintaCosecha } from '@/stores/cosecha/cosechaStore';
@@ -14,6 +17,10 @@ const {
   fincaSeleccionada,
   fechaObjetoPicker,
   hayConteoSinEnviar,
+  errorBorrador,
+  hayBorradorAntiguo,
+  hayRespaldoBorrador,
+  conflictosConteo, corregirConflicto, exportarBorrador, avisoOffline, preparandoOffline, prepararSinConexion,
   cargarSaldos,
   guardarCosecha,
 } = useRegistroCosecha();
@@ -23,6 +30,9 @@ const fotoPendiente = ref(false);
 const sesionFoto = ref(0);
 const errorFoto = ref('');
 const mensajeFoto = ref('');
+const fotoAbierta = ref(false);
+const confirmarAccion = ref<'limpiar' | 'llenar' | null>(null);
+const conteoBloqueado = computed(() => preparandoOffline.value || cosechaStore.loading || cosechaStore.submitting || cosechaStore.sincronizando);
 const cintasFoto = computed(() => cintasDisponibles.value.map((item) => ({
   calendario_id: item.calendario_id,
   color_cinta: item.color_cinta,
@@ -41,7 +51,7 @@ const fechaCampo = computed({
 
 const cintasDisponibles = computed(() =>
   cosechaStore.saldosPendientes
-    .filter((item) => Number(item.saldo_en_campo || 0) > 0)
+    .filter((item) => Number(item.saldo_en_campo || 0) > 0 || item.cantidad_a_cosechar > 0 || item.rechazo > 0)
     .sort((a, b) => {
       const corteA = cosechaStore.esFrutaDeCorte(a.semana_enfunde, a.anio) ? 0 : 1;
       const corteB = cosechaStore.esFrutaDeCorte(b.semana_enfunde, b.anio) ? 0 : 1;
@@ -79,6 +89,7 @@ function saldoDisponible(item: CintaCosecha) {
 }
 
 function sumar(item: CintaCosecha, campo: CampoConteo, delta: number) {
+  if (conteoBloqueado.value) return;
   cosechaStore.ajustarDigitacion(item, campo, delta);
 }
 
@@ -92,8 +103,15 @@ function limpiarCinta(item: CintaCosecha) {
   cosechaStore.normalizarItemDigitacion(item);
 }
 
+function confirmarCambio() {
+  if (!cintaActiva.value || conteoBloqueado.value) return;
+  if (confirmarAccion.value === 'limpiar') limpiarCinta(cintaActiva.value);
+  if (confirmarAccion.value === 'llenar') llenarSaldo(cintaActiva.value);
+  confirmarAccion.value = null;
+}
+
 async function refrescar() {
-  if (!fincaSeleccionada.value || fotoPendiente.value || cosechaStore.submitting) return;
+  if (!fincaSeleccionada.value || fotoPendiente.value || conteoBloqueado.value) return;
   await cargarSaldos(fincaSeleccionada.value);
 }
 
@@ -115,11 +133,10 @@ function aplicarFoto(total: number, reparto: RepartoFoto[]) {
 </script>
 
 <template>
-  <v-container fluid class="mobile-count pa-3 pb-16">
+  <v-container fluid class="mobile-count">
     <div class="mobile-count__header">
       <div>
-        <div class="text-caption text-medium-emphasis font-weight-bold">Conteo móvil</div>
-        <h1 class="text-h5 font-weight-black text-high-emphasis">Cosecha en campo</h1>
+        <h1 class="mobile-count__title">Conteo en campo</h1>
       </div>
       <v-chip
         :color="cosechaStore.isOnline ? 'success' : 'warning'"
@@ -130,25 +147,14 @@ function aplicarFoto(total: number, reparto: RepartoFoto[]) {
       </v-chip>
     </div>
 
-    <v-alert
-      v-if="!cosechaStore.isOnline || cosechaStore.colaSincronizacion.length || hayConteoSinEnviar"
-      :type="!cosechaStore.isOnline ? 'warning' : 'info'"
-      variant="tonal"
-      density="comfortable"
-      class="mb-3"
-    >
-      <div class="font-weight-bold">
-        {{ cosechaStore.isOnline ? 'Borrador protegido' : 'Modo campo sin conexión' }}
-      </div>
-      <div class="text-caption">
-        El conteo se conserva en este celular. Pendientes: {{ cosechaStore.colaSincronizacion.length }}.
-      </div>
-    </v-alert>
+    <p class="mobile-count__save-state text-caption" :class="errorBorrador ? 'text-error' : 'text-medium-emphasis'" role="status">
+      {{ errorBorrador ? 'No se pudo guardar. Mantén esta pantalla abierta.' : hayConteoSinEnviar ? 'Borrador guardado en este celular.' : 'Sin conteo nuevo pendiente.' }}
+    </p>
 
-    <section class="mobile-count__section">
+    <section class="mobile-count__context" aria-label="Datos de la jornada">
       <v-select
         v-model="fincaSeleccionada"
-        :disabled="fotoPendiente || cosechaStore.submitting || cosechaStore.loading || cosechaStore.sincronizando"
+        :disabled="fotoPendiente || conteoBloqueado"
         :items="fincas"
         item-title="nombre"
         item-value="id"
@@ -158,9 +164,10 @@ function aplicarFoto(total: number, reparto: RepartoFoto[]) {
         prepend-inner-icon="mdi-map-marker-radius"
         hide-details
       />
+      <div class="mobile-count__date">
       <v-text-field
         v-model="fechaCampo"
-        :disabled="fotoPendiente || cosechaStore.submitting || cosechaStore.loading || cosechaStore.sincronizando"
+        :disabled="fotoPendiente || conteoBloqueado"
         type="date"
         label="Fecha de corte"
         variant="outlined"
@@ -168,15 +175,25 @@ function aplicarFoto(total: number, reparto: RepartoFoto[]) {
         prepend-inner-icon="mdi-calendar"
         hide-details
       />
+      <v-btn icon="mdi-refresh" variant="text" aria-label="Actualizar inventario" title="Actualizar inventario"
+        :loading="cosechaStore.loading" :disabled="fotoPendiente || conteoBloqueado" @click="refrescar" />
+      </div>
     </section>
 
+    <div class="mobile-count__workspace">
+    <ConteoManualPanel
+      v-model:calendario-id="calendarioSeleccionadoId"
+      :cintas="cintasDisponibles" :bloqueado="conteoBloqueado" :loading="cosechaStore.loading"
+      @ajustar="sumar" @accion="confirmarAccion = $event"
+    />
+    <aside class="mobile-count__support" aria-label="Resumen y herramientas">
     <section class="mobile-count__totals">
       <div>
-        <span class="text-caption text-medium-emphasis font-weight-bold">Digitado</span>
+        <span>Contados</span>
         <strong>{{ cosechaStore.totalDigitado }}</strong>
       </div>
       <div>
-        <span class="text-caption text-medium-emphasis font-weight-bold">Restante</span>
+        <span>En campo</span>
         <strong>{{ cosechaStore.totalRestante }}</strong>
       </div>
       <v-btn
@@ -184,125 +201,54 @@ function aplicarFoto(total: number, reparto: RepartoFoto[]) {
         variant="flat"
         rounded="lg"
         :loading="cosechaStore.submitting || cosechaStore.sincronizando"
-        :disabled="cosechaStore.totalDigitado <= 0 || fotoPendiente || cosechaStore.loading || !fechaCampo || !fincaSeleccionada"
+        :disabled="cosechaStore.totalDigitado <= 0 || fotoPendiente || conteoBloqueado || conflictosConteo.length > 0 || Boolean(errorBorrador) || !fechaCampo || !fincaSeleccionada"
         @click="guardarCosecha"
       >
-        Enviar
+        {{ cosechaStore.isOnline ? 'Enviar conteo' : 'Guardar pendiente' }}
       </v-btn>
     </section>
 
-    <section class="mobile-count__section">
-      <div class="mobile-count__section-title">
-        <div>
-          <div class="text-subtitle-2 font-weight-black">Cinta a contar</div>
-          <div class="text-caption text-medium-emphasis">Toca una cinta y usa los botones grandes.</div>
-        </div>
-        <v-btn
-          size="small"
-          variant="tonal"
-          color="primary"
-          prepend-icon="mdi-refresh"
-          :loading="cosechaStore.loading"
-          :disabled="fotoPendiente || cosechaStore.submitting"
-          @click="refrescar"
-        >
-          Actualizar
-        </v-btn>
-      </div>
+    <v-dialog :model-value="Boolean(confirmarAccion)" max-width="420" @update:model-value="confirmarAccion = null">
+      <v-card rounded="lg">
+        <v-card-title>{{ confirmarAccion === 'limpiar' ? 'Limpiar conteo' : 'Contar todo el saldo' }}</v-card-title>
+        <v-card-text>
+          {{ cintaActiva?.color_cinta }} · Semana {{ cintaActiva?.semana_enfunde }}/{{ cintaActiva?.anio }}.
+          {{ confirmarAccion === 'limpiar' ? 'Se pondran en cero los buenos y rechazos de esta cinta.' : 'Se completaran los buenos con todo el saldo disponible, conservando los rechazos.' }}
+        </v-card-text>
+        <v-card-actions>
+          <v-btn @click="confirmarAccion = null">Cancelar</v-btn>
+          <v-spacer />
+          <v-btn :disabled="conteoBloqueado" color="primary" @click="confirmarCambio">Confirmar</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
-      <v-chip-group
-        v-model="calendarioSeleccionadoId"
-        mandatory
-        selected-class="mobile-count__chip--selected"
-        class="mobile-count__chips"
-      >
-        <v-chip
-          v-for="item in cintasDisponibles"
-          :key="item.calendario_id"
-          :value="item.calendario_id"
-          class="mobile-count__chip"
-          variant="outlined"
-        >
-          <span class="mobile-count__dot" :style="{ backgroundColor: item.color_hex }" />
-          <span class="font-weight-black">{{ item.color_cinta }}</span>
-          <span class="text-caption ml-1">Sem {{ item.semana_enfunde }}</span>
-        </v-chip>
-      </v-chip-group>
-    </section>
-
-    <ConteoFotoPanel
-      :key="sesionFoto"
-      :finca-id="fincaSeleccionada"
-      :cintas="cintasFoto"
-      :bloqueado="cosechaStore.loading || cosechaStore.submitting || !fincaSeleccionada || !fechaCampo"
-      :error-aplicacion="errorFoto"
-      @pending="fotoPendiente = $event"
-      @apply="aplicarFoto"
-    />
+    <CosechaSyncPanel :fincas="fincas" :error-borrador="errorBorrador" :hay-borrador-antiguo="hayBorradorAntiguo" />
+    <CosechaRecoveryPanel :conflictos="conflictosConteo" :corregir="corregirConflicto"
+      :hay-respaldo="hayRespaldoBorrador"
+      :consultado-en="cosechaStore.inventarioConsultadoEn" :copia-local="cosechaStore.inventarioLocal"
+      :aviso="avisoOffline" :error-copia="cosechaStore.errorCopiaLocal" :bloqueado="conteoBloqueado || fotoPendiente"
+      :preparando="preparandoOffline" :finca-id="fincaSeleccionada" @preparar="prepararSinConexion" @exportar="exportarBorrador" />
+    <v-btn variant="text" block class="mobile-count__photo-toggle" :aria-expanded="fotoAbierta" aria-controls="conteo-foto-opcional" @click="fotoAbierta = !fotoAbierta">
+      <v-icon start>mdi-camera</v-icon>Conteo por foto
+      <span class="mobile-count__optional">{{ fotoPendiente ? 'Sin aplicar' : 'Opcional' }}</span>
+      <v-icon end :style="{ transform: fotoAbierta ? 'rotate(180deg)' : undefined }">mdi-chevron-down</v-icon>
+    </v-btn>
+    </aside>
+    </div>
+    <div v-show="fotoAbierta" id="conteo-foto-opcional">
+      <ConteoFotoPanel
+        :key="sesionFoto"
+        :finca-id="fincaSeleccionada"
+        :cintas="cintasFoto"
+        :bloqueado="conteoBloqueado || !fincaSeleccionada || !fechaCampo"
+        :error-aplicacion="errorFoto"
+        @pending="fotoPendiente = $event"
+        @apply="aplicarFoto"
+      />
+    </div>
     <v-alert v-if="mensajeFoto" type="success" variant="tonal" density="compact" class="mb-3" closable @click:close="mensajeFoto = ''">
       {{ mensajeFoto }}
-    </v-alert>
-
-    <v-card v-if="cintaActiva" class="mobile-count__counter" variant="flat" border>
-      <v-card-text>
-        <div class="mobile-count__counter-head">
-          <v-avatar
-            :style="{ backgroundColor: cintaActiva.color_hex + '22' }"
-            rounded="lg"
-            size="52"
-          >
-            <v-icon :style="{ color: cintaActiva.color_hex }">mdi-tag</v-icon>
-          </v-avatar>
-          <div>
-            <div class="text-caption text-medium-emphasis font-weight-bold">Cinta seleccionada</div>
-            <div class="text-h6 font-weight-black" :style="{ color: cintaActiva.color_hex }">
-              {{ cintaActiva.color_cinta }} · Semana {{ cintaActiva.semana_enfunde }}/{{ cintaActiva.anio }}
-            </div>
-            <div class="text-caption text-medium-emphasis">
-              Edad {{ cintaActiva.edad }} sem · Disponible {{ saldoDisponible(cintaActiva) }}
-            </div>
-          </div>
-        </div>
-
-        <div class="mobile-count__numbers">
-          <div>
-            <span>Buenos</span>
-            <strong>{{ cintaActiva.cantidad_a_cosechar }}</strong>
-          </div>
-          <div>
-            <span>Rechazo</span>
-            <strong>{{ cintaActiva.rechazo }}</strong>
-          </div>
-        </div>
-
-        <div class="mobile-count__actions">
-          <v-btn color="success" size="x-large" rounded="lg" @click="sumar(cintaActiva, 'cantidad_a_cosechar', 1)">
-            +1 Bueno
-          </v-btn>
-          <v-btn color="success" variant="tonal" size="x-large" rounded="lg" @click="sumar(cintaActiva, 'cantidad_a_cosechar', 10)">
-            +10
-          </v-btn>
-          <v-btn color="error" variant="tonal" size="x-large" rounded="lg" @click="sumar(cintaActiva, 'rechazo', 1)">
-            +1 Rechazo
-          </v-btn>
-          <v-btn color="medium-emphasis" variant="outlined" size="x-large" rounded="lg" @click="sumar(cintaActiva, 'cantidad_a_cosechar', -1)">
-            -1
-          </v-btn>
-        </div>
-
-        <div class="mobile-count__secondary">
-          <v-btn variant="text" color="primary" prepend-icon="mdi-basket-check" @click="llenarSaldo(cintaActiva)">
-            Todo el saldo
-          </v-btn>
-          <v-btn variant="text" color="error" prepend-icon="mdi-broom" @click="limpiarCinta(cintaActiva)">
-            Limpiar cinta
-          </v-btn>
-        </div>
-      </v-card-text>
-    </v-card>
-
-    <v-alert v-else type="info" variant="tonal" class="mt-3">
-      No hay cintas con saldo para esta finca.
     </v-alert>
   </v-container>
 </template>
@@ -310,145 +256,36 @@ function aplicarFoto(total: number, reparto: RepartoFoto[]) {
 
 
 <style scoped>
-.mobile-count {
-  min-height: 100vh;
-  background: rgb(var(--v-theme-background));
+.mobile-count { max-width: 1080px; padding: 24px 24px 48px; color: rgb(var(--v-theme-on-surface)); }
+.mobile-count__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mobile-count__title { font-size: 24px; line-height: 1.25; font-weight: 750; letter-spacing: 0; }
+.mobile-count__save-state { min-height: 36px; padding-top: 6px; margin-bottom: 12px; }
+.mobile-count__context { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; margin-bottom: 20px; }
+.mobile-count__date { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.mobile-count__date .v-text-field { min-width: 0; }
+.mobile-count__workspace { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.mobile-count__support { min-width: 0; }
+.mobile-count__totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 4px 0 20px; margin-bottom: 16px; border-bottom: 1px solid rgba(var(--v-border-color), .16); }
+.mobile-count__totals div { display: grid; gap: 4px; }
+.mobile-count__totals span { font-size: 13px; color: rgba(var(--v-theme-on-surface), .72); }
+.mobile-count__totals strong { font-size: 28px; font-variant-numeric: tabular-nums; line-height: 1.2; overflow-wrap: anywhere; }
+.mobile-count__totals .v-btn { grid-column: 1 / -1; min-height: 48px; }
+.mobile-count__photo-toggle { min-height: 52px; padding-inline: 12px; border-top: 1px solid rgba(var(--v-border-color), .16); border-radius: 0; }
+.mobile-count__photo-toggle :deep(.v-btn__content) { width: 100%; justify-content: start; white-space: normal; }
+.mobile-count__optional { margin-left: auto; padding-left: 8px; font-size: 12px; color: rgba(var(--v-theme-on-surface), .7); }
+#conteo-foto-opcional { margin-top: 20px; }
+:deep(.v-btn) { text-transform: none; letter-spacing: 0; font-weight: 650; }
+@media (max-width: 800px) {
+  .mobile-count { padding: 16px 12px 32px; }
+  .mobile-count__title { font-size: 21px; }
+  .mobile-count__workspace { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .mobile-count__context { grid-template-columns: minmax(0, 1fr); gap: 12px; margin-bottom: 16px; }
+  .mobile-count__totals { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; padding-bottom: 16px; }
+  .mobile-count__totals strong { font-size: 22px; }
+  .mobile-count__totals .v-btn { grid-column: auto; padding-inline: 12px; }
 }
-
-.mobile-count__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.mobile-count__section,
-.mobile-count__totals,
-.mobile-count__counter {
-  margin-bottom: 12px;
-  border-radius: 8px;
-}
-
-
-.mobile-count__section {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  background: rgb(var(--v-theme-surface));
-}
-
-.mobile-count__section-title,
-.mobile-count__totals,
-.mobile-count__counter-head,
-.mobile-count__secondary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.mobile-count__totals {
-  position: sticky;
-  top: 8px;
-  z-index: 2;
-  padding: 10px;
-  border: 1px solid rgba(var(--v-border-color), 0.16);
-  background: rgb(var(--v-theme-surface));
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
-}
-
-.mobile-count__totals div,
-.mobile-count__numbers div {
-  display: grid;
-  gap: 2px;
-}
-
-.mobile-count__totals strong {
-  font-size: 1.35rem;
-  line-height: 1;
-}
-
-.mobile-count__chips {
-  max-height: 136px;
-  overflow-y: auto;
-}
-
-.mobile-count__chip {
-  min-height: 42px;
-  margin-bottom: 6px;
-}
-
-.mobile-count__chip--selected {
-  border-color: rgb(var(--v-theme-primary)) !important;
-  background: rgba(var(--v-theme-primary), 0.1) !important;
-}
-
-.mobile-count__dot {
-  width: 13px;
-  height: 13px;
-  margin-right: 8px;
-  border: 1px solid rgba(var(--v-border-color), 0.3);
-  border-radius: 999px;
-}
-
-.mobile-count__counter {
-  background: rgb(var(--v-theme-surface));
-}
-
-.mobile-count__numbers {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin: 18px 0;
-}
-
-.mobile-count__numbers div {
-  min-height: 92px;
-  place-items: center;
-  border-radius: 8px;
-  background: rgba(var(--v-theme-on-surface), 0.04);
-}
-
-.mobile-count__numbers span {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 0.78rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.mobile-count__numbers strong {
-  font-size: 2.6rem;
-  line-height: 1;
-}
-
-.mobile-count__actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.mobile-count__actions :deep(.v-btn) {
-  min-height: 64px;
-  font-weight: 900;
-}
-
-.mobile-count__secondary {
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-@media (max-width: 420px) {
-  .mobile-count__header,
-  .mobile-count__counter-head,
-  .mobile-count__section-title {
-    align-items: flex-start;
-  }
-
-  .mobile-count__actions {
-    grid-template-columns: 1fr;
-  }
-
+@media (max-width: 360px) {
+  .mobile-count__totals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mobile-count__totals .v-btn { grid-column: 1 / -1; }
 }
 </style>

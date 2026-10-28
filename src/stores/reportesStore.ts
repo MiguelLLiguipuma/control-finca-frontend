@@ -2,6 +2,8 @@ import { defineStore } from 'pinia';
 import { reporteService } from '../services/reporteService';
 import { useUIStore } from './uiStore';
 import { reportesSeguridadService } from '@/services/reportes/reportesSeguridadService';
+import { useAuthStore } from './auth/authStore';
+import type { ProduccionFinca, SenalesFinca } from '@/domain/estadoFinca';
 
 interface TarjetaReporte {
 	title: string;
@@ -28,6 +30,10 @@ interface CintaStat {
 }
 
 interface DashboardSnapshot {
+	senalesFinca: SenalesFinca;
+	actualizadoEn: number | null;
+	avisos: string[];
+	erroresGraficos: { mensual?: string; semanal?: string; cintas?: string };
 	tarjetas: TarjetaReporte[];
 	chartSeries: SerieChart[];
 	chartCategories: string[];
@@ -60,11 +66,7 @@ interface AlertaSanitaria {
 	mensaje: string;
 }
 
-interface ScoreSaludRow {
-	score_total?: number | string;
-	clasificacion?: string;
-	semana?: number | string;
-}
+type ScoreSaludRow = ProduccionFinca;
 
 interface ReportesState extends DashboardSnapshot {
 	loading: boolean;
@@ -171,6 +173,14 @@ const isCacheFresh = (
 	Date.now() - entry.timestamp <= CACHE_TTL_MS;
 
 const cloneSnapshot = (snapshot: DashboardSnapshot): DashboardSnapshot => ({
+	senalesFinca: {
+		produccion: snapshot.senalesFinca.produccion ? { ...snapshot.senalesFinca.produccion } : null,
+		sanidad: snapshot.senalesFinca.sanidad ? { ...snapshot.senalesFinca.sanidad } : null,
+		consultadoEn: snapshot.senalesFinca.consultadoEn,
+	},
+	actualizadoEn: snapshot.actualizadoEn,
+	avisos: [...snapshot.avisos],
+	erroresGraficos: { ...snapshot.erroresGraficos },
 	tarjetas: (snapshot.tarjetas || []).map((t) => ({ ...t })),
 	chartSeries: (snapshot.chartSeries || []).map((s) => ({
 		name: s.name,
@@ -188,6 +198,10 @@ const cloneSnapshot = (snapshot: DashboardSnapshot): DashboardSnapshot => ({
 
 export const useReportesStore = defineStore('reportes', {
 	state: (): ReportesState => ({
+		senalesFinca: { produccion: null, sanidad: null, consultadoEn: null },
+		actualizadoEn: null,
+		avisos: [],
+		erroresGraficos: {},
 		loading: false,
 		loadingKpis: false,
 		loadingMensual: false,
@@ -217,6 +231,10 @@ export const useReportesStore = defineStore('reportes', {
 		},
 
 		resetDashboardData() {
+			this.senalesFinca = { produccion: null, sanidad: null, consultadoEn: null };
+			this.actualizadoEn = null;
+			this.avisos = [];
+			this.erroresGraficos = {};
 			this.tarjetas = [];
 			this.chartSeries = [];
 			this.chartCategories = [];
@@ -236,6 +254,10 @@ export const useReportesStore = defineStore('reportes', {
 
 	applySnapshot(snapshot: DashboardSnapshot) {
 			const safe = cloneSnapshot(snapshot);
+			this.senalesFinca = safe.senalesFinca;
+			this.actualizadoEn = safe.actualizadoEn;
+			this.avisos = safe.avisos;
+			this.erroresGraficos = safe.erroresGraficos;
 			this.tarjetas = safe.tarjetas;
 			this.chartSeries = safe.chartSeries;
 			this.chartCategories = safe.chartCategories;
@@ -247,6 +269,10 @@ export const useReportesStore = defineStore('reportes', {
 
 	createSnapshot(): DashboardSnapshot {
 			return cloneSnapshot({
+				senalesFinca: this.senalesFinca,
+				actualizadoEn: this.actualizadoEn,
+				avisos: this.avisos,
+				erroresGraficos: this.erroresGraficos,
 				tarjetas: this.tarjetas,
 				chartSeries: this.chartSeries,
 				chartCategories: this.chartCategories,
@@ -262,33 +288,39 @@ export const useReportesStore = defineStore('reportes', {
 			await this.cargarReportes(fincaId);
 		},
 
-		async cargarReportes(fincaId: number | null) {
+		async cargarReportes(fincaId: number | null, forzar = false) {
+			const requestId = ++this.requestSeq;
 			if (!fincaId) {
 				this.resetDashboardData();
+				this.error = null;
+				this.resetLoadingFlags();
 				return;
 			}
 
 			const uiStore = useUIStore();
 			const anio = this.anioSeleccionado;
+			const modo = this.modoComparativo;
+			const auth = useAuthStore();
+			const usuario = `${auth.user?.empresa_id || 0}:${auth.user?.id || auth.user?.id_usuario || 0}`;
 			const scopeApi = this.scopeDatos || 'finca';
-			const cacheKey = getCacheKey(
+			const cacheKey = usuario + ':' + getCacheKey(
 				fincaId,
 				anio,
 				this.modoComparativo,
 				scopeApi,
 			);
 			const cacheEntry = dashboardCache.get(cacheKey);
+			if (forzar) dashboardCache.delete(cacheKey);
 
 			// Cache caliente: respuesta instantánea sin bloquear UI.
-			if (isCacheFresh(cacheEntry)) {
+			if (!forzar && isCacheFresh(cacheEntry)) {
 				this.error = null;
 				this.applySnapshot(cacheEntry.data);
 				this.resetLoadingFlags();
 				return;
 			}
 
-			const requestId = ++this.requestSeq;
-
+			this.resetDashboardData();
 			this.error = null;
 			this.loadingKpis = true;
 			this.loadingMensual = true;
@@ -298,15 +330,18 @@ export const useReportesStore = defineStore('reportes', {
 
 			try {
 				const anioAnterior = anio - 1;
-				const modoApi = this.modoComparativo === 'ytd' ? 'ytd' : 'full';
-				const incluirComparativo = this.modoComparativo !== 'actual';
+				const modoApi = modo === 'ytd' ? 'ytd' : 'full';
+				const incluirComparativo = modo !== 'actual';
 
 				const [totalAnualResp, totalMensualKpiResp, mejorSemanaResp, promedioSemanalResp] =
 					await reporteService.getKpisData(fincaId, anio, modoApi, scopeApi);
+				if (requestId !== this.requestSeq) return;
 				let scoreResp: { data?: ScoreSaludRow | null } | null = null;
 				try {
 					scoreResp = await reporteService.getScoreSalud(fincaId, anio);
 				} catch (scoreErr) {
+					if (requestId !== this.requestSeq) return;
+					this.avisos.push('No se pudo consultar la salud de producción.');
 					console.warn('⚠️ Score de salud no disponible:', scoreErr);
 				}
 
@@ -326,36 +361,42 @@ export const useReportesStore = defineStore('reportes', {
 				);
 				const mejorSemana = mejorSemanaResp.data?.[0]?.semana ?? 'N/A';
 				const scoreData: ScoreSaludRow | null = scoreResp?.data || null;
-				const scoreTotal = toNumber(scoreData?.score_total, 0);
+				this.senalesFinca.produccion = scoreData ? { ...scoreData } : null;
+				const scoreTotal = scoreData?.score_total == null ? NaN : toNumber(scoreData.score_total, NaN);
 				const scoreClasificacion = String(
 					scoreData?.clasificacion || 'SIN DATOS',
 				).toUpperCase();
 
 				this.tarjetas = [
 					{
-						title: this.modoComparativo === 'ytd' ? 'Total YTD' : 'Total Anual',
+						title: 'Enfunde registrado',
 						value: totalAnualNum,
 						icon: 'mdi-calendar',
+						helperText: modo === 'ytd' ? 'Fundas acumuladas al corte' : `Fundas del año ${anio}`,
 					},
 					{
 						title: 'Promedio Mensual',
 						value: promedioMensual,
 						icon: 'mdi-calendar-month',
+						helperText: 'Fundas por mes con registros',
 					},
 					{
 						title: 'Promedio Semanal',
 						value: promedioSemanal,
 						icon: 'mdi-calendar-week',
+						helperText: 'Fundas por semana con registros',
 					},
 					{
 						title: 'Mejor Semana',
 						value: mejorSemana,
 						icon: 'mdi-calendar-star',
+						helperText: 'Semana con mayor enfunde',
 					},
 					{
 						title: 'Salud Producción',
-						value: `${scoreTotal.toFixed(1)} · ${scoreClasificacion}`,
+						value: Number.isFinite(scoreTotal) ? `${scoreTotal.toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} · ${scoreClasificacion}` : 'Sin dato',
 						icon: 'mdi-heart-pulse',
+						helperText: `Finca completa · ${anio}${scoreData?.semana ? ' · Semana ' + scoreData.semana : ''}`,
 					},
 				];
 
@@ -367,8 +408,12 @@ export const useReportesStore = defineStore('reportes', {
 						(alertas.find((item) =>
 							String(item.tipo || '').startsWith('SANIDAD_'),
 						) as AlertaSanitaria | undefined) || null;
+					if (requestId !== this.requestSeq) return;
+					this.senalesFinca.sanidad = alertaSanitaria ? { ...alertaSanitaria } : null;
 					this.tarjetas.push(construirTarjetaSigatoka(alertaSanitaria));
 				} catch (sanidadErr) {
+					if (requestId !== this.requestSeq) return;
+					this.avisos.push('No se pudo consultar el estado sanitario.');
 					console.warn(
 						'⚠️ No se pudo obtener semaforo sanitario para dashboard:',
 						sanidadErr,
@@ -376,49 +421,53 @@ export const useReportesStore = defineStore('reportes', {
 					this.tarjetas.push(construirTarjetaSigatoka(null));
 				}
 
+				this.senalesFinca.consultadoEn = Date.now();
 				this.sideStats = [
 					{
 						label:
-							this.modoComparativo === 'ytd'
+							modo === 'ytd'
 								? 'Fundas Totales YTD'
 								: 'Fundas Totales',
 						value: totalAnualNum,
-						change: 0,
 					},
-					{ label: 'Promedio Mensual', value: promedioMensual, change: 0 },
-					{ label: 'Promedio Semanal', value: promedioSemanal, change: 0 },
+					{ label: 'Promedio Mensual', value: promedioMensual },
+					{ label: 'Promedio Semanal', value: promedioSemanal },
 				];
 
 				this.loadingKpis = false;
 				this.actualizarLoadingGlobal();
 
 				const mensualPromise = (async () => {
-					const mensualResp = await reporteService.getMensual(
-						fincaId,
-						anio,
-						modoApi,
-						scopeApi,
-					);
+					const mensualResp = totalMensualKpiResp;
 					if (requestId !== this.requestSeq) return;
 					const mesesActual: MensualRow[] = mensualResp.data || [];
 
 					let mesesAnterior: MensualRow[] = [];
+					let comparativoDisponible = incluirComparativo;
 					if (incluirComparativo) {
-						const compResp = await reporteService.getComparativo(
-							fincaId,
-							anioAnterior,
-							modoApi,
-							scopeApi,
-						);
-						mesesAnterior = compResp.data || [];
+						try {
+							const compResp = await reporteService.getComparativo(
+								fincaId,
+								anioAnterior,
+								modoApi,
+								scopeApi,
+							);
+							mesesAnterior = compResp.data || [];
+						} catch {
+							if (requestId !== this.requestSeq) return;
+							comparativoDisponible = false;
+							this.avisos.push('No se pudo comparar los meses con el año anterior.');
+						}
 					}
 
+					if (requestId !== this.requestSeq) return;
+					if (!mesesActual.length && !mesesAnterior.length) return;
 					this.chartCategories = MESES_MAESTROS;
 					const seriesMensual: SerieChart[] = [];
-					if (incluirComparativo) {
+					if (comparativoDisponible) {
 						seriesMensual.push({
 							name:
-								this.modoComparativo === 'ytd'
+								modo === 'ytd'
 									? `Año ${anioAnterior} (YTD)`
 									: `Año ${anioAnterior}`,
 							data: MESES_MAESTROS.map((m) =>
@@ -430,7 +479,7 @@ export const useReportesStore = defineStore('reportes', {
 					}
 					seriesMensual.push({
 						name:
-							this.modoComparativo === 'ytd'
+							modo === 'ytd'
 								? `Año ${anio} (YTD)`
 								: `Año ${anio}`,
 						data: MESES_MAESTROS.map((m) =>
@@ -442,6 +491,8 @@ export const useReportesStore = defineStore('reportes', {
 					.catch((e) => {
 						if (requestId !== this.requestSeq) return;
 						console.error('❌ Error mensual:', e);
+						this.avisos.push('No se pudo cargar la tendencia mensual.');
+						this.erroresGraficos.mensual = 'No se pudo consultar el enfunde mensual.';
 						this.chartSeries = [];
 						this.chartCategories = [];
 					})
@@ -462,6 +513,7 @@ export const useReportesStore = defineStore('reportes', {
 					const semanasActual: SemanalRow[] = respActual.data || [];
 
 					let semanasAnterior: SemanalRow[] = [];
+					let comparativoDisponible = incluirComparativo;
 					if (incluirComparativo) {
 						try {
 							const respAnterior = await reporteService.getSemanal(
@@ -472,12 +524,16 @@ export const useReportesStore = defineStore('reportes', {
 							);
 							semanasAnterior = respAnterior.data || [];
 						} catch (e) {
+							if (requestId !== this.requestSeq) return;
+							comparativoDisponible = false;
+							this.avisos.push('No se pudo comparar las semanas con el año anterior.');
 							// Fallback robusto: si falla comparativo, mantenemos serie del año actual.
 							console.warn('⚠️ Semanal comparativo no disponible, se muestra solo año actual.', e);
 							semanasAnterior = [];
 						}
 					}
 
+					if (requestId !== this.requestSeq) return;
 					const semanasSet = new Set<number>();
 					for (const s of semanasActual) semanasSet.add(Number(s.semana) || 0);
 					for (const s of semanasAnterior) semanasSet.add(Number(s.semana) || 0);
@@ -498,10 +554,10 @@ export const useReportesStore = defineStore('reportes', {
 					this.chartCategoriesSemanal = semanasOrdenadas.map((s) => `Sem. ${s}`);
 					const seriesSemanal: SerieChart[] = [];
 
-					if (incluirComparativo) {
+					if (comparativoDisponible) {
 						seriesSemanal.push({
 							name:
-								this.modoComparativo === 'ytd'
+								modo === 'ytd'
 									? `Producción ${anioAnterior} (YTD)`
 									: `Producción ${anioAnterior}`,
 							data: semanasOrdenadas.map((s) => toNumber(mapaAnterior.get(s))),
@@ -510,7 +566,7 @@ export const useReportesStore = defineStore('reportes', {
 
 					seriesSemanal.push({
 						name:
-							this.modoComparativo === 'ytd'
+							modo === 'ytd'
 								? `Producción ${anio} (YTD)`
 								: `Producción ${anio}`,
 						data: semanasOrdenadas.map((s) => toNumber(mapaActual.get(s))),
@@ -521,6 +577,8 @@ export const useReportesStore = defineStore('reportes', {
 					.catch((e) => {
 						if (requestId !== this.requestSeq) return;
 						console.error('❌ Error semanal:', e);
+						this.avisos.push('No se pudo cargar la tendencia semanal.');
+						this.erroresGraficos.semanal = 'No se pudo consultar el enfunde semanal.';
 						this.chartSeriesSemanal = [];
 						this.chartCategoriesSemanal = [];
 					})
@@ -543,6 +601,8 @@ export const useReportesStore = defineStore('reportes', {
 					.catch((e) => {
 						if (requestId !== this.requestSeq) return;
 						console.error('❌ Error cintas:', e);
+						this.avisos.push('No se pudo cargar la distribución por cinta.');
+						this.erroresGraficos.cintas = 'No se pudo consultar el enfunde por cinta.';
 						this.cintasStats = [];
 					})
 					.finally(() => {
@@ -554,12 +614,15 @@ export const useReportesStore = defineStore('reportes', {
 				await Promise.allSettled([mensualPromise, semanalPromise, cintasPromise]);
 
 				if (requestId === this.requestSeq) {
+					this.actualizadoEn = Date.now();
+					if (this.avisos.length) return;
 					dashboardCache.set(cacheKey, {
 						timestamp: Date.now(),
 						data: this.createSnapshot(),
 					});
 				}
 			} catch (err) {
+				if (requestId !== this.requestSeq) return;
 				const e = err as {
 					response?: { data?: { error?: string } };
 					message?: string;

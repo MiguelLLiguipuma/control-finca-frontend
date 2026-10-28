@@ -50,7 +50,7 @@
                 </v-icon>
               </v-btn>
 
-              <NotificationCenter />
+              <NotificationCenter v-if="authStore.can('view.alertas')" />
 
               <div class="user-info d-none d-sm-flex mr-2 align-center">
                 <v-avatar size="36" color="primary" class="mr-2">
@@ -82,14 +82,14 @@
                   </v-btn>
                 </template>
                 <v-list nav width="180" class="rounded-lg mt-2">
-                  <v-list-item prepend-icon="mdi-account-outline" title="Mi Perfil" />
-                  <v-list-item prepend-icon="mdi-cog-outline" title="Ajustes" />
+                  <v-list-item prepend-icon="mdi-account-outline" title="Mi cuenta" to="/mi-cuenta" />
+                  <v-list-item prepend-icon="mdi-information-outline" title="Ayuda" to="/ayuda" />
                   <v-divider class="my-2" />
                   <v-list-item 
                     prepend-icon="mdi-logout" 
                     title="Salir" 
                     color="error" 
-                    @click="authStore.logout()"
+                    @click="logoutOpen = true"
                   />
                 </v-list>
               </v-menu>
@@ -99,6 +99,7 @@
       </v-container>
     </v-card>
   </v-app-bar>
+  <LogoutDialog v-model="logoutOpen" />
 </template>
 
 <script setup lang="ts">
@@ -106,7 +107,8 @@ import { useTheme } from 'vuetify'; // 1. Importamos el hook de tema
 import NotificationCenter from '@/components/header/NotificationCenter.vue';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useAuthStore } from '../stores/auth/authStore';
-import { computed } from 'vue';
+import { computed, shallowRef } from 'vue';
+import LogoutDialog from '@/components/auth/LogoutDialog.vue';
 import { useRoute } from 'vue-router';
 
 interface BreadcrumbItem {
@@ -119,6 +121,7 @@ const theme = useTheme(); // 2. Instanciamos el tema
 const sidebarStore = useSidebarStore();
 const authStore = useAuthStore();
 const route = useRoute();
+const logoutOpen = shallowRef(false);
 
 const toggleSidebar = () => sidebarStore.toggleSidebar();
 

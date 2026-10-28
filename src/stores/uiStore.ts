@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { propietarioCosecha } from '@/utils/cosechaLocal';
 
 // 1. Definimos los tipos de colores permitidos (Union Type)
 // Esto evita errores de dedo como escribir "sucess" en lugar de "success"
@@ -34,31 +35,38 @@ interface NotifyOptions {
 }
 
 export interface UIState {
+	propietario: string | null;
 	snackbar: SnackbarState;
 	notifications: AppNotification[];
 	loadingGlobal: boolean;
 }
 
-const NOTIFICATIONS_STORAGE_KEY = 'control_finca_notifications';
+const notificationKey = (owner: string) => `control_finca_notifications_v2:${owner}`;
 const MAX_NOTIFICATIONS = 40;
 
-function safeReadNotifications(): AppNotification[] {
-	if (typeof localStorage === 'undefined') return [];
+function safeReadNotifications(owner: string | null): AppNotification[] {
+	if (!owner || owner !== propietarioCosecha()) return [];
 	try {
 		const parsed = JSON.parse(
-			localStorage.getItem(NOTIFICATIONS_STORAGE_KEY) || '[]',
+			localStorage.getItem(notificationKey(owner)) || '[]',
 		);
-		return Array.isArray(parsed) ? parsed.slice(0, MAX_NOTIFICATIONS) : [];
+		return Array.isArray(parsed) ? parsed.filter((item) => item &&
+			typeof item.id === 'string' && typeof item.title === 'string' &&
+			typeof item.message === 'string' && typeof item.createdAt === 'string' &&
+			Number.isFinite(Date.parse(item.createdAt)) && typeof item.read === 'boolean' &&
+			item.persist === true && ['success', 'error', 'warning', 'info'].includes(item.color) &&
+			['sistema', 'vista', 'seguridad', 'operacion'].includes(item.scope)
+		).slice(0, MAX_NOTIFICATIONS) : [];
 	} catch {
 		return [];
 	}
 }
 
-function safePersistNotifications(items: AppNotification[]) {
-	if (typeof localStorage === 'undefined') return;
+function safePersistNotifications(owner: string | null, items: AppNotification[]) {
+	if (!owner || owner !== propietarioCosecha()) return;
 	try {
 		localStorage.setItem(
-			NOTIFICATIONS_STORAGE_KEY,
+			notificationKey(owner),
 			JSON.stringify(items.filter((item) => item.persist).slice(0, MAX_NOTIFICATIONS)),
 		);
 	} catch {
@@ -83,13 +91,14 @@ function defaultTitle(color: SnackbarColor): string {
 export const useUIStore = defineStore('ui', {
 	// Tipamos el retorno del estado
 	state: (): UIState => ({
+		propietario: propietarioCosecha(),
 		snackbar: {
 			show: false,
 			text: '',
 			color: 'info',
 			timeout: 5000,
 		},
-		notifications: safeReadNotifications(),
+		notifications: safeReadNotifications(propietarioCosecha()),
 		loadingGlobal: false,
 	}),
 
@@ -102,8 +111,17 @@ export const useUIStore = defineStore('ui', {
 	},
 
 	actions: {
+		activarSesion() {
+			const owner = propietarioCosecha();
+			if (owner === this.propietario) return;
+			this.propietario = owner;
+			this.notifications = safeReadNotifications(owner);
+			this.snackbar.show = false;
+			this.snackbar.text = '';
+		},
 		// Tipamos los parámetros explícitamente
 		notify(text: string, color: SnackbarColor = 'info', options: NotifyOptions = {}) {
+			this.activarSesion();
 			this.snackbar.text = text;
 			this.snackbar.color = color;
 			this.snackbar.timeout = options.timeout ?? 5000;
@@ -124,7 +142,7 @@ export const useUIStore = defineStore('ui', {
 				0,
 				MAX_NOTIFICATIONS,
 			);
-			safePersistNotifications(this.notifications);
+			safePersistNotifications(this.propietario, this.notifications);
 		},
 
 		// Métodos directos
@@ -145,28 +163,32 @@ export const useUIStore = defineStore('ui', {
 		},
 
 		markNotificationRead(id: string) {
+			this.activarSesion();
 			this.notifications = this.notifications.map((item) =>
 				item.id === id ? { ...item, read: true } : item,
 			);
-			safePersistNotifications(this.notifications);
+			safePersistNotifications(this.propietario, this.notifications);
 		},
 
 		markAllNotificationsRead() {
+			this.activarSesion();
 			this.notifications = this.notifications.map((item) => ({
 				...item,
 				read: true,
 			}));
-			safePersistNotifications(this.notifications);
+			safePersistNotifications(this.propietario, this.notifications);
 		},
 
 		removeNotification(id: string) {
+			this.activarSesion();
 			this.notifications = this.notifications.filter((item) => item.id !== id);
-			safePersistNotifications(this.notifications);
+			safePersistNotifications(this.propietario, this.notifications);
 		},
 
 		clearNotifications() {
+			this.activarSesion();
 			this.notifications = [];
-			safePersistNotifications(this.notifications);
+			safePersistNotifications(this.propietario, this.notifications);
 		},
 	},
 });

@@ -212,9 +212,10 @@ export const cosechaService = {
 	// Envía la liquidación.
 	// Omitimos 'id_local' si tu backend no lo espera, o lo enviamos completo si lo necesita para logs.
 	// Aquí asumo que envías todo el payload.
-	async registrarLiquidacion(payload: PayloadCosecha): Promise<any> {
+	async registrarLiquidacion(payload: PayloadCosecha, propietario?: string): Promise<any> {
 		const response = await api.post('/cosecha/registrar-liquidacion', payload, {
 			skipGlobalError: true,
+			propietarioCosecha: propietario,
 		} as any);
 		return response.data;
 	},

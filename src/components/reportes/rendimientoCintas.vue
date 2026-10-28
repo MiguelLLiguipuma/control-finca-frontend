@@ -1,314 +1,62 @@
-<template>
-  <v-card variant="flat" class="rounded-xl bg-surface border shadow-sm overflow-hidden h-100">
-    <div class="pa-5 border-b bg-header-subtle d-flex align-center justify-space-between">
-      <div>
-        <div class="d-flex align-center">
-          <v-icon color="primary" class="mr-2">mdi-chart-donut</v-icon>
-          <span class="text-overline font-weight-black text-high-emphasis">Rendimiento de Cintas</span>
-        </div>
-        <p class="text-caption text-medium-emphasis mb-0 d-flex align-center">
-          <v-icon size="14" class="mr-1">mdi-clock-outline</v-icon>
-          Actualizado: {{ horaActual }}
-        </p>
-      </div>
-      <v-chip color="primary" variant="tonal" size="small" class="font-weight-bold">
-        {{ eficienciaTotal }}% Eficiencia
-      </v-chip>
-    </div>
-
-    <v-card-text class="pa-6">
-      <v-sheet class="chart-guide rounded-lg pa-3 mb-4" color="surface">
-        <div class="text-caption text-medium-emphasis">
-          Este bloque compara el aporte de cada color de cinta en la producción total.
-        </div>
-        <div class="d-flex flex-wrap align-center gap-2 mt-2">
-          <v-chip size="x-small" color="primary" variant="flat" class="font-weight-bold">
-            Gauge: participación por cinta
-          </v-chip>
-          <v-chip size="x-small" color="info" variant="tonal" class="font-weight-bold">
-            Ranking: mayor a menor producción
-          </v-chip>
-          <v-chip size="x-small" color="success" variant="tonal" class="font-weight-bold">
-            Eficiencia: avance vs meta diaria
-          </v-chip>
-        </div>
-      </v-sheet>
-
-      <v-skeleton-loader
-        v-if="loading"
-        type="image, list-item-three-line, list-item-three-line"
-        class="bg-surface"
-      />
-      <v-sheet
-        v-else-if="cintasOrdenadas.length === 0"
-        class="pa-6 text-center border rounded-lg"
-        color="surface"
-      >
-        <v-icon size="44" color="medium-emphasis">mdi-chart-donut-variant</v-icon>
-        <div class="text-subtitle-1 font-weight-bold text-medium-emphasis mt-2">Sin datos de cintas</div>
-      </v-sheet>
-      <v-row v-else>
-        <v-col cols="12" md="5" class="d-flex flex-column align-center justify-center border-right-md">
-          <div class="gauge-container mb-6">
-            <svg class="gauge-svg" viewBox="0 0 200 200">
-              <circle cx="100" cy="100" r="85" fill="none" :stroke="isDark ? '#334155' : '#f1f5f9'" stroke-width="12" />
-              <circle
-                v-for="(segment, i) in gaugeSegments"
-                :key="i"
-                cx="100"
-                cy="100"
-                r="85"
-                fill="none"
-                :stroke="segment.color"
-                stroke-width="14"
-                stroke-dasharray="534"
-                :stroke-dashoffset="534 - (534 * segment.porcentaje) / 100"
-                stroke-linecap="round"
-                :transform="`rotate(${segment.inicio}, 100, 100)`"
-                class="gauge-segment"
-              />
-              
-              <text
-                v-for="(segment, i) in gaugeSegments"
-                :key="'text-' + i"
-                v-show="segment.porcentaje > 7"
-                :x="calcularX(segment.inicio + (segment.porcentaje * 3.6) / 2)"
-                :y="calcularY(segment.inicio + (segment.porcentaje * 3.6) / 2)"
-                fill="white"
-                font-size="10"
-                font-weight="900"
-                text-anchor="middle"
-                dominant-baseline="middle"
-                style="text-shadow: 0px 1px 2px rgba(0,0,0,0.5); pointer-events: none;"
-              >
-                {{ Math.round(segment.porcentaje) }}%
-              </text>
-            </svg>
-            <div class="gauge-center-content">
-              <span class="text-h3 font-weight-black text-high-emphasis">{{ totalFundasFormateado }}</span>
-              <span class="text-caption font-weight-bold text-medium-emphasis uppercase tracking-widest">Fundas</span>
-            </div>
-          </div>
-
-          <div class="w-100 px-4">
-            <div v-for="cinta in cintasOrdenadas.slice(0, 4)" :key="cinta.nombre" class="d-flex align-center mb-2">
-              <div class="color-indicator mr-2" :style="{ backgroundColor: colorReal(cinta.nombre) }"></div>
-              <span class="text-caption font-weight-bold text-medium-emphasis flex-grow-1">{{ cinta.nombre }}</span>
-              <span class="text-caption font-weight-black text-high-emphasis">{{ calcularPorcentaje(cinta.total) }}%</span>
-            </div>
-          </div>
-        </v-col>
-
-        <v-col cols="12" md="7">
-          <div class="d-flex align-center justify-space-between mb-4">
-            <span class="text-subtitle-2 font-weight-bold text-high-emphasis">Ranking de Producción</span>
-            <span class="text-caption text-medium-emphasis font-weight-bold">Meta: {{ metaDiariaFormateada }}</span>
-          </div>
-          
-          <div class="cintas-scroll-area">
-            <div
-              v-for="(cinta, index) in cintasOrdenadas"
-              :key="cinta.nombre"
-              class="cinta-row-minimal mb-3 pa-3 rounded-lg border"
-              :class="{ 'leader-row': index === 0 }"
-            >
-              <div class="d-flex align-center justify-space-between mb-1">
-                <div class="d-flex align-center">
-                  <div class="rank-badge mr-3" :style="{ color: colorReal(cinta.nombre) }">#{{ index + 1 }}</div>
-                  <span class="text-body-2 font-weight-bold text-medium-emphasis">{{ cinta.nombre }}</span>
-                </div>
-                <span class="text-body-2 font-weight-black text-high-emphasis">{{ cinta.total }} <small class="text-medium-emphasis">und</small></span>
-              </div>
-              <v-progress-linear
-                :model-value="(cinta.total / (cintaTop.total || 1)) * 100"
-                height="6"
-                rounded
-                :color="colorReal(cinta.nombre)"
-                :bg-color="isDark ? 'slate-700' : 'slate-100'"
-              />
-            </div>
-          </div>
-        </v-col>
-      </v-row>
-    </v-card-text>
-
-    <v-divider />
-    <div class="pa-4 bg-footer-subtle d-flex justify-space-around text-center">
-      <div>
-        <div class="text-caption font-weight-bold text-medium-emphasis">LÍDER</div>
-        <div class="text-body-2 font-weight-black text-primary">{{ cintaTop.nombre }}</div>
-      </div>
-      <v-divider vertical inset />
-      <div>
-        <div class="text-caption font-weight-bold text-medium-emphasis">RESTANTE</div>
-        <div class="text-body-2 font-weight-black text-high-emphasis">{{ tiempoRestante }}</div>
-      </div>
-      <v-divider vertical inset />
-      <div>
-        <div class="text-caption font-weight-bold text-medium-emphasis">PROMEDIO</div>
-        <div class="text-body-2 font-weight-black text-high-emphasis">{{ calcularPromedioHora(totalFundas) }} p/h</div>
-      </div>
-    </div>
-  </v-card>
-</template>
-
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useTheme } from 'vuetify'
-
-interface CintaRendimiento {
-  nombre: string
-  total: number
-}
-
-interface GaugeSegment {
-  color: string
-  porcentaje: number
-  inicio: number
-}
-
+import { computed } from 'vue'
 const props = withDefaults(defineProps<{
-  cintas: CintaRendimiento[]
-  metaDiaria?: number
+  cintas: { nombre: string; total: number }[]
   loading?: boolean
-}>(), {
-  metaDiaria: 10000,
-  loading: false,
-})
-
-const theme = useTheme()
-const isDark = computed(() => theme.global.current.value.dark)
-const now = ref(new Date())
-let clockInterval: ReturnType<typeof window.setInterval> | null = null
-
-const cintasSafe = computed<CintaRendimiento[]>(() =>
-  Array.isArray(props.cintas) ? props.cintas : [],
-)
-
-onMounted(() => {
-  clockInterval = setInterval(() => {
-    now.value = new Date()
-  }, 60000)
-})
-
-onBeforeUnmount(() => {
-  if (clockInterval) clearInterval(clockInterval)
-})
-
-const horaActual = computed(() =>
-  now.value.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit' }),
-)
-const totalFundas = computed(() => cintasSafe.value.reduce((acc, c) => acc + (Number(c.total) || 0), 0))
-const totalFundasFormateado = computed(() => new Intl.NumberFormat('es-EC').format(totalFundas.value))
-const metaDiariaFormateada = computed(() => new Intl.NumberFormat('es-EC').format(props.metaDiaria))
-const eficienciaTotal = computed(() => Math.min(100, Math.round((totalFundas.value / props.metaDiaria) * 100)))
-
-const cintasOrdenadas = computed<CintaRendimiento[]>(() =>
-  [...cintasSafe.value].sort((a, b) => b.total - a.total).slice(0, 8),
-)
-const cintaTop = computed<CintaRendimiento>(() => cintasOrdenadas.value[0] || { nombre: 'N/A', total: 0 })
-
-const gaugeSegments = computed<GaugeSegment[]>(() => {
-  let acumulado = 0
-  return cintasOrdenadas.value.map((c) => {
-    const porc = (c.total / (totalFundas.value || 1)) * 100
-    const seg = { color: colorReal(c.nombre), porcentaje: porc, inicio: acumulado - 90 }
-    acumulado += (porc * 360) / 100
-    return seg
-  })
-})
-
-const calcularX = (angulo: number) => 100 + 85 * Math.cos(angulo * Math.PI / 180)
-const calcularY = (angulo: number) => 100 + 85 * Math.sin(angulo * Math.PI / 180)
-
-const calcularPorcentaje = (v: number) => Math.round((v / (totalFundas.value || 1)) * 100)
-const calcularPromedioHora = (v: number) => Math.round(v / 8)
-
-const tiempoRestante = computed(() => {
-  const fin = new Date(now.value)
-  fin.setHours(17, 0, 0, 0)
-  const dif = fin.getTime() - now.value.getTime()
-  if (dif < 0) return 'Turno Finalizado'
-  return `${Math.floor(dif/3600000)}h ${Math.floor((dif%3600000)/60000)}m`
-})
-
-// Ajustamos ligeramente los colores para que se vean mejor en ambos temas
-const colores: Record<string, string> = { 
-  Blanca: '#cbd5e1', 
-  Negra: '#1e293b', 
-  Lila: '#a855f7', 
-  Roja: '#ef4444', 
-  Cafe: '#78350f', 
-  Amarilla: '#eab308', 
-  Verde: '#22c55e', 
-  Azul: '#3b82f6' 
+  error?: string
+}>(), { loading: false })
+const colores: Record<string, string> = {
+  blanca: '#ffffff', negra: '#171717', lila: '#b291ed', roja: '#e14747',
+  cafe: '#8b5e3c', amarilla: '#e6ba25', verde: '#24a876', azul: '#3780e7',
 }
-const colorReal = (n: string) => {
-  if (n === 'Blanca' && isDark.value) return '#f8fafc' // Blanca más brillante en dark
-  if (n === 'Negra' && isDark.value) return '#64748b'  // Negra más clara en dark
-  return colores[n] || `hsl(${n.length * 40}, 70%, 50%)`
-}
+const filas = computed(() => props.cintas
+  .map(cinta => ({ ...cinta, total: Number.isFinite(Number(cinta.total)) ? Math.max(0, Number(cinta.total)) : 0 }))
+  .sort((a, b) => b.total - a.total))
+const total = computed(() => filas.value.reduce((sum, cinta) => sum + cinta.total, 0))
+const formato = (n: number) => n.toLocaleString('es-EC')
+const porcentaje = (n: number) => total.value > 0 ? n / total.value * 100 : 0
+const color = (nombre: string) => colores[nombre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')] || '#929292'
 </script>
 
+<template>
+  <section class="cintas-panel" aria-labelledby="cintas-title">
+    <header class="cintas-header">
+      <h2 id="cintas-title">Enfunde por cinta</h2>
+      <p class="text-medium-emphasis">Participación en el período</p>
+    </header>
+    <v-skeleton-loader v-if="loading" type="list-item-three-line, list-item-three-line" />
+    <p v-else-if="error || !filas.length" class="cintas-empty text-medium-emphasis">{{ error || 'Sin registros de cintas en este período.' }}</p>
+    <template v-else>
+      <div class="cintas-total"><strong>{{ formato(total) }}</strong><span class="text-medium-emphasis">fundas registradas</span></div>
+      <ul class="cintas-list">
+        <li v-for="cinta in filas" :key="cinta.nombre" class="cinta-row">
+          <div class="cinta-label">
+            <span class="color-dot" :style="{ backgroundColor: color(cinta.nombre) }" aria-hidden="true" />
+            <span>{{ cinta.nombre }}</span>
+            <strong>{{ formato(cinta.total) }}</strong>
+            <span class="cinta-share text-medium-emphasis">{{ porcentaje(cinta.total).toLocaleString('es-EC', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) }}%</span>
+          </div>
+          <div class="cinta-track" aria-hidden="true"><span :style="{ width: porcentaje(cinta.total) + '%', backgroundColor: color(cinta.nombre) }" /></div>
+        </li>
+      </ul>
+    </template>
+  </section>
+</template>
+
 <style scoped>
-/* ESTILOS DINÁMICOS BASADOS EN EL TEMA */
-.border {
-  border: 1px solid rgba(var(--v-border-color), 0.1) !important;
-}
-
-.border-b {
-  border-bottom: 1px solid rgba(var(--v-border-color), 0.1) !important;
-}
-
-.bg-header-subtle {
-  background-color: rgba(var(--v-theme-on-surface), 0.03) !important;
-}
-
-.bg-footer-subtle {
-  background-color: rgba(var(--v-theme-on-surface), 0.02) !important;
-}
-
-.chart-guide {
-  border: 1px dashed rgba(var(--v-border-color), 0.22);
-  background: rgba(var(--v-theme-on-surface), 0.02);
-}
-
-/* GAUGE */
-.gauge-container { position: relative; width: 100%; max-width: 200px; }
-.gauge-svg { transition: all 0.5s ease; }
-.gauge-center-content {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  text-align: center; display: flex; flex-direction: column;
-}
-
-.color-indicator { width: 8px; height: 8px; border-radius: 2px; }
-.cintas-scroll-area { 
-  max-height: 320px; 
-  overflow-y: auto; 
-  padding-right: 4px; 
-}
-
-/* FILAS DEL RANKING */
-.cinta-row-minimal { 
-  transition: all 0.2s ease; 
-  background-color: rgba(var(--v-theme-on-surface), 0.01);
-}
-
-.leader-row { 
-  border-left: 4px solid rgb(var(--v-theme-primary)) !important; 
-  background-color: rgba(var(--v-theme-primary), 0.05) !important;
-}
-
-.rank-badge { font-family: var(--font-mono); font-weight: 900; font-size: 0.75rem; width: 24px; }
-
-@media (min-width: 960px) {
-  .border-right-md { border-right: 1px solid rgba(var(--v-border-color), 0.1); }
-}
-
-/* Estilo para el scrollbar en modo oscuro */
-.cintas-scroll-area::-webkit-scrollbar { width: 4px; }
-.cintas-scroll-area::-webkit-scrollbar-thumb {
-  background: rgba(var(--v-theme-on-surface), 0.1);
-  border-radius: 4px;
-}
+.cintas-panel { padding: 20px; background: rgb(var(--v-theme-surface)); border: 1px solid rgba(var(--v-theme-on-surface), .12); border-radius: 8px; min-width: 0; height: 100%; }
+.cintas-header h2 { font-size: 16px; font-weight: 700; letter-spacing: 0; }
+.cintas-header p { font-size: 12px; margin-top: 4px; }
+.cintas-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; padding: 18px 0; }
+.cintas-total strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+.cintas-total span { font-size: 12px; }
+.cintas-list { list-style: none; padding: 0; }
+.cinta-row { padding: 10px 0; }
+.cinta-label { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 48px; align-items: center; gap: 8px; font-size: 13px; }
+.cinta-label > span { overflow-wrap: anywhere; }
+.color-dot { width: 10px; height: 10px; border-radius: 3px; border: 1px solid #999; }
+.cinta-share { text-align: right; font-size: 12px; }
+.cinta-track { height: 5px; margin-top: 8px; background: rgba(var(--v-theme-on-surface), .07); border-radius: 2px; overflow: hidden; }
+.cinta-track span { display: block; height: 100%; border: 1px solid rgba(var(--v-theme-on-surface), .2); }
+.cintas-empty { padding: 48px 0; font-size: 14px; text-align: center; }
 </style>

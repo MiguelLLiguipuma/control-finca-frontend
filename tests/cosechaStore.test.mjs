@@ -20,11 +20,14 @@ const server = await createServer({
 after(() => server.close());
 const { useCosechaStore } = await server.ssrLoadModule('/src/stores/cosecha/cosechaStore.ts');
 const { cosechaService } = await server.ssrLoadModule('/src/services/cosecha/cosechaService.ts');
+const { default: api } = await server.ssrLoadModule('/src/services/api.ts');
 
-beforeEach(() => { storage.clear(); storage.set('token', 'test-session'); setActivePinia(createPinia()); });
+beforeEach(() => { storage.clear(); storage.set('token', 'test-session'); storage.set('user', JSON.stringify({ id: 1, empresa_id: 2 })); setActivePinia(createPinia()); });
+const clave = 'cosecha_colas_v2:2:1';
 const cinta = () => ({ calendario_id: 10, semana_enfunde: 38, anio: 2026, saldo_en_campo: 20, color_cinta: 'Verde', color_hex: '#009966', cantidad_a_cosechar: 3, rechazo: 1, edad: 0 });
 function iniciar() {
   const store = useCosechaStore();
+  store.activarSesion();
   store.fincaActivaId = 4;
   store.saldosPendientes = [cinta()];
   return store;
@@ -38,7 +41,7 @@ test('guardar offline limpia lo enviado y reserva el saldo; un segundo envio no 
   assert.equal(result.queued, true);
   assert.equal(store.totalDigitado, 0);
   assert.equal(store.saldosPendientes[0].saldo_en_campo, 16);
-  assert.equal(JSON.parse(storage.get('cola_cosecha_pendiente')).length, 1);
+  assert.equal(JSON.parse(storage.get(clave)).pendientes.length, 1);
   assert.equal((await store.enviarCosecha(4, '2026-09-17')).ok, false);
   assert.equal(store.colaSincronizacion.length, 1);
 });
@@ -125,15 +128,124 @@ test('no intenta sincronizar sin sesion evitando recargas del login', async (t) 
   assert.equal(store.colaSincronizacion.length, 1);
 });
 
-test('un fallo en la segunda escritura local no guarda un reporte mientras deja el conteo activo', async (t) => {
+test('pendientes y fallidos se guardan juntos con una unica escritura atomica', async (t) => {
   const store = iniciar();
   t.mock.method(cosechaService, 'registrarLiquidacion', async () => { throw new Error('offline'); });
   let writes = 0;
   t.mock.method(localStorage, 'setItem', (key, value) => {
-    if (++writes === 2) throw new Error('quota');
+    writes++;
     storage.set(key, value);
   });
+  assert.equal((await store.enviarCosecha(4, '2026-09-17')).ok, true);
+  assert.equal(store.totalDigitado, 0);
+  assert.equal(writes, 1);
+  assert.equal(JSON.parse(storage.get(clave)).pendientes.length, 1);
+});
+
+test('cada cuenta recupera solo su cola y los pendientes antiguos no se atribuyen automaticamente', () => {
+  storage.set('cola_cosecha_pendiente', JSON.stringify([pendiente('antiguo')]));
+  const store = iniciar();
+  assert.equal(store.pendientesAntiguos, 1);
+  assert.equal(store.colaSincronizacion.length, 0);
+  store.colaSincronizacion = [pendiente('usuario1')];
+  store.persistirCola();
+  storage.set('user', JSON.stringify({ id: 2, empresa_id: 2 }));
+  store.activarSesion();
+  assert.equal(store.colaSincronizacion.length, 0);
+  assert.equal(store.totalDigitado, 0);
+  store.colaSincronizacion = [pendiente('usuario2')];
+  store.persistirCola();
+  storage.set('user', JSON.stringify({ id: 1, empresa_id: 2 }));
+  store.activarSesion();
+  assert.deepEqual(store.colaSincronizacion.map(p => p.id_local), ['usuario1']);
+  assert.equal(JSON.parse(storage.get('cola_cosecha_pendiente'))[0].id_local, 'antiguo');
+});
+
+test('cambiar de cuenta durante sincronizacion detiene los siguientes envios', async (t) => {
+  const store = iniciar();
+  store.isOnline = true;
+  store.colaSincronizacion = [pendiente('primero'), pendiente('segundo')];
+  store.persistirCola();
+  const api = t.mock.method(cosechaService, 'registrarLiquidacion', async (_p, propietario) => {
+    assert.equal(propietario, '2:1');
+    storage.set('user', JSON.stringify({ id: 2, empresa_id: 2 }));
+  });
+  await store.sincronizarCola();
+  assert.equal(api.mock.callCount(), 1);
+  assert.equal(store.propietario, '2:2');
+  assert.equal(store.colaSincronizacion.length, 0);
+  assert.deepEqual(JSON.parse(storage.get(clave)).pendientes.map(p => p.id_local), ['segundo']);
+});
+
+test('fallidos se corrigen conservando el UUID y quedan pendientes sin conexion', async () => {
+  const store = iniciar();
+  store.isOnline = false;
+  store.colaFallida = [pendiente('mismo-id')];
+  const detalles = [{ calendario_id: 10, cantidad_racimos: 2, cantidad_rechazo: 0 }];
+  assert.equal(await store.reintentarFallido('mismo-id', { fecha: '2026-02-30', detalles }), false);
+  assert.equal(await store.reintentarFallido('mismo-id', { fecha: '2026-09-17', detalles: [{ ...detalles[0], cantidad_racimos: -1 }] }), false);
+  assert.equal(await store.reintentarFallido('mismo-id', { fecha: '2026-09-17', detalles }), true);
+  assert.equal(store.colaFallida.length, 0);
+  assert.equal(store.colaSincronizacion[0].id_local, 'mismo-id');
+  assert.equal(JSON.parse(storage.get(clave)).pendientes[0].detalles[0].cantidad_racimos, 2);
+});
+
+test('corregir sin espacio no pierde el original ni confirma un reenvio', async (t) => {
+  const store = iniciar();
+  store.colaFallida = [pendiente('original')];
+  t.mock.method(localStorage, 'setItem', () => { throw new Error('quota'); });
+  assert.equal(await store.reintentarFallido('original', pendiente('original')), false);
+  assert.equal(store.colaFallida.length, 1);
+  assert.equal(store.colaSincronizacion.length, 0);
+});
+
+test('cola ilegible bloquea escrituras para conservar el contenido recuperable', async () => {
+  storage.set(clave, '{roto');
+  const store = iniciar();
+  assert.ok(store.errorAlmacenamiento);
   assert.equal((await store.enviarCosecha(4, '2026-09-17')).ok, false);
-  assert.equal(store.totalDigitado, 4);
-  assert.equal(storage.has('cola_cosecha_pendiente'), false);
+  assert.equal(storage.get(clave), '{roto');
+});
+
+test('un error de validacion aparece inmediatamente en la bandeja de correccion', async (t) => {
+  const store = iniciar();
+  store.isOnline = true;
+  store.colaSincronizacion = [pendiente('validacion')];
+  t.mock.method(cosechaService, 'registrarLiquidacion', async () => { throw { response: { status: 422, data: { message: 'Saldo insuficiente' } } }; });
+  await store.sincronizarCola();
+  assert.equal(store.colaSincronizacion.length, 0);
+  assert.equal(store.colaFallida[0].ultimoError, 'Saldo insuficiente');
+  assert.equal(JSON.parse(storage.get(clave)).fallidos.length, 1);
+});
+
+test('el limite de peticiones no convierte el reporte en un error de datos', async (t) => {
+  const store = iniciar();
+  store.isOnline = true;
+  store.colaSincronizacion = [pendiente('rate-limit')];
+  t.mock.method(cosechaService, 'registrarLiquidacion', async () => { throw { response: { status: 429 } }; });
+  await store.sincronizarCola();
+  assert.equal(store.colaSincronizacion.length, 1);
+  assert.equal(store.colaFallida.length, 0);
+});
+
+test('el interceptor impide enviar si la sesion cambia justo antes de despachar HTTP', async (t) => {
+  const previous = api.defaults.adapter;
+  let calls = 0;
+  api.defaults.adapter = async () => { calls++; throw new Error('No debe despachar'); };
+  t.after(() => { api.defaults.adapter = previous; });
+  const request = cosechaService.registrarLiquidacion(pendiente('interceptor'), '2:1');
+  storage.set('user', JSON.stringify({ id: 2, empresa_id: 2 }));
+  await assert.rejects(request, /sesion cambio/);
+  assert.equal(calls, 0);
+});
+
+test('estructura de cola invalida se conserva sin intentar sincronizar', async (t) => {
+  const raw = JSON.stringify({ pendientes: [null], fallidos: [] });
+  storage.set(clave, raw);
+  const store = iniciar();
+  const send = t.mock.method(cosechaService, 'registrarLiquidacion', async () => {});
+  await store.sincronizarCola();
+  assert.ok(store.errorAlmacenamiento);
+  assert.equal(send.mock.callCount(), 0);
+  assert.equal(storage.get(clave), raw);
 });

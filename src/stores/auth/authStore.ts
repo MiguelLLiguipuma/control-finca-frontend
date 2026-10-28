@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import api from '@/services/api';
+import { readSessionToken } from '@/utils/sessionPolicy';
 import {
 	canAccess,
 	normalizeRole,
@@ -29,7 +30,9 @@ function parseStoredUser(): AuthUser | null {
 	try {
 		const raw = localStorage.getItem('user');
 		if (!raw) return null;
-		return JSON.parse(raw) as AuthUser;
+		const user = JSON.parse(raw);
+		const id = Number(user?.id ?? user?.id_usuario);
+		return Number.isSafeInteger(id) && id > 0 && typeof user?.nombre === 'string' ? user as AuthUser : null;
 	} catch {
 		return null;
 	}
@@ -39,13 +42,13 @@ export const useAuthStore = defineStore('auth', {
 	state: () => ({
 		// Cargamos datos de localStorage solo si existen
 		user: parseStoredUser(),
-		token: localStorage.getItem('token') || null,
+		token: readSessionToken(),
 		loading: false,
 	}),
 
 	getters: {
 		userName: (state) => state.user?.nombre || 'Usuario',
-		userRole: (state) => state.user?.rol?.toUpperCase() || 'TRABAJADOR',
+		userRole: (state) => state.user?.rol?.toUpperCase() || 'SIN ROL',
 		userEmpresaId: (state) =>
 			Number(state.user?.empresa_id || 0) > 0
 				? Number(state.user?.empresa_id)
@@ -58,16 +61,27 @@ export const useAuthStore = defineStore('auth', {
 				canAccess(permission, state.user?.rol),
 		userInitials: (state) =>
 			state.user?.nombre ? state.user.nombre.charAt(0).toUpperCase() : 'U',
-		isAuthenticated: (state) => !!state.token,
+		isAuthenticated: (state) => !!state.token && !!state.user,
 	},
 
 	actions: {
 		establishSession(payload: LoginResponse) {
 			const { user, token } = payload;
+			if (!token || !Number.isSafeInteger(Number(user?.id ?? user?.id_usuario)) ||
+				Number(user?.id ?? user?.id_usuario) <= 0 || typeof user?.nombre !== 'string') {
+				throw new Error('Respuesta de autenticacion invalida');
+			}
+			const previousUser = localStorage.getItem('user');
+			try {
+				localStorage.setItem('user', JSON.stringify(user));
+				localStorage.setItem('token', token);
+			} catch (error) {
+				if (previousUser === null) localStorage.removeItem('user');
+				else localStorage.setItem('user', previousUser);
+				throw error;
+			}
 			this.user = user;
 			this.token = token;
-			localStorage.setItem('token', token);
-			localStorage.setItem('user', JSON.stringify(user));
 		},
 
 		async login(credentials: LoginCredentials) {
@@ -76,6 +90,7 @@ export const useAuthStore = defineStore('auth', {
 				const response = await api.post<LoginResponse>(
 					'/auth/login',
 					credentials,
+					{ skipGlobalError: true } as import('axios').AxiosRequestConfig,
 				);
 				this.establishSession(response.data);
 
@@ -96,7 +111,7 @@ export const useAuthStore = defineStore('auth', {
 			try {
 				const response = await api.post<LoginResponse>('/auth/google', {
 					id_token: idToken,
-				});
+				}, { skipGlobalError: true } as import('axios').AxiosRequestConfig);
 				this.establishSession(response.data);
 				return { success: true };
 			} catch (error) {
@@ -112,13 +127,13 @@ export const useAuthStore = defineStore('auth', {
 		},
 
 		// ✅ Centralizamos el cierre de sesión aquí
-		logout() {
+		logout(reason?: 'expired') {
 			this.user = null;
 			this.token = null;
 			localStorage.removeItem('token');
 			localStorage.removeItem('user');
 			// Usamos replace para que no puedan volver atrás con el botón del navegador
-			window.location.replace('/login');
+			window.location.replace(reason === 'expired' ? '/login?sesion=expirada' : '/login');
 		},
 	},
 });

@@ -1,7 +1,7 @@
 <template>
   <div class="svg-chart-root">
     <div
-      v-if="!safeSeries.length || !categoryCount"
+      v-if="!hasValues || !categoryCount"
       class="svg-chart-empty text-medium-emphasis"
     >
       {{ emptyText }}
@@ -39,7 +39,7 @@
           :y="tick.y + 4"
           text-anchor="end"
           :fill="labelColor"
-          font-size="11"
+          font-size="14"
           font-weight="600"
         >
           {{ formatValue(tick.value) }}
@@ -152,7 +152,7 @@
           <text
             text-anchor="middle"
             :fill="labelColor"
-            font-size="11"
+            font-size="14"
             font-weight="600"
           >
             {{ tick.label }}
@@ -165,7 +165,7 @@
         :x="18"
         :y="svgHeight / 2"
         :fill="labelColor"
-        font-size="11"
+        font-size="14"
         font-weight="700"
         text-anchor="middle"
         :transform="`rotate(-90 18 ${svgHeight / 2})`"
@@ -182,7 +182,7 @@ import { useTheme } from 'vuetify'
 
 export interface SvgChartSeries {
   name?: string
-  data?: number[]
+  data?: (number | null)[]
 }
 
 export interface SvgChartExpose {
@@ -193,6 +193,7 @@ const props = withDefaults(defineProps<{
   series: SvgChartSeries[]
   categories: string[]
   type?: 'bar' | 'line'
+  width?: number
   height?: number
   colors?: string[]
   threshold?: number | null
@@ -201,8 +202,10 @@ const props = withDefaults(defineProps<{
   ariaLabel?: string
   yAxisTitle?: string
   showDataLabels?: boolean
+  fractionDigits?: number
 }>(), {
   type: 'bar',
+  width: 960,
   height: 320,
   colors: () => ['#3b82f6'],
   threshold: null,
@@ -211,12 +214,13 @@ const props = withDefaults(defineProps<{
   ariaLabel: 'Gráfico de reportes',
   yAxisTitle: 'Fundas',
   showDataLabels: false,
+  fractionDigits: 0,
 })
 
 const svgRef = ref<SVGSVGElement | null>(null)
 const theme = useTheme()
 const barRadius = 4
-const svgWidth = 960
+const svgWidth = computed(() => Math.max(320, Number.isFinite(props.width) ? props.width : 960))
 const svgHeight = computed(() => props.height)
 const padding = computed(() => ({
   top: 18,
@@ -225,18 +229,19 @@ const padding = computed(() => ({
   left: 64,
 }))
 
-const chartWidth = computed(() => svgWidth - padding.value.left - padding.value.right)
+const chartWidth = computed(() => svgWidth.value - padding.value.left - padding.value.right)
 const chartHeight = computed(() => svgHeight.value - padding.value.top - padding.value.bottom)
 const chartBottom = computed(() => svgHeight.value - padding.value.bottom)
 const safeSeries = computed(() =>
   (props.series || []).map((series, index) => ({
     name: series.name || `Serie ${index + 1}`,
-    data: Array.isArray(series.data) ? series.data.map((value) => Number(value) || 0) : [],
+    data: Array.isArray(series.data) ? series.data.map(value => value == null || !Number.isFinite(Number(value)) ? null : Number(value)) : [],
   })),
 )
 const categoryCount = computed(() => props.categories?.length || 0)
+const hasValues = computed(() => safeSeries.value.some(series => series.data.some(value => value !== null)))
 const maxValue = computed(() => {
-  const fromSeries = safeSeries.value.flatMap((series) => series.data)
+  const fromSeries = safeSeries.value.flatMap((series) => series.data.filter((value): value is number => value !== null))
   const values = props.threshold != null ? [...fromSeries, props.threshold] : fromSeries
   const max = Math.max(0, ...values)
   if (max <= 10) return 10
@@ -290,10 +295,11 @@ const bars = computed(() => {
   const seriesCount = Math.max(1, safeSeries.value.length)
   const groupWidth = categoryStep.value * 0.78
   const barGap = Math.min(8, groupWidth * 0.08)
-  const width = Math.max(8, (groupWidth - barGap * (seriesCount - 1)) / seriesCount)
+  const width = Math.max(1, (groupWidth - barGap * (seriesCount - 1)) / seriesCount)
 
   return safeSeries.value.flatMap((series, seriesIndex) =>
-    series.data.map((value, pointIndex) => {
+    series.data.flatMap((value, pointIndex) => {
+      if (value === null) return []
       const height = maxValue.value === 0 ? 0 : (value / maxValue.value) * chartHeight.value
       const x =
         padding.value.left +
@@ -316,23 +322,21 @@ const bars = computed(() => {
   )
 })
 
-const buildLinePath = (points: { x: number; y: number }[]) =>
-  points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-    .join(' ')
-
 const lines = computed(() => {
   if (props.type !== 'line') return []
   return safeSeries.value.map((series, seriesIndex) => {
-    const points = series.data.map((value, pointIndex) => ({
-      x: padding.value.left + categoryStep.value * pointIndex + categoryStep.value / 2,
-      y: chartBottom.value - (value / maxValue.value) * chartHeight.value,
-    }))
+    let newSegment = true
+    const path = series.data.map((value, pointIndex) => {
+      if (value === null) { newSegment = true; return '' }
+      const command = newSegment ? 'M' : 'L'
+      newSegment = false
+      return `${command} ${padding.value.left + categoryStep.value * pointIndex + categoryStep.value / 2} ${chartBottom.value - (value / maxValue.value) * chartHeight.value}`
+    }).join(' ')
 
     return {
       name: series.name,
       color: props.colors[seriesIndex] || props.colors[props.colors.length - 1] || '#3b82f6',
-      path: buildLinePath(points),
+      path,
     }
   })
 })
@@ -340,7 +344,7 @@ const lines = computed(() => {
 const linePoints = computed(() => {
   if (props.type !== 'line') return []
   return safeSeries.value.flatMap((series, seriesIndex) =>
-    series.data.map((value, pointIndex) => ({
+    series.data.flatMap((value, pointIndex) => value === null ? [] : ({
       key: `${series.name}-${pointIndex}`,
       value,
       x: padding.value.left + categoryStep.value * pointIndex + categoryStep.value / 2,
@@ -363,7 +367,7 @@ const thresholdLabelText = computed(() =>
 )
 
 const formatValue = (value: number) =>
-  new Intl.NumberFormat('es-EC', { maximumFractionDigits: 0 }).format(Number(value) || 0)
+  new Intl.NumberFormat('es-EC', { maximumFractionDigits: props.fractionDigits }).format(Number(value) || 0)
 
 const exportPng = async (filename: string) => {
   const svg = svgRef.value
@@ -382,7 +386,7 @@ const exportPng = async (filename: string) => {
   })
 
   const canvas = document.createElement('canvas')
-  canvas.width = svgWidth * 2
+  canvas.width = svgWidth.value * 2
   canvas.height = svgHeight.value * 2
   const context = canvas.getContext('2d')
   if (!context) {

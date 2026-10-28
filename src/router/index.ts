@@ -4,6 +4,14 @@ import { isAppPermission } from '@/utils/rbac';
 
 const routes: RouteRecordRaw[] = [
 	{
+		path: '/mi-cuenta', name: 'MiCuenta', component: () => import('@/views/CuentaView.vue'),
+		meta: { requiresAuth: true, breadcrumb: 'Mi cuenta' },
+	},
+	{
+		path: '/clima', name: 'ClimaFinca', component: () => import('@/views/reportes/ClimaFincaView.vue'),
+		meta: { requiresAuth: true, permission: 'view.clima', breadcrumb: 'Clima por finca' },
+	},
+	{
 		path: '/login',
 		name: 'Login',
 		component: () => import('@/views/Login.vue'),
@@ -183,7 +191,7 @@ router.beforeEach((to) => {
 		isAppPermission(requiredPermission) &&
 		!authStore.can(requiredPermission)
 	) {
-		return '/reportes';
+		return authStore.can('view.dashboard') ? '/reportes' : '/mi-cuenta';
 	}
 });
 

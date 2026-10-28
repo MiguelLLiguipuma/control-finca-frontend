@@ -342,7 +342,7 @@
       </v-card-text>
     </v-card>
 
-    <v-card class="rounded-xl mb-4" elevation="1">
+    <v-card id="registro-fumigacion" class="rounded-xl mb-4" elevation="1" style="scroll-margin-top: 100px">
       <v-card-text>
         <div class="d-flex align-center justify-space-between flex-wrap gap-3 mb-2">
           <div class="text-subtitle-1 font-weight-bold">Registro de Fumigación</div>
@@ -717,7 +717,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import { ESTADOS_ALERTAS_ABIERTAS, fincaDesdeEnlace, pestanaDesdeEnlace } from '@/domain/pendientesFinca';
 import { storeToRefs } from 'pinia';
 import { useFincaStore } from '@/stores/fincaStore';
 import { useAlertaStore } from '@/stores/alertaStore';
@@ -744,10 +746,12 @@ interface DiagnosticoResumen {
 const fincaStore = useFincaStore();
 const alertaStore = useAlertaStore();
 const authStore = useAuthStore();
+const route = useRoute();
+let catalogoListo = false;
 const { fincas } = storeToRefs(fincaStore);
 
 const fincaId = ref<number | null>(null);
-const estadoFiltro = ref<AlertaEstado | null>(null);
+const estadoFiltro = ref<AlertaEstado | 'abiertas' | null>(null);
 const severidadFiltro = ref<AlertaSeveridad | null>(null);
 const edadCriticaCinta = ref(15);
 const edadHistoricaCinta = ref(17);
@@ -773,6 +777,7 @@ const activeAlertTab = ref('resumen');
 const ultimoDiagnostico = ref<DiagnosticoResumen | null>(null);
 
 const estadoOptions = [
+  { label: 'Todas las abiertas', value: 'abiertas' },
   { label: 'Pendientes', value: 'pendiente' },
   { label: 'Enviadas', value: 'enviada' },
   { label: 'Leídas', value: 'leida' },
@@ -853,7 +858,7 @@ async function cargarAlertas() {
     await alertaStore.cargar({
       query: {
       finca_id: fincaId.value || undefined,
-      estado: estadoFiltro.value || undefined,
+      estado: estadoFiltro.value === 'abiertas' ? ESTADOS_ALERTAS_ABIERTAS : estadoFiltro.value || undefined,
       },
     });
   } catch (e) {
@@ -1115,12 +1120,41 @@ async function cerrarInventarioSeleccionado() {
   }
 }
 
-onMounted(async () => {
-  await fincaStore.obtenerFincas();
+async function aplicarEnlace(): Promise<boolean> {
+  if (route.query.finca_id !== undefined) {
+    const id = fincaDesdeEnlace(route.query.finca_id, fincas.value);
+    if (!id) {
+      error.value = 'La finca del enlace no está disponible para tu usuario. Selecciona una finca autorizada.';
+      return false;
+    }
+    fincaId.value = id;
+    fincaStore.seleccionarFinca(id);
+  }
+  if (route.query.abiertas === '1') estadoFiltro.value = 'abiertas';
+  if (route.query.tab !== undefined) activeAlertTab.value = pestanaDesdeEnlace(route.query.tab, canManageAlertConfig.value);
   fincaFumigacionId.value = fincaId.value;
+  await nextTick();
+  if (route.query.seccion === 'fumigacion' && activeAlertTab.value === 'configuracion') {
+    document.getElementById('registro-fumigacion')?.scrollIntoView({ block: 'start' });
+  }
+  return true;
+}
+
+onMounted(async () => {
+  try { await fincaStore.obtenerFincas(); }
+  catch { error.value = 'No se pudieron cargar las fincas. Vuelve a abrir este apartado cuando tengas conexión.'; return; }
+  catalogoListo = true;
+  if (!await aplicarEnlace()) return;
   await cargarWhatsappPendientes();
   await cargarContactos();
   await cargarAlertas();
+  if (activeAlertTab.value === 'historico') await cargarInventarioHistorico();
+});
+
+watch(() => route.query, async () => {
+  if (!catalogoListo || !await aplicarEnlace()) return;
+  await cargarAlertas();
+  if (activeAlertTab.value === 'historico') await cargarInventarioHistorico();
 });
 
 watch(fincaId, (next) => {

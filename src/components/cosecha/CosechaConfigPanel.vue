@@ -17,7 +17,7 @@
         hide-details
         class="super-select"
         menu-icon="mdi-chevron-down"
-        :disabled="loading"
+        :disabled="loading || submitting"
       >
         <template #selection="{ item }">
           <div class="d-flex align-center py-2 selection-finca">
@@ -51,7 +51,7 @@
             class="d-flex align-center pa-3 rounded-xl cursor-pointer hover-effect border-input"
             flat
             color="surface"
-            :disabled="loading"
+            :disabled="loading || submitting"
             role="button"
             tabindex="0"
             aria-label="Seleccionar fecha de corte"
@@ -78,6 +78,7 @@
           :min="fechaMinima"
           :max="fechaMaxima"
           :allowed-dates="fechaPermitida"
+          :disabled="loading || submitting"
           aria-label="Calendario de selección de fecha de corte"
           @update:model-value="menuFechaValue = false"
         />
@@ -113,7 +114,7 @@
       class="rounded-xl py-7 font-weight-black elevation-6 button-glow mb-4 text-h6"
       height="72"
       :loading="loading || submitting"
-      :disabled="loading || submitting || totalDigitado === 0 || !selectedFincaId"
+      :disabled="loading || submitting || envioBloqueado || totalDigitado === 0 || !selectedFincaId"
       aria-label="Enviar reporte de cosecha"
       @click="$emit('guardar')"
     >
@@ -142,6 +143,7 @@ interface Props {
   fechaMaxima: Date;
   loading: boolean;
   submitting: boolean;
+  envioBloqueado?: boolean;
   totalDigitado: number;
   totalRestante: number;
   estadoFechaSeleccionada: FechaOcupadaState | null;

@@ -1,6 +1,7 @@
 export type AppRole = 'ADMIN' | 'SUPERVISOR' | 'OPERADOR' | 'INVITADO';
 
 export type AppPermission =
+	| 'view.clima'
 	| 'view.dashboard'
 	| 'view.balanza'
 	| 'view.calendario'
@@ -17,6 +18,7 @@ export type AppPermission =
 	| 'action.admin.manage';
 
 export const APP_PERMISSIONS: readonly AppPermission[] = [
+	'view.clima',
 	'view.dashboard',
 	'view.balanza',
 	'view.calendario',
@@ -45,6 +47,7 @@ const ROLE_MAP: Record<string, AppRole> = {
 
 const PERMISSIONS_BY_ROLE: Record<AppRole, AppPermission[]> = {
 	ADMIN: [
+		'view.clima',
 		'view.dashboard',
 		'view.balanza',
 		'view.calendario',
@@ -61,6 +64,7 @@ const PERMISSIONS_BY_ROLE: Record<AppRole, AppPermission[]> = {
 		'action.admin.manage',
 	],
 	SUPERVISOR: [
+		'view.clima',
 		'view.dashboard',
 		'view.balanza',
 		'view.calendario',
@@ -73,6 +77,7 @@ const PERMISSIONS_BY_ROLE: Record<AppRole, AppPermission[]> = {
 		'action.voucher.cancel',
 	],
 	OPERADOR: [
+		'view.clima',
 		'view.dashboard',
 		'view.balanza',
 		'view.calendario',
@@ -81,7 +86,7 @@ const PERMISSIONS_BY_ROLE: Record<AppRole, AppPermission[]> = {
 		'view.voucher',
 		'view.alertas',
 	],
-	INVITADO: ['view.dashboard'],
+	INVITADO: [],
 };
 
 export function normalizeRole(role?: string | null): AppRole {
@@ -90,7 +95,7 @@ export function normalizeRole(role?: string | null): AppRole {
 }
 
 export function permissionsForRole(role?: string | null): AppPermission[] {
-	return PERMISSIONS_BY_ROLE[normalizeRole(role)];
+	return [...PERMISSIONS_BY_ROLE[normalizeRole(role)]];
 }
 
 export function isAppPermission(value: unknown): value is AppPermission {

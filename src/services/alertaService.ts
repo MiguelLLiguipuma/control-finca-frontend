@@ -107,10 +107,10 @@ function unwrap<T>(payload: ApiEnvelope<T> | T): T {
 }
 
 export const alertaService = {
-	async listar(params: AlertasQuery = {}): Promise<AlertaOperativa[]> {
+	async listar(params: AlertasQuery = {}, signal?: AbortSignal): Promise<AlertaOperativa[]> {
 		const { data } = await api.get<ApiEnvelope<AlertaOperativa[]> | AlertaOperativa[]>(
 			'/alertas',
-			{ params, skipGlobalError: true } as any,
+			{ params, signal, skipGlobalError: true } as any,
 		);
 		return unwrap<AlertaOperativa[]>(data);
 	},

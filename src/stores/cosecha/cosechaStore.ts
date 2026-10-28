@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { crearUuid } from '@/utils/uuid';
+import { claveColaCosecha, propietarioCosecha, CLAVES_COLA_ANTIGUA } from '@/utils/cosechaLocal';
+import { leerInventarioLocal, guardarInventarioLocal, descontarConfirmadoLocal, permiteCopiaLocal } from '@/utils/cosechaOffline';
 import {
 	cosechaService,
 	type BackendCinta,
@@ -26,6 +28,10 @@ export interface CintaCosecha {
 }
 
 interface CosechaState {
+	inventarioLocal: boolean;
+	inventarioConsultadoEn: number | null;
+	errorCopiaLocal: string;
+	cargaInventarioSeq: number;
 	loading: boolean;
 	submitting: boolean;
 	sincronizando: boolean;
@@ -38,6 +44,9 @@ interface CosechaState {
 	colaFallida: PayloadPendienteCosecha[];
 	mostrarSoloAnioActual: boolean;
 	monitoreoRedInicializado: boolean;
+	propietario: string | null;
+	pendientesAntiguos: number;
+	errorAlmacenamiento: string;
 }
 
 export interface ResultadoEnvioCosecha {
@@ -46,17 +55,26 @@ export interface ResultadoEnvioCosecha {
 	message: string;
 }
 
-const COLA_KEY = 'cola_cosecha_pendiente';
-const COLA_FALLIDA_KEY = 'cola_cosecha_fallida';
-const MAX_INTENTOS_NO_ENCOLABLE = 3;
 const VENTANA_CORTE_DEFAULT_INICIO = 11;
 const VENTANA_CORTE_DEFAULT_FIN = 12;
 const VENTANA_CORTE_MAX_AMPLITUD = 8;
 
-type PayloadPendienteCosecha = PayloadCosecha & {
+export type PayloadPendienteCosecha = PayloadCosecha & {
 	intentos?: number;
 	ultimoError?: string;
 };
+
+function esReporteLocal(value: unknown): value is PayloadPendienteCosecha {
+	if (!value || typeof value !== 'object') return false;
+	const item = value as PayloadPendienteCosecha;
+	return typeof item.id_local === 'string' && item.id_local.length > 0 &&
+		Number.isSafeInteger(item.finca_id) && item.finca_id > 0 &&
+		typeof item.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.fecha) &&
+		Number.isFinite(item.timestamp) && Array.isArray(item.detalles) && item.detalles.length > 0 &&
+		item.detalles.every(d => d && Number.isSafeInteger(d.calendario_id) && d.calendario_id > 0 &&
+			Number.isSafeInteger(d.cantidad_racimos) && d.cantidad_racimos >= 0 &&
+			Number.isSafeInteger(d.cantidad_rechazo) && d.cantidad_rechazo >= 0);
+}
 
 function toNonNegativeInt(value: unknown): number {
 	const n = Number(value);
@@ -95,9 +113,9 @@ function resolverAnioDesdeBackend(
 function esErrorEncolable(error: unknown): boolean {
 	const e = error as { response?: { status?: number } } | undefined;
 	const status = e?.response?.status;
-	if (typeof navigator !== 'undefined' && !navigator.onLine) return true;
+	if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
 	if (status === undefined) return true;
-	return status >= 500;
+	return status === 408 || status === 429 || status >= 500;
 }
 
 function extraerMensajeError(error: unknown): string {
@@ -114,6 +132,10 @@ function extraerMensajeError(error: unknown): string {
 
 export const useCosechaStore = defineStore('cosecha', {
 	state: (): CosechaState => ({
+		inventarioLocal: false,
+		inventarioConsultadoEn: null,
+		errorCopiaLocal: '',
+		cargaInventarioSeq: 0,
 		loading: false,
 		submitting: false,
 		sincronizando: false,
@@ -121,10 +143,13 @@ export const useCosechaStore = defineStore('cosecha', {
 		fincaActivaId: null,
 		semanaInicioCorte: VENTANA_CORTE_DEFAULT_INICIO,
 		semanaFinCorte: VENTANA_CORTE_DEFAULT_FIN,
-		isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+		isOnline: typeof navigator !== 'undefined' ? navigator.onLine !== false : true,
 		mostrarSoloAnioActual: false,
-		colaSincronizacion: parsearColaDesdeStorage(COLA_KEY),
-		colaFallida: parsearColaDesdeStorage(COLA_FALLIDA_KEY),
+		colaSincronizacion: [],
+		colaFallida: [],
+		propietario: null,
+		pendientesAntiguos: 0,
+		errorAlmacenamiento: '',
 		monitoreoRedInicializado: false,
 	}),
 
@@ -172,7 +197,7 @@ export const useCosechaStore = defineStore('cosecha', {
 			const grupos: Record<number, CintaCosecha[]> = {};
 
 			let lista = state.saldosPendientes.filter(
-				(item) => toNonNegativeInt(item.saldo_en_campo) > 0,
+				(item) => toNonNegativeInt(item.saldo_en_campo) > 0 || item.cantidad_a_cosechar > 0 || item.rechazo > 0,
 			);
 
 			if (state.mostrarSoloAnioActual) {
@@ -218,6 +243,63 @@ export const useCosechaStore = defineStore('cosecha', {
 	},
 
 	actions: {
+		activarSesion() {
+			if (this.submitting || this.sincronizando) return;
+			const propietario = propietarioCosecha();
+			if (this.propietario === propietario) return;
+			this.propietario = propietario;
+			this.saldosPendientes = [];
+			this.fincaActivaId = null;
+			this.inventarioLocal = false;
+			this.inventarioConsultadoEn = null;
+			this.errorCopiaLocal = '';
+			this.cargaInventarioSeq++;
+			this.colaSincronizacion = [];
+			this.colaFallida = [];
+			this.errorAlmacenamiento = '';
+			this.pendientesAntiguos = CLAVES_COLA_ANTIGUA.reduce((n, key) => n + parsearColaDesdeStorage(key).length, 0);
+			if (!propietario) return;
+			try {
+				const raw = localStorage.getItem(claveColaCosecha(propietario));
+				if (!raw) return;
+				const data = JSON.parse(raw);
+				if (!Array.isArray(data.pendientes) || !Array.isArray(data.fallidos) ||
+					![...data.pendientes, ...data.fallidos].every(esReporteLocal)) throw new Error('Formato invalido');
+				this.colaSincronizacion = data.pendientes;
+				this.colaFallida = data.fallidos;
+			} catch {
+				this.errorAlmacenamiento = 'No se pudieron leer los reportes locales. No borres los datos del navegador; conserva este dispositivo para recuperarlos.';
+			}
+		},
+
+		async reintentarFallido(id: string, correccion: Pick<PayloadCosecha, 'fecha' | 'detalles'>): Promise<boolean> {
+			if (this.submitting || this.sincronizando || !this.propietario || this.propietario !== propietarioCosecha() || this.errorAlmacenamiento) return false;
+			const original = this.colaFallida.find((item) => item.id_local === id);
+			if (!original || !/^\d{4}-\d{2}-\d{2}$/.test(correccion.fecha)) return false;
+			const fecha = new Date(`${correccion.fecha}T00:00:00Z`);
+			if (!Number.isFinite(fecha.getTime()) || fecha.toISOString().slice(0, 10) !== correccion.fecha) return false;
+			if (correccion.detalles.length !== original.detalles.length || !correccion.detalles.every((d, i) =>
+				d.calendario_id === original.detalles[i].calendario_id &&
+				Number.isSafeInteger(d.cantidad_racimos) && d.cantidad_racimos >= 0 &&
+				Number.isSafeInteger(d.cantidad_rechazo) && d.cantidad_rechazo >= 0,
+			) || !correccion.detalles.some((d) => d.cantidad_racimos + d.cantidad_rechazo > 0)) return false;
+			const fallidos = this.colaFallida;
+			const pendientes = this.colaSincronizacion;
+			// Conservamos el UUID: incluso un envio confirmado cuya respuesta se perdio no se duplica.
+			this.colaSincronizacion = [...pendientes, { ...original, ...correccion, detalles: correccion.detalles.map(d => ({ ...d })), intentos: 0, ultimoError: undefined }];
+			this.colaFallida = fallidos.filter((item) => item.id_local !== id);
+			try {
+				this.persistirCola();
+			} catch {
+				this.colaFallida = fallidos;
+				this.colaSincronizacion = pendientes;
+				useUIStore().showError('No se pudo guardar la correccion. El reporte original sigue conservado.');
+				return false;
+			}
+			await this.sincronizarCola();
+			return true;
+		},
+
 		calcularEdadExacta(semanaEnfunde: number, anio: number): number {
 			return calculateIsoWeekAge(semanaEnfunde, anio, new Date());
 		},
@@ -262,21 +344,7 @@ export const useCosechaStore = defineStore('cosecha', {
 			item.rechazo = toNonNegativeInt(item.rechazo);
 			item.saldo_en_campo = toNonNegativeInt(item.saldo_en_campo);
 
-			const total = item.cantidad_a_cosechar + item.rechazo;
-			if (total <= item.saldo_en_campo) return;
-
-			const exceso = total - item.saldo_en_campo;
-			if (item.rechazo >= exceso) {
-				item.rechazo -= exceso;
-				return;
-			}
-
-			const restante = exceso - item.rechazo;
-			item.rechazo = 0;
-			item.cantidad_a_cosechar = Math.max(
-				0,
-				item.cantidad_a_cosechar - restante,
-			);
+			// Un saldo menor es un conflicto, no permiso para recortar el conteo del operador.
 		},
 
 		esExcedido(item: CintaCosecha): boolean {
@@ -308,7 +376,8 @@ export const useCosechaStore = defineStore('cosecha', {
 			const otroCampo = campo === 'cantidad_a_cosechar' ? 'rechazo' : 'cantidad_a_cosechar';
 			const otro = toNonNegativeInt(item[otroCampo]);
 			const maxPermitido = Math.max(0, toNonNegativeInt(item.saldo_en_campo) - otro);
-			item[campo] = Math.min(maxPermitido, Math.max(0, toNonNegativeInt(item[campo]) + Math.trunc(delta)));
+			if (delta < 0) item[campo] = Math.max(0, item[campo] + Math.trunc(delta));
+			else if (!this.esExcedido(item)) item[campo] = Math.min(maxPermitido, item[campo] + Math.trunc(delta));
 		},
 
 		maximizarBuenos(item: CintaCosecha) {
@@ -317,12 +386,41 @@ export const useCosechaStore = defineStore('cosecha', {
 		},
 
 		async cargarSaldos(fincaId: number): Promise<boolean> {
+			this.activarSesion();
+			const requestId = ++this.cargaInventarioSeq;
+			const propietario = this.propietario;
 			const fincaAnteriorId = this.fincaActivaId;
 			this.loading = true;
 			this.fincaActivaId = fincaId;
+			if (fincaAnteriorId !== fincaId) {
+				this.inventarioLocal = false;
+				this.inventarioConsultadoEn = null;
+			}
 			try {
-				const data: BackendCinta[] = await cosechaService.getBalance(fincaId);
-				if (this.fincaActivaId !== fincaId) return false;
+				let data: BackendCinta[];
+				let copia = false;
+				let consultadoEn = Date.now();
+				try {
+					if (!this.isOnline) throw new Error('Sin conexion');
+					data = await cosechaService.getBalance(fincaId);
+				} catch (error) {
+					const local = propietario && permiteCopiaLocal(error) ? leerInventarioLocal(propietario, fincaId) : null;
+					if (!local) throw error;
+					data = local.cintas;
+					consultadoEn = local.consultadoEn;
+					copia = true;
+				}
+				if (requestId !== this.cargaInventarioSeq || propietario !== propietarioCosecha()) return false;
+				this.inventarioLocal = copia;
+				this.inventarioConsultadoEn = consultadoEn;
+				this.errorCopiaLocal = '';
+				if (!copia && propietario) {
+					try {
+						guardarInventarioLocal(propietario, fincaId, data.map(c => ({ ...c, anio: resolverAnioDesdeBackend(c, this.infoSistema.anio) })), consultadoEn);
+					} catch {
+						this.errorCopiaLocal = 'No se pudo guardar el inventario para uso sin conexión.';
+					}
+				}
 				const digitado = new Map(
 					(fincaAnteriorId === fincaId ? this.saldosPendientes : []).map((item) =>
 						[item.calendario_id, { buenos: item.cantidad_a_cosechar, rechazo: item.rechazo }]),
@@ -334,7 +432,7 @@ export const useCosechaStore = defineStore('cosecha', {
 						const semanaEnfunde = Number(item.semana_enfunde);
 						const anio = resolverAnioDesdeBackend(item, anioFallback);
 
-						const reservado = this.colaSincronizacion
+						const reservado = [...this.colaSincronizacion, ...this.colaFallida]
 							.filter((pendiente) => pendiente.finca_id === fincaId)
 							.flatMap((pendiente) => pendiente.detalles)
 							.filter((detalle) => detalle.calendario_id === item.calendario_id)
@@ -356,13 +454,15 @@ export const useCosechaStore = defineStore('cosecha', {
 					);
 				return true;
 			} catch (error) {
+				if (requestId !== this.cargaInventarioSeq) return false;
 				if (this.fincaActivaId === fincaId && fincaAnteriorId !== fincaId) {
 					this.saldosPendientes = [];
 				}
-				useUIStore().showError('Error al cargar inventario del servidor.');
+				this.errorCopiaLocal = 'No se pudo consultar el inventario ni recuperar una copia local autorizada.';
+				useUIStore().showError(this.errorCopiaLocal);
 				return false;
 			} finally {
-				if (this.fincaActivaId === fincaId) this.loading = false;
+				if (requestId === this.cargaInventarioSeq) this.loading = false;
 			}
 		},
 
@@ -387,6 +487,10 @@ export const useCosechaStore = defineStore('cosecha', {
 			fincaId: number,
 			fecha: string,
 		): Promise<ResultadoEnvioCosecha> {
+			const propietario = this.propietario;
+			if (!propietario || propietario !== propietarioCosecha() || this.errorAlmacenamiento) {
+				return { ok: false, queued: false, message: this.errorAlmacenamiento || 'La sesion cambio. Ingresa con el usuario que inicio este conteo.' };
+			}
 			if (this.loading || this.fincaActivaId !== fincaId) {
 				return { ok: false, queued: false, message: 'Espera a que se cargue el inventario de la finca seleccionada.' };
 			}
@@ -398,9 +502,10 @@ export const useCosechaStore = defineStore('cosecha', {
 				};
 			}
 
-			this.saldosPendientes.forEach((item) =>
-				this.normalizarItemDigitacion(item),
-			);
+			if (this.hayExcedidos || this.saldosPendientes.some(item =>
+				![item.cantidad_a_cosechar, item.rechazo].every(n => Number.isSafeInteger(n) && n >= 0))) {
+				return { ok: false, queued: false, message: 'El conteo se conserva. Revisa las cantidades y los conflictos de saldo antes de enviar.' };
+			}
 
 			const detalles = this.saldosPendientes
 				.filter((s) => s.cantidad_a_cosechar > 0 || s.rechazo > 0)
@@ -428,7 +533,9 @@ export const useCosechaStore = defineStore('cosecha', {
 
 			this.submitting = true;
 			try {
-				await cosechaService.registrarLiquidacion(payload);
+				if (!this.isOnline) throw new Error('Sin conexion');
+				await cosechaService.registrarLiquidacion(payload, propietario);
+				this.descontarCopiaConfirmada(payload, propietario);
 				this.consumirConteoEnviado(payload);
 				if (this.fincaActivaId === fincaId) await this.cargarSaldos(fincaId);
 				return {
@@ -437,6 +544,9 @@ export const useCosechaStore = defineStore('cosecha', {
 					message: 'Reporte enviado correctamente.',
 				};
 			} catch (error) {
+				if (propietario !== propietarioCosecha()) {
+					return { ok: false, queued: false, message: 'La sesion cambio durante el envio. Revisa el reporte con la cuenta original antes de repetirlo.' };
+				}
 				if (esErrorEncolable(error)) {
 					this.colaSincronizacion.push({ ...payload, intentos: 0 });
 					try {
@@ -460,13 +570,21 @@ export const useCosechaStore = defineStore('cosecha', {
 				};
 			} finally {
 				this.submitting = false;
+				this.activarSesion();
 			}
 		},
 
 		persistirCola() {
-			if (typeof localStorage === 'undefined') return;
-			localStorage.setItem(COLA_FALLIDA_KEY, JSON.stringify(this.colaFallida));
-			localStorage.setItem(COLA_KEY, JSON.stringify(this.colaSincronizacion));
+			if (!this.propietario || this.errorAlmacenamiento) throw new Error('Cola no disponible');
+			localStorage.setItem(claveColaCosecha(this.propietario), JSON.stringify({
+				pendientes: this.colaSincronizacion,
+				fallidos: this.colaFallida,
+			}));
+		},
+
+		descontarCopiaConfirmada(payload: PayloadCosecha, propietario: string) {
+			try { descontarConfirmadoLocal(propietario, payload); }
+			catch { this.errorCopiaLocal = 'El envío fue confirmado, pero no se pudo actualizar la copia local. Actualiza el inventario antes de salir sin conexión.'; }
 		},
 
 		consumirConteoEnviado(payload: PayloadCosecha) {
@@ -482,6 +600,9 @@ export const useCosechaStore = defineStore('cosecha', {
 
 		async sincronizarCola() {
 			if (!localStorage.getItem('token')) return;
+			this.activarSesion();
+			const propietario = this.propietario;
+			if (!propietario || propietario !== propietarioCosecha() || this.errorAlmacenamiento) return;
 			if (!this.isOnline || this.sincronizando || this.submitting || !this.colaSincronizacion.length) return;
 			this.sincronizando = true;
 			let enviados = 0;
@@ -489,12 +610,15 @@ export const useCosechaStore = defineStore('cosecha', {
 			try {
 				const pendientes = [...this.colaSincronizacion];
 				for (const payload of pendientes) {
+					if (propietario !== propietarioCosecha()) break;
 					try {
-						await cosechaService.registrarLiquidacion(payload);
+						await cosechaService.registrarLiquidacion(payload, propietario);
+						this.descontarCopiaConfirmada(payload, propietario);
 						// Quitar solo el enviado, conservando los registros nuevos de la cola.
 						this.colaSincronizacion = this.colaSincronizacion.filter((item) => item.id_local !== payload.id_local);
 						enviados++;
 					} catch (error) {
+						if (propietario !== propietarioCosecha()) break;
 						const status = (error as { response?: { status?: number } })?.response?.status;
 						// Una sesion expirada no convierte el reporte en un error de datos.
 						if (status === 401 || status === 403) break;
@@ -502,7 +626,7 @@ export const useCosechaStore = defineStore('cosecha', {
 						if (!pendiente) continue;
 						pendiente.intentos = (pendiente.intentos || 0) + 1;
 						pendiente.ultimoError = extraerMensajeError(error);
-						if (!esErrorEncolable(error) && pendiente.intentos >= MAX_INTENTOS_NO_ENCOLABLE) {
+						if (!esErrorEncolable(error)) {
 							this.colaFallida.push({ ...pendiente });
 							this.colaSincronizacion = this.colaSincronizacion.filter((item) => item.id_local !== payload.id_local);
 							movidosAFallida++;
@@ -510,7 +634,7 @@ export const useCosechaStore = defineStore('cosecha', {
 					}
 					this.persistirCola();
 				}
-				if (enviados && this.fincaActivaId) await this.cargarSaldos(this.fincaActivaId);
+				if (enviados && this.fincaActivaId && propietario === propietarioCosecha()) await this.cargarSaldos(this.fincaActivaId);
 				if (movidosAFallida) {
 					useUIStore().showWarning(`${movidosAFallida} reporte(s) requieren revisión manual por errores de validación.`);
 				}
@@ -518,10 +642,12 @@ export const useCosechaStore = defineStore('cosecha', {
 				useUIStore().showError('No se pudo actualizar la cola local. Conserva este dispositivo y vuelve a intentar la sincronización.');
 			} finally {
 				this.sincronizando = false;
+				this.activarSesion();
 			}
 		},
 
 		inicializarMonitoreoRed() {
+			this.activarSesion();
 			if (this.monitoreoRedInicializado) return;
 			this.monitoreoRedInicializado = true;
 
@@ -531,6 +657,9 @@ export const useCosechaStore = defineStore('cosecha', {
 			});
 			window.addEventListener('offline', () => {
 				this.isOnline = false;
+			});
+			window.addEventListener('storage', (event) => {
+				if (event.key === 'user' || event.key === 'token' || event.key === null) this.activarSesion();
 			});
 
 			if (this.isOnline) {

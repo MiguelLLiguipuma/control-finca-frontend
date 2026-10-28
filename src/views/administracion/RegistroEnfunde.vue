@@ -1,5 +1,18 @@
 <template>
   <v-container class="pa-4 pt-6 pb-16 bg-background min-h-screen transition-colors">
+    <v-alert v-if="errorEnlace" type="warning" variant="tonal" class="mb-4">{{ errorEnlace }}</v-alert>
+    <v-dialog :model-value="fincaPendiente !== null" persistent max-width="460" aria-labelledby="titulo-borrador-finca">
+      <v-card>
+        <v-card-title id="titulo-borrador-finca" class="text-wrap">Hay un borrador de otra finca</v-card-title>
+        <v-card-text>
+          El pendiente corresponde a {{ fincaPendiente?.nombre }}. Conservamos los datos que ya escribiste para evitar registrarlos en una finca equivocada.
+        </v-card-text>
+        <v-card-actions class="flex-wrap">
+          <v-btn variant="text" @click="fincaPendiente = null">Seguir con mi borrador</v-btn>
+          <v-btn color="primary" variant="tonal" @click="abrirFincaPendiente">Descartar y abrir finca</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
     <v-row justify="center">
       <v-col cols="12" lg="10">
         <div class="mb-8 d-flex align-center justify-space-between">
@@ -347,6 +360,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { conservaBorradorEnfunde, fincaDesdeEnlace } from '@/domain/pendientesFinca'
 import { useTheme } from 'vuetify'
 import { useRegistroEnfundeStore } from '@/stores/registroEnfundeStore'
 import { useFincaStore, type Finca } from '@/stores/fincaStore'
@@ -369,6 +384,20 @@ const fincaStore = useFincaStore()
 const usuarioStore = useUsuarioStore()
 const calendarioStore = useCalendarioStore()
 const authStore = useAuthStore()
+const route = useRoute()
+const errorEnlace = ref('')
+const fincaPendiente = ref<Finca | null>(null)
+
+function abrirFincaPendiente() {
+  if (!fincaPendiente.value) return
+  registroStore.resetFormulario()
+  registroStore.initForm()
+  seleccionarSemanaPorFechaRegistro()
+  registroStore.formData.finca_id = fincaPendiente.value.id
+  fincaStore.seleccionarFinca(fincaPendiente.value.id)
+  fincaPendiente.value = null
+  void refrescarRegistros()
+}
 
 interface FormValidationResult {
   valid: boolean
@@ -593,7 +622,9 @@ watch(() => anioActivo.value, async (nuevoAnio) => {
 
 onMounted(async () => {
   registroStore.globalLoading = true
-  registroStore.initForm()
+  if (route.query.finca_id === undefined || !conservaBorradorEnfunde(registroStore.formData, Number(route.query.finca_id))) {
+    registroStore.initForm()
+  }
   try {
     const tasks: [
       Promise<Finca[]>,
@@ -611,6 +642,17 @@ onMounted(async () => {
 
     rawData.value = { fincas: f || [], usuarios: u || [], calendarios: c || [] }
     seleccionarSemanaPorFechaRegistro()
+
+    if (route.query.finca_id !== undefined) {
+      const destino = fincaDesdeEnlace(route.query.finca_id, f)
+      if (!destino) errorEnlace.value = 'La finca del pendiente no está disponible. Verifica la finca del formulario antes de registrar.'
+      else if (conservaBorradorEnfunde(registroStore.formData, destino)) {
+        fincaPendiente.value = f.find(finca => finca.id === destino) || null
+      } else {
+        registroStore.formData.finca_id = destino
+        fincaStore.seleccionarFinca(destino)
+      }
+    }
 
     if (!registroStore.formData.finca_id && fincaStore.fincaSeleccionadaId) {
       registroStore.formData.finca_id = fincaStore.fincaSeleccionadaId

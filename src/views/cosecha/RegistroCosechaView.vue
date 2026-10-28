@@ -62,10 +62,11 @@
           class="mb-4"
         >
           <div class="font-weight-bold">
-            {{ cosechaStore.isOnline ? 'Conteo protegido localmente' : 'Modo sin conexión activo' }}
+            {{ errorBorrador ? 'Borrador sin guardar' : cosechaStore.isOnline ? 'Conteo protegido localmente' : 'Modo sin conexión activo' }}
           </div>
           <div class="text-body-2">
-            <span v-if="!cosechaStore.isOnline">
+            <span v-if="errorBorrador">Conserva esta pantalla abierta hasta guardar el borrador.</span>
+            <span v-else-if="!cosechaStore.isOnline">
               Puedes seguir contando y guardar el reporte; quedará en cola para sincronizar cuando vuelva la conexión.
             </span>
             <span v-else>
@@ -76,6 +77,14 @@
             </span>
           </div>
         </v-alert>
+
+        <CosechaSyncPanel :fincas="fincas" :error-borrador="errorBorrador" :hay-borrador-antiguo="hayBorradorAntiguo" />
+        <CosechaRecoveryPanel :conflictos="conflictosConteo" :corregir="corregirConflicto"
+          :hay-respaldo="hayRespaldoBorrador"
+          :consultado-en="cosechaStore.inventarioConsultadoEn" :copia-local="cosechaStore.inventarioLocal"
+          :aviso="avisoOffline" :error-copia="cosechaStore.errorCopiaLocal"
+          :bloqueado="preparandoOffline || cosechaStore.loading || cosechaStore.submitting || cosechaStore.sincronizando"
+          :preparando="preparandoOffline" :finca-id="fincaSeleccionada" @preparar="prepararSinConexion" @exportar="exportarBorrador" />
 
         <v-row>
           <v-col cols="12" lg="4" xl="3">
@@ -88,8 +97,9 @@
               :info-dia-semana="infoDiaSemana"
               :fecha-minima="fechaMinima"
               :fecha-maxima="fechaMaxima"
-              :loading="cosechaStore.loading"
+              :loading="cosechaStore.loading || preparandoOffline || cosechaStore.sincronizando"
               :submitting="cosechaStore.submitting"
+              :envio-bloqueado="conflictosConteo.length > 0 || Boolean(errorBorrador)"
               :total-digitado="cosechaStore.totalDigitado"
               :total-restante="cosechaStore.totalRestante"
               :estado-fecha-seleccionada="estadoFechaSeleccionada"
@@ -249,8 +259,11 @@
 
 <script setup lang="ts">
 import { computed, ref, shallowRef, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import CintaColorScanner from '@/components/cosecha/CintaColorScanner.vue';
 import CosechaConfigPanel from '@/components/cosecha/CosechaConfigPanel.vue';
+import CosechaSyncPanel from '@/components/cosecha/CosechaSyncPanel.vue';
+import CosechaRecoveryPanel from '@/components/cosecha/CosechaRecoveryPanel.vue';
 import CosechaHeaderCard from '@/components/cosecha/CosechaHeaderCard.vue';
 import CosechaSaldosPorAnio from '@/components/cosecha/CosechaSaldosPorAnio.vue';
 import PanelPrediccionCosecha from '@/components/cosecha/PanelPrediccionCosecha.vue';
@@ -294,6 +307,10 @@ const {
   fechaMinima,
   estadoFechaSeleccionada,
   hayConteoSinEnviar,
+  errorBorrador,
+  hayBorradorAntiguo,
+  hayRespaldoBorrador,
+  conflictosConteo, corregirConflicto, exportarBorrador, avisoOffline, preparandoOffline, prepararSinConexion,
   ultimaCintaLiquidada,
   obtenerColorTarjeta,
   obtenerVarianteTarjeta,
@@ -301,7 +318,7 @@ const {
   setCampoDigitacion,
   normalizarDigitacion,
   guardarCosecha,
-} = useRegistroCosecha();
+} = useRegistroCosecha(useRoute().query.finca_id);
 
 const uiStore = useUIStore();
 const colorDetectado = shallowRef<CintaColorNombre | null>(null);

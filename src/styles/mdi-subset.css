@@ -1,4 +1,9 @@
 /* Generated local subset of Material Design Icons for this project */
+.mdi-menu-down::before { content: "\F035D"; }
+.mdi-menu-up::before { content: "\F0360"; }
+.mdi-page-first::before { content: "\F0600"; }
+.mdi-page-last::before { content: "\F0601"; }
+
 @font-face {
   font-family: "Material Design Icons";
   src: url("@mdi/font/fonts/materialdesignicons-webfont.woff2?v=7.4.47") format("woff2"),

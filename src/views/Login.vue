@@ -38,8 +38,11 @@
           </div>
 
           <v-form class="auth-stagger" @submit.prevent="isRegisterMode ? handleRegister() : handleLogin()">
+            <v-alert v-if="route.query.sesion === 'expirada'" type="info" variant="tonal" class="mb-4">
+              Tu sesión terminó. Ingresa con la misma cuenta para recuperar sus reportes guardados en este dispositivo.
+            </v-alert>
             <div v-if="isRegisterMode" class="mb-4">
-              <label class="field-label">Nombre</label>
+              <label class="field-label" for="register-name">Nombre</label>
               <v-text-field
                 id="register-name"
                 v-model="nombre"
@@ -56,7 +59,7 @@
             </div>
 
             <div class="mb-4">
-              <label class="field-label">Correo Electronico</label>
+              <label class="field-label" for="auth-email">Correo Electronico</label>
               <v-text-field
                 id="auth-email"
                 v-model="email"
@@ -74,7 +77,7 @@
             </div>
 
             <div class="mb-4">
-              <label class="field-label">Contrasena</label>
+              <label class="field-label" for="auth-password">Contrasena</label>
               <v-text-field
                 id="auth-password"
                 v-model="password"
@@ -86,8 +89,8 @@
                 color="primary"
                 rounded="lg"
                 density="comfortable"
-                :aria-label="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'"
-                autocomplete="current-password"
+                aria-label="Contraseña"
+                :autocomplete="isRegisterMode ? 'new-password' : 'current-password'"
                 @click:append-inner="showPassword = !showPassword"
                 :rules="[v => !!v || 'La contrasena es obligatoria']"
                 hide-details="auto"
@@ -95,7 +98,7 @@
             </div>
 
             <div v-if="isRegisterMode" class="mb-6">
-              <label class="field-label">Confirmar Contrasena</label>
+              <label class="field-label" for="register-confirm-password">Confirmar Contrasena</label>
               <v-text-field
                 id="register-confirm-password"
                 v-model="confirmPassword"
@@ -152,7 +155,7 @@
               {{ isRegisterMode ? 'Crear Usuario' : 'Entrar al Sistema' }}
             </v-btn>
 
-            <template v-if="!isRegisterMode">
+            <template v-if="!isRegisterMode && googleClientIdValido">
               <div class="d-flex align-center my-5">
                 <v-divider />
                 <span class="mx-3 text-caption text-medium-emphasis">o</span>
@@ -165,7 +168,7 @@
             </template>
           </v-form>
 
-          <div class="mt-7 text-center text-body-2 auth-switch auth-enter-fade">
+          <div v-if="publicRegistration" class="mt-7 text-center text-body-2 auth-switch auth-enter-fade">
             <span v-if="!isRegisterMode">
               No tienes cuenta?
               <button class="switch-btn" type="button" @click="toggleMode(true)">Registrate</button>
@@ -175,6 +178,7 @@
               <button class="switch-btn" type="button" @click="toggleMode(false)">Inicia sesion</button>
             </span>
           </div>
+          <p v-else class="mt-6 text-body-2 text-medium-emphasis text-center">Acceso por invitación. Solicita tu cuenta al administrador de tu finca.</p>
         </v-card>
       </v-col>
     </v-row>
@@ -183,7 +187,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '@/stores/auth/authStore';
 import api from '@/services/api';
 
@@ -221,6 +225,8 @@ declare global {
 }
 
 const router = useRouter();
+const route = useRoute();
+const publicRegistration = import.meta.env.VITE_ALLOW_PUBLIC_REGISTRATION === 'true';
 const authStore = useAuthStore();
 
 const email = ref('');
@@ -262,6 +268,7 @@ const loadGoogleScript = () =>
   });
 
 const toggleMode = (registerMode: boolean) => {
+  if (registerMode && !publicRegistration) return;
   isRegisterMode.value = registerMode;
   errorMessage.value = '';
   successMessage.value = '';

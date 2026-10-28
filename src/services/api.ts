@@ -1,8 +1,10 @@
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/auth/authStore';
+import { propietarioCosecha } from '@/utils/cosechaLocal';
+import { isAuthenticationRequest, readSessionToken, shouldExpireSession } from '@/utils/sessionPolicy';
 
-type ApiRequestConfig = AxiosRequestConfig & { skipGlobalError?: boolean };
+type ApiRequestConfig = AxiosRequestConfig & { skipGlobalError?: boolean; propietarioCosecha?: string; sessionToken?: string | null };
 const hasCrypto = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function';
 const buildRequestId = () =>
 	hasCrypto
@@ -19,9 +21,18 @@ const api = axios.create({
 // Interceptor de Peticiones: Adjuntar Token
 api.interceptors.request.use(
 	(config) => {
-		const token = localStorage.getItem('token');
+		const propietario = (config as ApiRequestConfig).propietarioCosecha;
+		if (propietario && propietario !== propietarioCosecha()) {
+			throw new axios.CanceledError('La sesion cambio. El reporte permanece con su propietario.');
+		}
+		const token = readSessionToken();
+		const authentication = isAuthenticationRequest(config.url);
+		if (!authentication && useAuthStore().token !== token) {
+			throw new axios.CanceledError('La sesion cambio en otra pestana. Reabre la aplicacion para continuar.');
+		}
+		(config as ApiRequestConfig).sessionToken = token;
 		const requestId = buildRequestId();
-		if (token) {
+		if (token && !authentication) {
 			config.headers = config.headers || {};
 			(config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
 		}
@@ -34,8 +45,15 @@ api.interceptors.request.use(
 
 // Interceptor de Respuestas: Manejo de Errores Global
 api.interceptors.response.use(
-	(response) => response,
+	(response) => {
+		if (isPreviousSession(response.config)) throw new axios.CanceledError('Respuesta de una sesion anterior descartada.');
+		return response;
+	},
 	(error: AxiosError) => {
+		if (axios.isCancel(error)) return Promise.reject(error);
+		if (error.config && isPreviousSession(error.config)) {
+			return Promise.reject(new axios.CanceledError('Respuesta de una sesion anterior descartada.'));
+		}
 		const uiStore = useUIStore();
 		const authStore = useAuthStore();
 
@@ -48,22 +66,18 @@ api.interceptors.response.use(
 				message?: string;
 			};
 			const backendMessage = String(data.message || data.error || '');
+			if (!isAuthenticationRequest(error.config?.url) &&
+				shouldExpireSession(status, backendMessage, Boolean((error.config as ApiRequestConfig)?.sessionToken))) {
+				authStore.logout('expired');
+				return Promise.reject(error);
+			}
 
 			switch (status) {
 				case 401:
 					mensaje = data.message || 'Su sesión ha expirado. Ingrese nuevamente.';
-					authStore.logout();
 					break;
 				case 403: {
 					mensaje = data.message || 'No tiene permisos para esta operación.';
-					const esSesionExpirada =
-						/sesion expirada|ingrese nuevamente|token de seguridad no valido|token invalido/i.test(
-							backendMessage,
-						);
-					// Solo cerramos sesión cuando el backend indica token inválido/expirado.
-					if (esSesionExpirada) {
-						authStore.logout();
-					}
 					break;
 				}
 
@@ -72,10 +86,7 @@ api.interceptors.response.use(
 					break;
 
 				case 500:
-					mensaje =
-						data?.error ||
-						data?.message ||
-						'Error interno en el servidor. Inténtelo más tarde.';
+					mensaje = 'Error interno en el servidor. Inténtelo más tarde.';
 					break;
 
 				default:
@@ -96,5 +107,10 @@ api.interceptors.response.use(
 		return Promise.reject(error);
 	},
 );
+
+function isPreviousSession(config: ApiRequestConfig): boolean {
+	return !isAuthenticationRequest(config.url) && config.sessionToken !== undefined &&
+		config.sessionToken !== readSessionToken();
+}
 
 export default api;

@@ -6,6 +6,7 @@
       item-title="nombre"
       item-value="id"
       placeholder="Buscar finca..."
+      aria-label="Finca"
       persistent-placeholder
       variant="solo-filled"
       flat
@@ -54,7 +55,7 @@
       </template>
 
       <template v-slot:loader>
-        <v-progress-linear indeterminate color="primary" height="2" />
+        <v-progress-linear v-if="loading" indeterminate color="primary" height="2" />
       </template>
     </v-autocomplete>
   </div>

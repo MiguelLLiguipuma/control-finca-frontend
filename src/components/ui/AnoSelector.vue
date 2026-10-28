@@ -2,6 +2,8 @@
   <div class="ano-selector-wrapper">
     <v-btn
       icon="mdi-chevron-left"
+      aria-label="Año anterior"
+      title="Año anterior"
       size="small"
       variant="text"
       color="primary"
@@ -15,6 +17,7 @@
       item-title="label"
       item-value="value"
       placeholder="Año"
+      aria-label="Año del reporte"
       variant="solo-filled"
       flat
       density="compact"
@@ -28,6 +31,8 @@
     </v-select>
     <v-btn
       icon="mdi-chevron-right"
+      aria-label="Año siguiente"
+      title="Año siguiente"
       size="small"
       variant="text"
       color="primary"

@@ -44,6 +44,7 @@
         ></v-btn>
       </template>
     </v-snackbar>
+    <SessionSafety />
   </v-app>
 </template>
 
@@ -52,12 +53,15 @@ import { computed, onMounted, watch } from 'vue';
 import { RouterView, useRoute } from 'vue-router';
 import Header from './components/HeaderView.vue';
 import SidebarMenu from './components/SidebarMenu.vue';
+import SessionSafety from './components/auth/SessionSafety.vue';
 import { useUIStore } from './stores/uiStore';
 import { useCosechaStore } from './stores/cosecha/cosechaStore';
 import { useAuthStore } from './stores/auth/authStore';
+import { useAlertaStore } from './stores/alertaStore';
 
 const cosechaStore = useCosechaStore();
 const authStore = useAuthStore();
+const alertaStore = useAlertaStore();
 const route = useRoute();
 const uiStore = useUIStore();
 const isPublicRoute = computed(() =>
@@ -67,9 +71,12 @@ const isPublicRoute = computed(() =>
 onMounted(() => {
   cosechaStore.inicializarMonitoreoRed();
 });
-watch(() => authStore.token, (token) => {
-  if (token) void cosechaStore.sincronizarCola();
-});
+watch(() => [authStore.token, authStore.user?.id, authStore.user?.id_usuario, authStore.user?.empresa_id], () => {
+  uiStore.activarSesion();
+  alertaStore.activarSesion();
+  cosechaStore.activarSesion();
+  if (authStore.token) void cosechaStore.sincronizarCola();
+}, { immediate: true });
 </script>
 
 <style>
